@@ -1,0 +1,115 @@
+/* 对话列表容器 - 毛玻璃效果 */
+.conversation-list {
+  
+    backdrop-filter: blur(20px);
+   
+    border: 1px solid;
+    border-radius: 24px;
+    padding: 10px;
+    height: 100%;
+    width:450px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+   
+}
+
+/* 对话项 - 柔和3D质感 */
+.conversation_item {
+    border:1px solid; 
+    border-radius: 20px;
+    padding: 8px 8px;
+    margin-bottom: 2px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+    
+  
+    cursor: pointer;
+}
+
+.conversation_item:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 
+        0 8px 24px var(--shadow-hover),
+        inset 0 1px 0 var(--inner-shadow-hover);
+    background: var(--item-bg-hover);
+}
+
+.conversation_item:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 
+        0 2px 8px var(--shadow-color),
+        inset 0 1px 0 var(--inner-shadow-active);
+}
+
+/* 对话名称 - 柔和字体 */
+.conversation_name {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--text-color);
+    letter-spacing: 0.3px;
+    transition: all 0.3s ease-out;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: var(--item-bg);
+    box-shadow: 
+        0 2px 8px var(--shadow-color),
+        inset 0 1px 0 var(--inner-shadow-color);
+    max-width: 140px;
+}
+
+.conversation_item:hover .conversation_name {
+    color: var(--text-color-hover);
+}
+
+/* 操作按钮 - 圆润可爱 */
+.conversation_button {
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    background: var(--button-bg);
+    border: none;
+    color: var(--button-color);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.3s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.conversation_button:hover {
+    background: var(--button-bg-hover);
+    transform: scale(1.1);
+    color: var(--button-color-hover);
+    box-shadow: 0 4px 12px var(--shadow-hover);
+}
+
+.conversation_button:active {
+    transform: scale(0.95);
+    background: var(--button-bg-active);
+}
+
+/* 滚动条样式优化 */
+.conversation-info::-webkit-scrollbar {
+    width: 3px;
+}
+
+.conversation-info::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 3px;
+}
+
+.conversation-info::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+}
+
+.conversation-info::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}

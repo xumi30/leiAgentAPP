@@ -1,0 +1,25 @@
+@import "componentcss/Conversationlist.css";
+@import "componentcss/Dialog.css";
+@import "componentcss/Header.css";
+@import "componentcss/Reasoning.css";
+#App {
+  display: flex;
+  gap: 8px;
+ 
+}
+
+
+.board-column {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+}
+
+.main-content {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    overflow: hidden;
+    padding: 14px;
+}
