@@ -4,10 +4,9 @@
 @import "componentcss/Reasoning.css";
 #App {
   display: flex;
-  gap: 8px;
+
  
 }
-
 
 .board-column {
     display: flex;
@@ -20,6 +19,48 @@
     display: flex;
     flex-direction: row;
     flex: 1;
-    overflow: hidden;
+    
     padding: 14px;
+    margin-top: 5px;
+    border-radius: 5px;
+}
+
+/* 圆润毛玻璃卡片 */
+.card {
+  background: rgba(255,255,255,0.4);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 4px 4px 12px rgba(0,0,0,0.05),
+             -4px -4px 12px rgba(255,255,255,0.7);
+  transition: 0.3s;
+}
+.card:hover {
+  transform: translateY(-2px);
+}
+
+.resizer {
+    width: 5px;
+    background: #c7e094;
+    cursor: col-resize;
+    transition: background 0.2s;
+    margin: 0 15px;
+}
+.right-resizer{
+    margin-left: 20px;
+} 
+
+.resizer:hover {
+    background: #9be704;
+}
+
+.resizer:active {
+    background: #9be704;
+}
+
+.main-content {
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - 60px);
+    overflow: hidden;
 }

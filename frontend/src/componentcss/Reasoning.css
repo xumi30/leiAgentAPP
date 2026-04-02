@@ -1,11 +1,74 @@
-.reasongings{
-    margin: 0 auto;
+.reasonings {
     height: 100%;
     width: 100%;
     display: flex;
     flex-direction: column;
-    background-color: rgb(209, 163, 106);
+
+    margin: 0 4px;
+    
+    /* 精致的边框和阴影 */
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 20px;
+    
+    
+    /* 滚动样式 */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-behavior: smooth;  /* 添加这行以实现平滑滚动 */
+
 }
 
+.reason__header{
+    padding: 15px 10px;
+    background: rgba(18, 209, 123, 1);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 1);
+    font-weight: 500;
+    color: rgba(100, 100, 150, 1);
+    position:sticky;
+    top:0;
+    z-index: 100;
+}
 
+.reasoning__message{
+    text-align: left;
+    padding: 10px 15px;
+    background: rgba(168, 30, 30, 0.4);
+    border-radius: 12px;
+    margin: 8px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-behavior: smooth;  /* 添加这行以实现平滑滚动 */
+}
 
+/* 优化的滚动条样式 */
+.reasonings:-webkit-scrollbar {
+    width: 5px;
+}
+
+.reasonings:-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.reasonings:-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, 
+        rgba(180, 180, 190, 0.5) 0%, 
+        rgba(160, 165, 180, 0.5) 100%);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.reasonings:-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, 
+        rgba(160, 165, 180, 0.6) 0%, 
+        rgba(140, 145, 160, 0.6) 100%);
+}
+.reasoning {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 100%;
+}

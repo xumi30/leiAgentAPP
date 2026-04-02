@@ -6,7 +6,7 @@ html {
 
 body {
     margin: 0;
-    color: rgb(134, 11, 136);
+    color: black;
     font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
     "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
@@ -20,7 +20,7 @@ body {
     url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
 }
 
-#app {
+/* #app {
     height: 100vh;
    
-}
+} */

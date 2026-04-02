@@ -1,0 +1,167 @@
+package timeFunctions
+
+import (
+	"container/list"
+	"context"
+	"encoding/json"
+	"fmt"
+	"leiAgent/internal/tools"
+	"time"
+
+	"github.com/6tail/lunar-go/calendar"
+)
+
+// TimeTool implements the Tool interface for getting the current time
+type TimeTool struct{}
+
+func NewTimeTool() tools.Tool {
+	return &TimeTool{}
+}
+
+// Name returns the name of the tool
+func (t *TimeTool) Name() string {
+	return "get_date_info_about_almanac"
+}
+
+// Description returns a description of what the tool does
+// Description returns a description of what the tool does
+func (t *TimeTool) Description() string {
+	return `传入date获取date对应日期和时间的详细信息，只要问今天适合干什么，问今天的运势，只要关于运气，玄学等等关于气运的都要调用这个接口。
+	支持星座、儒略日、干支、生肖、节气、节日、彭祖百忌、吉神(喜神/福神/财神/阳贵神/阴贵神)方位、胎神方位、冲煞、纳音、星宿、八字、五行、十神、建除十二值星、青龙名堂等十二神、黄道日及吉凶、法定节假日及调休等,about almanac`
+}
+
+// Parameters returns the parameters that the tool accepts
+func (t *TimeTool) Parameters() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"date": map[string]interface{}{
+				"type":        "string",
+				"description": "必要参数，指定查询的日期，格式为'YYYY-MM-DD'，如'2023-01-01'，或者不指定，则默认为当前时间",
+			},
+		},
+		"required": []string{"date"},
+	}
+}
+
+// listToStringSlice 将 *list.List 转换为 []string
+func listToStringSlice(l *list.List) []string {
+	if l == nil {
+		return []string{}
+	}
+	result := make([]string, 0, l.Len())
+	for e := l.Front(); e != nil; e = e.Next() {
+		if str, ok := e.Value.(string); ok {
+			result = append(result, str)
+		}
+	}
+	return result
+}
+func (t *TimeTool) Run(ctx context.Context, input string) (string, error) {
+	return NewTimeTool().Execute(ctx, input)
+}
+
+// Execute executes the tool with the given arguments
+func (t *TimeTool) Execute(ctx context.Context, args string) (string, error) {
+	var params map[string]interface{}
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		// 如果不是JSON，直接返回当前时间
+		return t.getCurrentTimeInfo(time.Now()), nil
+	}
+
+	// 获取date参数
+	date, _ := params["date"].(string)
+
+	// 如果指定了日期，解析日期
+	var queryDate time.Time
+	if date != "" {
+		var err error
+		queryDate, err = time.Parse("2006-01-02", date)
+		if err != nil {
+			return "", fmt.Errorf("无效的日期格式: %v", err)
+		}
+	} else {
+		queryDate = time.Now()
+	}
+
+	return t.getCurrentTimeInfo(queryDate), nil
+}
+
+func (t *TimeTool) getCurrentTimeInfo(date time.Time) string {
+
+	// 获取星期几
+	weekdays := []string{"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"}
+	weekday := weekdays[date.Weekday()]
+
+	// 获取节日信息
+	holiday := getHoliday(date)
+
+	// 创建农历对象
+	lunar := calendar.NewLunarFromSolar(calendar.NewSolarFromDate(date))
+
+	// 构建详细的时间信息
+	result := fmt.Sprintf("当前时间: %s\n", date.Format("2006-01-02 15:04:05"))
+	result += fmt.Sprintf("星期: %s\n", weekday)
+	result += fmt.Sprintf("农历: %s年%s%s\n", lunar.GetYearInGanZhi(), lunar.GetMonthInChinese(), lunar.GetDayInChinese())
+	result += fmt.Sprintf("生肖: %s\n", lunar.GetYearShengXiao())
+	result += fmt.Sprintf("干支年: %s\n", lunar.GetYearInGanZhi())
+	result += fmt.Sprintf("干支月: %s\n", lunar.GetMonthInGanZhi())
+	result += fmt.Sprintf("干支日: %s\n", lunar.GetDayInGanZhi())
+	result += fmt.Sprintf("老黄历: %s\n", lunar.ToFullString())
+
+	// 节气信息
+	jieQi := lunar.GetJieQi()
+	if jieQi != "" {
+		result += fmt.Sprintf("节气: %s\n", jieQi)
+	}
+
+	if holiday != "" {
+		result += fmt.Sprintf("节日: %s\n", holiday)
+	}
+
+	return result
+}
+
+// getHoliday 返回当前日期的节日信息
+func getHoliday(date time.Time) string {
+	// 固定日期的节日
+	holidays := map[string]string{
+		"01-01": "元旦",
+		"02-14": "情人节",
+		"03-08": "妇女节",
+		"03-12": "植树节",
+		"04-01": "愚人节",
+		"05-01": "劳动节",
+		"05-04": "青年节",
+		"06-01": "儿童节",
+		"07-01": "建党节",
+		"08-01": "建军节",
+		"09-10": "教师节",
+		"10-01": "国庆节",
+		"12-25": "圣诞节",
+	}
+
+	monthDay := date.Format("01-02")
+	if holiday, ok := holidays[monthDay]; ok {
+		return holiday
+	}
+
+	// 可以添加更多动态节日判断逻辑，如春节、端午节、中秋节等
+	// 这里只实现了固定日期的节日
+
+	return ""
+}
+
+// getLunarDate 返回农历日期
+func getLunarDate(date time.Time) string {
+	// 创建公历对象
+	solar := calendar.NewSolarFromDate(date)
+	// 转换为农历对象
+	lunar := calendar.NewLunarFromSolar(solar)
+
+	// 构建农历日期字符串
+	return fmt.Sprintf("%s年%s%s",
+		lunar.GetYearInGanZhi(),   // 干支年
+		lunar.GetMonthInChinese(), // 月份
+		lunar.GetDayInChinese())   // 日期
+}

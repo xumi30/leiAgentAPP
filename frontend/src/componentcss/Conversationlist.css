@@ -1,115 +1,149 @@
-/* 对话列表容器 - 毛玻璃效果 */
+/* 对话列表容器 */
 .conversation-list {
-  
-    backdrop-filter: blur(20px);
-   
-    border: 1px solid;
-    border-radius: 24px;
-    padding: 10px;
-    height: 100%;
-    width:450px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: thin;
-   
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
 }
 
-/* 对话项 - 柔和3D质感 */
+/* 单个对话项 */
 .conversation_item {
-    border:1px solid; 
-    border-radius: 20px;
-    padding: 8px 8px;
-    margin-bottom: 2px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-
-    
-  
-    cursor: pointer;
+  padding: 11px 18px;
+  border-radius: 12px;
+  margin: 3px 0;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  overflow: visible;
+  overflow-wrap: break-word;
 }
 
 .conversation_item:hover {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 
-        0 8px 24px var(--shadow-hover),
-        inset 0 1px 0 var(--inner-shadow-hover);
-    background: var(--item-bg-hover);
+  box-shadow: 10px 10px 2px 0px rgba(154, 207, 31, 0.6);
+  cursor: pointer;
 }
 
-.conversation_item:active {
-    transform: translateY(0) scale(0.98);
-    box-shadow: 
-        0 2px 8px var(--shadow-color),
-        inset 0 1px 0 var(--inner-shadow-active);
-}
-
-/* 对话名称 - 柔和字体 */
+/* 对话名称 */
 .conversation_name {
-    font-size: 16px;
-    font-weight: 400;
-    color: var(--text-color);
-    letter-spacing: 0.3px;
-    transition: all 0.3s ease-out;
-
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    background: var(--item-bg);
-    box-shadow: 
-        0 2px 8px var(--shadow-color),
-        inset 0 1px 0 var(--inner-shadow-color);
-    max-width: 140px;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  flex-grow: 1;
+  margin-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.conversation_item:hover .conversation_name {
-    color: var(--text-color-hover);
-}
-
-/* 操作按钮 - 圆润可爱 */
+/* 对话按钮 */
 .conversation_button {
-    width: 32px;
-    height: 32px;
-    border-radius: 16px;
-    background: var(--button-bg);
-    border: none;
-    color: var(--button-color);
-    font-size: 18px;
-    cursor: pointer;
-    transition: all 0.3s ease-out;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  background: rgba(255, 255, 255, 0.3);
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: inherit;
+  font-size: 14px;
+  position: relative;
+  z-index: 10;
 }
 
 .conversation_button:hover {
-    background: var(--button-bg-hover);
-    transform: scale(1.1);
-    color: var(--button-color-hover);
-    box-shadow: 0 4px 12px var(--shadow-hover);
+  background: rgba(255, 255, 255, 0.5);
+  transform: scale(1.1);
 }
 
-.conversation_button:active {
-    transform: scale(0.95);
-    background: var(--button-bg-active);
+/* 对话菜单 */
+.conversation-menu {
+  position: absolute;
+  right: 0;
+  top: auto;
+  color: rgb(5, 1, 12);
+  margin-top: 8px;
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  min-width: 140px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  z-index: 1000; /* 添加这行，确保菜单显示在其他元素之上 */
 }
 
-/* 滚动条样式优化 */
-.conversation-info::-webkit-scrollbar {
-    width: 3px;
+
+.conversation-menu div {
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
 }
 
-.conversation-info::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-    border-radius: 3px;
+.conversation-menu div:hover {
+  background: rgba(255, 255, 255, 0.6);
+  padding-left: 20px;
 }
 
-.conversation-info::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 3px;
+/* 新建对话按钮 */
+.new-conversation-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(197, 206, 234, 0.6) 0%, rgba(224, 187, 228, 0.6) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #3A4A6A;
+  font-weight: 500;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(197, 206, 234, 0.25);
 }
 
-.conversation-info::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
+.new-conversation-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(197, 206, 234, 0.35);
+}
+
+.btn-icon {
+  margin-right: 8px;
+  font-size: 18px;
+  font-weight: 300;
+}
+
+/* 滚动条样式 */
+.conversation-list::-webkit-scrollbar {
+  width: 2px;
+}
+
+.conversation-list::-webkit-scrollbar-track {
+  background: white;
+  border-radius: 3px;
+}
+
+.conversation-list::-webkit-scrollbar-thumb {
+    background: white;
+  border-radius: 3px;
+}
+
+.conversation-list::-webkit-scrollbar-thumb:hover {
+    background: white;
 }

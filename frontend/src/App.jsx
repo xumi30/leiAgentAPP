@@ -8,60 +8,47 @@ import Header from './componentjs/Header.jsx';
 import Reasoning from './componentjs/Reasonging.jsx';
 
 function App() {
-    // 状态管理
-    const [conversations, setConversations] = useState([
-        { id: 1, text: '工作讨论工作讨论工作讨论工作讨论工作讨论工作讨论工作讨论' },
-        { id: 2, text: '项目计划' },
-        { id: 3, text: '日常交流' },
-        { id: 4, text: '工作讨论' },
-        { id: 5, text: '项目计划' },
-        { id: 6, text: '日常交流' },
-        { id: 7, text: '工作讨论' },
-        { id: 8, text: '项目计划' },
-        { id: 9, text: '日常交流' },
-        { id: 10, text: '工作讨论' },
-        { id: 11, text: '项目计划' },
-        { id: 12, text: '日常交流' },
-        { id: 13, text: '工作讨论' },
-        { id: 14, text: '项目计划' },
-        { id: 15, text: '日常交流' },
-    ]);
 
-    const [reasonings, setReasonings] = useState([
-        { id: 1, text: '工作讨论' },
-        { id: 2, text: '项目计划' },
-        { id: 3, text: '日常交流' },
-        { id: 4, text: '工作讨论' },
-        { id: 5, text: '项目计划' },
-        { id: 6, text: '日常交流' },
-        { id: 7, text: '工作讨论' },
-        { id: 8, text: '项目计划' },
-        { id: 9, text: '日常交流' },
-        { id: 10, text: '工作讨论' },
-        { id: 11, text: '项目计划' },
-        { id: 12, text: '日常交流' },
-        { id: 13, text: '工作讨论' },
-        { id: 14, text: '项目计划' },
-        { id: 15, text: '日常交流' },
-    ]);
+    const [leftWidth, setLeftWidth] = useState(260); // ConversationList宽度
+    const [rightWidth, setRightWidth] = useState(800); // Reasoning宽度
+    const [isDragging, setIsDragging] = useState(null); // 当前拖动的边界: 'left' 或 'right'
 
+    const handleMouseDown = (e, border) => {
+        e.preventDefault();
+        setIsDragging(border);
+    };
 
-    const [currentChatId, setCurrentChatId] = useState(null);
-    const [messages, setMessages] = useState([
-        { id: 1, role: "user", content: '你好，今天天气不错！' },
-        { id: 2, role: "assistant", content: '是的，阳光明媚。' },
-        { id: 3, role: "user", content: '那我们去公园走走吧！' },
-        { id: 4, role: "user", content: '你好，今天天气不错！' },
-        { id: 5, role: "assistant", content: '是的，阳光明媚。' },
-        { id: 6, role: "user", content: '那我们去公园走走吧！' },
-        { id: 7, role: "user", content: '你好，今天天气不错！' },
-        { id: 8, role: "assistant", content: '是的，阳光明媚。' },
-        { id: 9, role: "user", content: '那我们去公园走走吧！' },
-        { id: 10, role: "user", content: '你好，今天天气不错！' },
-        { id: 11, role: "assistant", content: '是的，阳光明媚。' },
-        { id: 12, role: "user", content: '那我们去公园走走吧！' },
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isDragging) return;
 
-    ]);
+            const container = document.querySelector('.main-content');
+            const containerRect = container.getBoundingClientRect();
+
+            if (isDragging === 'left') {
+                const newLeftWidth = e.clientX - containerRect.left;
+                setLeftWidth(Math.max(100, Math.min(400, newLeftWidth)));
+            } else if (isDragging === 'right') {
+                const newRightWidth = containerRect.right - e.clientX;
+                setRightWidth(Math.max(110, Math.min(1500, newRightWidth)));
+            }
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(null);
+        };
+
+        if (isDragging) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
 
     return (
         <div id="App" className='board-column'>
@@ -70,21 +57,25 @@ function App() {
                 showReasoningPanel={true}
             />
             <div className="main-content">
-                <ConversationList
-                    conversations={conversations}
-                    onSelectChat={setCurrentChatId}
+                <div style={{ width: `${leftWidth}px`, minWidth: '200px', maxWidth: '400px' }}>
+                    <ConversationList />
+                </div>
+                <div
+                    className="resizer left-resizer"
+                    onMouseDown={(e) => handleMouseDown(e, 'left')}
                 />
-                <Dialog
-                    chatId={currentChatId}
-                    messages={messages}
+                <div style={{ flex: 1 }}>
+                    <Dialog />
+                </div>
+                <div
+                    className="resizer right-resizer"
+                    onMouseDown={(e) => handleMouseDown(e, 'right')}
                 />
-                <Reasoning
-                    chatId={currentChatId}
-                    reasongingMessages={reasonings}
-                />
-
-
+                <div style={{ width: `${rightWidth}px`, minWidth: '100px', maxWidth: '1500px' }}>
+                    <Reasoning />
+                </div>
             </div>
+
         </div>
     )
 }

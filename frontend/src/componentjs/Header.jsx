@@ -9,14 +9,7 @@ export default function Header({ isConnected, showReasoningPanel, onToggleReason
       </div>
       
       <div className="header-controls">
-        <button 
-          className={`reasoning-toggle glass-button ${showReasoningPanel ? 'active' : ''}`}
-          onClick={onToggleReasoning}
-        >
-          <span className="toggle-icon">{showReasoningPanel ? '📖' : '📝'}</span>
-          <span className="toggle-text">{showReasoningPanel ? '隐藏推理' : '显示推理'}</span>
-        </button>
-        
+
         <div className={`status-indicator clay-card ${isConnected ? 'connected' : 'disconnected'}`}>
           <span className={`status-dot ${isConnected ? 'active' : ''}`}></span>
           <span className="status-text">{isConnected ? '已连接' : '已断开'}</span>
