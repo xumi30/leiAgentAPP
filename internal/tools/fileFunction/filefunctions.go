@@ -129,23 +129,23 @@ func (t *FileWriteTool) Execute(ctx context.Context, args string) (string, error
 
 		// 如果仍然无法提取到必要的参数，返回错误
 		if _, ok := params["path"]; !ok {
-			return "", fmt.Errorf("无法提取 path 参数")
+			return "无法提取 path 参数", fmt.Errorf("无法提取 path 参数")
 		}
 		if _, ok := params["content"]; !ok {
-			return "", fmt.Errorf("无法提取 content 参数")
+			return "无法提取 content 参数", fmt.Errorf("无法提取 content 参数")
 		}
 	}
 
 	// Get path parameter
 	path, ok := params["path"].(string)
 	if !ok || path == "" {
-		return "", fmt.Errorf("path parameter is required")
+		return "path parameter is required", fmt.Errorf("path parameter is required")
 	}
 
 	// Get content parameter
 	content, ok := params["content"].(string)
 	if !ok {
-		return "", fmt.Errorf("content parameter is required")
+		return "content parameter is required", fmt.Errorf("content parameter is required")
 	}
 
 	// Normalize path separators for the current OS
@@ -162,7 +162,7 @@ func (t *FileWriteTool) Execute(ctx context.Context, args string) (string, error
 		// If it's a relative path, resolve it against the current working directory
 		absPath, err := filepath.Abs(path)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve absolute path: %v", err)
+			return "failed to resolve absolute path", fmt.Errorf("failed to resolve absolute path: %v", err)
 		}
 		path = absPath
 	}
@@ -170,19 +170,27 @@ func (t *FileWriteTool) Execute(ctx context.Context, args string) (string, error
 	// Ensure the directory exists
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory: %v", err)
+		return "failed to create directory", fmt.Errorf("failed to create directory: %v", err)
 	}
 
 	// Write the content to the file
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return "", fmt.Errorf("failed to open file: %v", err)
+		return "failed to open file", fmt.Errorf("failed to open file: %v", err)
 	}
 	defer file.Close()
 
 	if _, err := file.WriteString(content); err != nil {
-		return "", fmt.Errorf("failed to write to file: %v", err)
+		return "failed to write to file", fmt.Errorf("failed to write to file: %v", err)
 	}
 
 	return fmt.Sprintf("Successfully wrote content to file: %s", path), nil
+}
+
+func (t *FileWriteTool) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "string",
+		"description": "A message indicating the result of the file write operation.",
+	}
+
 }

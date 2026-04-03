@@ -62,33 +62,45 @@ func (t *TimeTool) Run(ctx context.Context, input string) (string, error) {
 }
 
 // Execute executes the tool with the given arguments
+// Execute executes the tool with the given arguments
 func (t *TimeTool) Execute(ctx context.Context, args string) (string, error) {
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		// 如果不是JSON，直接返回当前时间
 		return t.getCurrentTimeInfo(time.Now()), nil
 	}
-
 	// 获取date参数
 	date, _ := params["date"].(string)
-
 	// 如果指定了日期，解析日期
 	var queryDate time.Time
 	if date != "" {
 		var err error
-		queryDate, err = time.Parse("2006-01-02", date)
+		// 尝试多种日期格式
+		layouts := []string{
+			time.RFC3339,                // "2006-01-02T15:04:05Z07:00"
+			"2006-01-02T15:04:05+08:00", // 带时区的ISO格式
+			"2006-01-02T15:04:05",       // 不带时区的ISO格式
+			"2006-01-02 15:04:05",       // 常见格式
+			"2006-01-02",                // 仅日期
+		}
+
+		for _, layout := range layouts {
+			queryDate, err = time.Parse(layout, date)
+			if err == nil {
+				break
+			}
+		}
+
 		if err != nil {
 			return "", fmt.Errorf("无效的日期格式: %v", err)
 		}
 	} else {
 		queryDate = time.Now()
 	}
-
 	return t.getCurrentTimeInfo(queryDate), nil
 }
 
 func (t *TimeTool) getCurrentTimeInfo(date time.Time) string {
-
 	// 获取星期几
 	weekdays := []string{"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"}
 	weekday := weekdays[date.Weekday()]
@@ -99,27 +111,35 @@ func (t *TimeTool) getCurrentTimeInfo(date time.Time) string {
 	// 创建农历对象
 	lunar := calendar.NewLunarFromSolar(calendar.NewSolarFromDate(date))
 
-	// 构建详细的时间信息
-	result := fmt.Sprintf("当前时间: %s\n", date.Format("2006-01-02 15:04:05"))
-	result += fmt.Sprintf("星期: %s\n", weekday)
-	result += fmt.Sprintf("农历: %s年%s%s\n", lunar.GetYearInGanZhi(), lunar.GetMonthInChinese(), lunar.GetDayInChinese())
-	result += fmt.Sprintf("生肖: %s\n", lunar.GetYearShengXiao())
-	result += fmt.Sprintf("干支年: %s\n", lunar.GetYearInGanZhi())
-	result += fmt.Sprintf("干支月: %s\n", lunar.GetMonthInGanZhi())
-	result += fmt.Sprintf("干支日: %s\n", lunar.GetDayInGanZhi())
-	result += fmt.Sprintf("老黄历: %s\n", lunar.ToFullString())
+	// 构建结构化的时间信息
+	result := map[string]interface{}{
+		"current_time":  date.Format("2006-01-02 15:04:05"),
+		"weekday":       weekday,
+		"lunar_date":    fmt.Sprintf("%s年%s%s", lunar.GetYearInGanZhi(), lunar.GetMonthInChinese(), lunar.GetDayInChinese()),
+		"zodiac":        lunar.GetYearShengXiao(),
+		"year_gan_zhi":  lunar.GetYearInGanZhi(),
+		"month_gan_zhi": lunar.GetMonthInGanZhi(),
+		"day_gan_zhi":   lunar.GetDayInGanZhi(),
+		"almanac":       lunar.ToFullString(),
+	}
 
 	// 节气信息
 	jieQi := lunar.GetJieQi()
 	if jieQi != "" {
-		result += fmt.Sprintf("节气: %s\n", jieQi)
+		result["solar_term"] = jieQi
 	}
 
 	if holiday != "" {
-		result += fmt.Sprintf("节日: %s\n", holiday)
+		result["holiday"] = holiday
 	}
 
-	return result
+	// 将结果序列化为JSON
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("Error marshaling result: %v", err)
+	}
+
+	return string(jsonBytes)
 }
 
 // getHoliday 返回当前日期的节日信息
@@ -164,4 +184,63 @@ func getLunarDate(date time.Time) string {
 		lunar.GetYearInGanZhi(),   // 干支年
 		lunar.GetMonthInChinese(), // 月份
 		lunar.GetDayInChinese())   // 日期
+}
+
+func (t *TimeTool) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"description": "Comprehensive date information including solar and lunar calendar details, zodiac, festivals, and traditional almanac data",
+		"properties": map[string]interface{}{
+			"current_time": map[string]interface{}{
+				"type":        "string",
+				"description": "Current date and time in format 'YYYY-MM-DD HH:MM:SS'",
+				"example":     "2024-01-15 10:30:45",
+			},
+			"weekday": map[string]interface{}{
+				"type":        "string",
+				"description": "Day of the week in Chinese",
+				"example":     "星期一",
+			},
+			"lunar_date": map[string]interface{}{
+				"type":        "string",
+				"description": "Lunar calendar date in Chinese format",
+				"example":     "甲辰年腊月初五",
+			},
+			"zodiac": map[string]interface{}{
+				"type":        "string",
+				"description": "Chinese zodiac animal for the year",
+				"example":     "龙",
+			},
+			"year_gan_zhi": map[string]interface{}{
+				"type":        "string",
+				"description": "Gan-Zhi (Stem-Branch) representation of the year",
+				"example":     "甲辰",
+			},
+			"month_gan_zhi": map[string]interface{}{
+				"type":        "string",
+				"description": "Gan-Zhi (Stem-Branch) representation of the month",
+				"example":     "丁丑",
+			},
+			"day_gan_zhi": map[string]interface{}{
+				"type":        "string",
+				"description": "Gan-Zhi (Stem-Branch) representation of the day",
+				"example":     "戊子",
+			},
+			"almanac": map[string]interface{}{
+				"type":        "string",
+				"description": "Traditional Chinese almanac information",
+				"example":     "甲辰年 丁丑月 戊子日 (冲马 煞南)",
+			},
+			"solar_term": map[string]interface{}{
+				"type":        "string",
+				"description": "Solar term information (if applicable)",
+				"example":     "小寒",
+			},
+			"holiday": map[string]interface{}{
+				"type":        "string",
+				"description": "Holiday information (only present if it's a holiday)",
+				"example":     "春节",
+			},
+		},
+	}
 }

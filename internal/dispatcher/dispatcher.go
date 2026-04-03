@@ -9,11 +9,13 @@ import (
 	"leiAgent/internal/planner"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
+	"leiAgent/internal/tools/bashfunction"
 	fileFunctions "leiAgent/internal/tools/fileFunction"
 	searchFunctions "leiAgent/internal/tools/searchFuctions"
 	"leiAgent/internal/tools/timeFunctions"
 	"leiAgent/logging"
 	"leiAgent/utils"
+	"runtime"
 	"strings"
 )
 
@@ -57,6 +59,7 @@ func (d *Dispatcher) Shutdown() {
 	if d.cancel != nil {
 		d.cancel()
 	}
+	d.DialogOutputChan <- "终止任务运行..."
 }
 
 // 获取outputChan 输出内容
@@ -66,21 +69,32 @@ func (d *Dispatcher) GetOutput() <-chan string {
 
 func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
 
-	ctx = context.WithValue(ctx, utils.DPDialogOutputChanString, &d.DialogOutputChan)
-	ctx = context.WithValue(ctx, utils.DPReasoningOutputChanString, &d.ReasonningOutputChan)
+	ctx = context.WithValue(ctx, utils.DPDialogOutputChanString, d.DialogOutputChan)
+	ctx = context.WithValue(ctx, utils.DPReasoningOutputChanString, d.ReasonningOutputChan)
 
 	logging.Info("Dispatcher 处理消息: %s", message)
 
-	
 	if d.Intention == nil {
 		logging.Info("context 中没有 Intent,重新确认意图...")
 		d.DialogOutputChan <- "context 中没有 Intent,重新确认意图..."
-		d.Intention = ConfirmIntention(ctx, message)
+		intent, err := ConfirmIntention(ctx, message)
+		if err != nil {
+			d.DialogOutputChan <- fmt.Sprintf("确认意图失败: %v", err)
+			return // 确认意图失败，直接返回
+		}
+		d.Intention = intent
 		ctx = context.WithValue(ctx, utils.IntentKey, d.Intention.Intent)
 		// 确认意图后 清除旧记忆
 		chatId := ctx.Value(utils.ChatIDString).(string)
 		memory.GetLocalMemory().Clear(chatId)
 	}
+
+	// 获取运行机器的系统类型是windosw还是linux
+	// 获取运行机器的系统类型
+	systemType := runtime.GOOS
+	logging.Info("运行机器的系统类型: %s", systemType)
+
+	memory.AddUserMessage(ctx.Value(utils.ChatIDString).(string), fmt.Sprintf("运行的系统类型是: %s", systemType))
 
 	d.Intention.Goal = message
 	fmt.Println("意图: ", d.Intention.Intent)
@@ -128,13 +142,15 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 	// 如果是规划模式,添加工具信息
 	if ctx.Value(utils.IsPlanningString).(bool) {
 		js := toolsInfo()
+		d.DialogOutputChan <- "正在加载工具信息...\n"
+		d.DialogOutputChan <- utils.FinishString
 		planInput := struct {
 			Message string      `json:"message"`
 			Goal    string      `json:"goal"`
 			Tools   interface{} `json:"TOOL_LIST"`
 		}{
 			Message: message,
-			Goal:    "",
+			Goal:    message,
 			Tools:   json.RawMessage(js),
 		}
 		planJSON, err := json.MarshalIndent(planInput, "", "  ")
@@ -142,8 +158,8 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 			logging.Error("序列化规划输入失败: %v", err)
 			return
 		}
-		message = "这是你的任务模版,你先理解message内容,如过是任务意图,就把它填充到goal字段,进行你的任务规划。" +
-			"如果不是任务意图,请继续询问用户意图,直到你能明确任务目标,能填充goal字段.如果还需要其他信息可以继续提问，最后开始你的规划：" + string(planJSON)
+		message = "这是你的任务,你理解message内容,进行你的任务规划。" +
+			"如果对任务意图有什么不明确,可以询问用户,直到你能明确任务目标,作为goal字段.然后开始你的规划：" + string(planJSON)
 	}
 
 	p := proxy.NewProxy(nil)
@@ -164,11 +180,32 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 		logging.Error("处理消息失败: %v", err)
 	}
 
-	pstr, err := planner.DoExe(ctx, extractJSON(response.Content))
+	// 计划 执行 校验 重试
+	planner := planner.NewPlanner(intent.Goal)
+	pstr, err := planner.DoExe(ctx, response.Content)
+	fmt.Println("初始执行规划结果: ", pstr, planner.Status, planner.RetryCount)
+
 	if err != nil {
 		logging.Error("执行规划失败: %v", err)
 		memory.AddUserMessage(chatId, "执行规划失败，返回的错误是："+err.Error())
-		response, err = p.Communicate(ctx)
+	}
+
+	for planner.Status == "failed" && planner.RetryCount > 0 {
+		fmt.Printf("执行规划失败，正在进行第%d次重试...\n", planner.RetryCount)
+		planner.RetryCount--
+		retryResult, err := planner.VerifyResult(ctx, pstr)
+		if err != nil {
+			logging.Error("Failed to retry verify result: %v", err)
+			return
+		}
+		pstr, err = planner.DoExe(ctx, retryResult)
+
+		if err != nil {
+			logging.Error("执行规划失败倒数第%d次: %v", planner.RetryCount, err)
+			d.DialogOutputChan <- fmt.Sprintf("执行规划失败倒数第%d次: %v", planner.RetryCount, err)
+			memory.AddUserMessage(chatId, fmt.Sprintf("执行规划失败倒数第%d次: %v", planner.RetryCount, err))
+		}
+
 	}
 
 	memory.AddUserMessage(chatId, "全部规划执行完成，以下是执行结果："+pstr)
@@ -200,13 +237,16 @@ func (d *Dispatcher) handleTool(ctx context.Context, intent *Intention) {
 func toolsInfo() []byte {
 	toolRegistry := tools.Getregistry()
 	getTime := timeFunctions.NewTimeTool()
+
 	calculateTimeTool := timeFunctions.NewCalculateTimeTool()
 	getWheatherTool := searchFunctions.NewWeatherTool()
 	getLongitude := searchFunctions.NewGeocodingTool()
-
-	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
 	financeMarket := searchFunctions.NewMarketTool()
 	getcurrenttime := timeFunctions.NewCurrentTimeTool()
+	bashfunction := bashfunction.NewBashTool()
+	toolRegistry.Register(bashfunction)
+
+	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
 	toolRegistry.Register(getcurrenttime)
 	toolRegistry.Register(financeMarket)
 	toolRegistry.Register(getLongitude)

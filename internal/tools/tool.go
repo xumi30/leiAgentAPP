@@ -27,6 +27,8 @@ type Tool interface {
 
 	// Execute executes the tool with the given arguments
 	Execute(ctx context.Context, args string) (string, error)
+
+	Results() map[string]interface{}
 }
 
 // ToolWithDisplayName is an optional interface that tools can implement

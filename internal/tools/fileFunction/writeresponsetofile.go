@@ -208,10 +208,58 @@ func (t *WriteFileChunk) Execute(ctx context.Context, args string) (string, erro
 	}
 
 	logging.Info("Wrote chunk of %d bytes at offset %d to file %s (is_last: %v)", len(content), offset, filename, isLast)
-	return fmt.Sprintf("Successfully wrote chunk of %d bytes at offset %d to file %s", len(content), offset, filename), nil
+
+	result := map[string]interface{}{
+		"success":       true,
+		"bytes_written": len(content),
+		"offset":        offset,
+		"filename":      filename,
+		"is_last":       isLast,
+	}
+
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %v", err)
+	}
+
+	return string(jsonBytes), nil
+
 }
 
 // Run executes the tool with the given input
 func (t *WriteFileChunk) Run(ctx context.Context, input string) (string, error) {
 	return t.Execute(ctx, input)
+}
+func (t *WriteFileChunk) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"description": "Result of the file write operation",
+		"properties": map[string]interface{}{
+			"success": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Indicates whether the write operation was successful",
+				"example":     true,
+			},
+			"bytes_written": map[string]interface{}{
+				"type":        "integer",
+				"description": "Number of bytes written in this chunk",
+				"example":     1024,
+			},
+			"offset": map[string]interface{}{
+				"type":        "integer",
+				"description": "The offset in the file where the chunk was written",
+				"example":     0,
+			},
+			"filename": map[string]interface{}{
+				"type":        "string",
+				"description": "The absolute path of the file that was written to",
+				"example":     "/path/to/large_file.txt",
+			},
+			"is_last": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Indicates whether this was the last chunk to write",
+				"example":     false,
+			},
+		},
+	}
 }

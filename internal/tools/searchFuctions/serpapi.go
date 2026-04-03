@@ -130,3 +130,186 @@ func (t *SerpapiSearch) generateQueries(query string) []string {
 		query + " 最新",
 	}
 }
+
+func (t *SerpapiSearch) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"description": "Search results from SerpAPI containing organic results, knowledge graph, and other search engine data",
+		"properties": map[string]interface{}{
+			"search_metadata": map[string]interface{}{
+				"type":        "object",
+				"description": "Metadata about the search request",
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{
+						"type":        "string",
+						"description": "Unique search ID",
+						"example":     "1234567890",
+					},
+					"status": map[string]interface{}{
+						"type":        "string",
+						"description": "Status of the search request",
+						"example":     "Success",
+					},
+					"json_endpoint": map[string]interface{}{
+						"type":        "string",
+						"description": "API endpoint used for the search",
+						"example":     "/searches/1234567890.json",
+					},
+					"created_at": map[string]interface{}{
+						"type":        "string",
+						"description": "Timestamp when the search was created",
+						"example":     "2024-01-15 10:30:00 UTC",
+					},
+					"processed_at": map[string]interface{}{
+						"type":        "string",
+						"description": "Timestamp when the search was processed",
+						"example":     "2024-01-15 10:30:01 UTC",
+					},
+					"google_url": map[string]interface{}{
+						"type":        "string",
+						"description": "URL of the Google search",
+						"example":     "https://www.google.com/search?q=example",
+					},
+					"raw_html_file": map[string]interface{}{
+						"type":        "string",
+						"description": "Path to raw HTML file",
+						"example":     "/searches/1234567890.html",
+					},
+					"total_time_taken": map[string]interface{}{
+						"type":        "number",
+						"description": "Total time taken for the search in seconds",
+						"example":     1.23,
+					},
+				},
+			},
+			"search_parameters": map[string]interface{}{
+				"type":        "object",
+				"description": "Parameters used for the search",
+				"properties": map[string]interface{}{
+					"engine": map[string]interface{}{
+						"type":        "string",
+						"description": "Search engine used",
+						"example":     "google",
+					},
+					"q": map[string]interface{}{
+						"type":        "string",
+						"description": "Search query",
+						"example":     "example query",
+					},
+					"num": map[string]interface{}{
+						"type":        "string",
+						"description": "Number of results requested",
+						"example":     "10",
+					},
+				},
+			},
+			"search_information": map[string]interface{}{
+				"type":        "object",
+				"description": "Information about the search results",
+				"properties": map[string]interface{}{
+					"query_displayed": map[string]interface{}{
+						"type":        "string",
+						"description": "Query as displayed in search results",
+						"example":     "example query",
+					},
+					"total_results": map[string]interface{}{
+						"type":        "string",
+						"description": "Total number of results found",
+						"example":     "1000000",
+					},
+					"time_taken_displayed": map[string]interface{}{
+						"type":        "number",
+						"description": "Time taken to display results in seconds",
+						"example":     0.5,
+					},
+				},
+			},
+			"organic_results": map[string]interface{}{
+				"type":        "array",
+				"description": "Organic search results",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"position": map[string]interface{}{
+							"type":        "integer",
+							"description": "Position of the result in search results",
+							"example":     1,
+						},
+						"title": map[string]interface{}{
+							"type":        "string",
+							"description": "Title of the search result",
+							"example":     "Example Title",
+						},
+						"link": map[string]interface{}{
+							"type":        "string",
+							"description": "URL of the search result",
+							"example":     "https://example.com",
+						},
+						"snippet": map[string]interface{}{
+							"type":        "string",
+							"description": "Snippet or description of the search result",
+							"example":     "This is a snippet of the search result...",
+						},
+					},
+				},
+			},
+			"answer_box": map[string]interface{}{
+				"type":        "object",
+				"description": "Featured snippet or answer box if present",
+				"properties": map[string]interface{}{
+					"type": map[string]interface{}{
+						"type":        "string",
+						"description": "Type of answer box",
+						"example":     "organic_result",
+					},
+					"title": map[string]interface{}{
+						"type":        "string",
+						"description": "Title of the answer box",
+						"example":     "Example Title",
+					},
+					"answer": map[string]interface{}{
+						"type":        "string",
+						"description": "Answer in the answer box",
+						"example":     "This is the answer...",
+					},
+					"source": map[string]interface{}{
+						"type":        "string",
+						"description": "Source of the answer",
+						"example":     "Example Source",
+					},
+				},
+			},
+			"knowledge_graph": map[string]interface{}{
+				"type":        "object",
+				"description": "Knowledge graph information if present",
+				"properties": map[string]interface{}{
+					"title": map[string]interface{}{
+						"type":        "string",
+						"description": "Title in knowledge graph",
+						"example":     "Example Entity",
+					},
+					"type": map[string]interface{}{
+						"type":        "string",
+						"description": "Type of entity",
+						"example":     "Organization",
+					},
+					"description": map[string]interface{}{
+						"type":        "string",
+						"description": "Description of the entity",
+						"example":     "This is a description of the entity...",
+					},
+					"website": map[string]interface{}{
+						"type":        "string",
+						"description": "Website of the entity",
+						"example":     "https://example.com",
+					},
+					"images": map[string]interface{}{
+						"type":        "string",
+						"description": "URL of an image of the entity",
+						"example":     "https://example.com/image.jpg",
+					},
+				},
+			},
+		},
+	}
+}

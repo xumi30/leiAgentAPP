@@ -8,7 +8,6 @@ import (
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
 	"leiAgent/utils"
-	"strings"
 )
 
 type Intention struct {
@@ -19,7 +18,7 @@ type Intention struct {
 	Goal                  string  `json:"goal", omitempty`
 }
 
-func ConfirmIntention(ctx context.Context, message string) *Intention {
+func ConfirmIntention(ctx context.Context, message string) (*Intention, error) {
 
 	promotion := `You are an intent classification module in an AI agent system.
 
@@ -93,37 +92,18 @@ You MUST return a JSON object with the following structure:
 
 	response, err := p.Communicate(ctx)
 	if err != nil {
-		logging.Error("Response: %s", response.Content)
-		return nil
+		logging.Error("Response error: %v", err)
+		return nil, err
 	}
 
-	result, err := parseIntention(extractJSON(response.Content))
+	result, err := parseIntention(utils.ExtractJSON(response.Content))
 	if err != nil {
 		logging.Error("Failed to parse intention: %v", err)
-		return nil
+		return nil, err
 	}
 	result.Goal = message // 保存原始请求作为目标
-	return result
+	return result, nil
 
-}
-
-func extractJSON(raw string) string {
-	raw = strings.TrimSpace(raw)
-
-	// 去掉 markdown 包裹
-	raw = strings.TrimPrefix(raw, "```json")
-	raw = strings.TrimPrefix(raw, "```")
-	raw = strings.TrimSuffix(raw, "```")
-
-	// 找 JSON 区间
-	start := strings.Index(raw, "{")
-	end := strings.LastIndex(raw, "}")
-
-	if start >= 0 && end > start {
-		return raw[start : end+1]
-	}
-
-	return raw
 }
 
 func parseIntention(data string) (*Intention, error) {

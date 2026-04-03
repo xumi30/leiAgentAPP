@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"leiAgent/logging"
+	"leiAgent/utils"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,6 +30,9 @@ var (
 
 // GetInstance 获取 SQLMemory 单例实例
 func GetSqlInstance(dbPath string) (*SQLMemory, error) {
+	if dbPath == "" {
+		dbPath = "data/sqlmemory.db"
+	}
 	var err error
 	once.Do(func() {
 		instance, err = NewSQLMemory(dbPath)
@@ -92,6 +96,16 @@ func createTables(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_chatID ON messages(chatID)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`,
+		// 创建chatid和subchatid的关系表，用于记录子对话的归属关系
+		`CREATE TABLE IF NOT EXISTS chat_subchat (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			chatID TEXT NOT NULL,
+			subChatID TEXT NOT NULL,
+			FOREIGN KEY (chatID) REFERENCES conversations(id) ON DELETE CASCADE
+		)`,
+		// 创建索引，加速查询
+		`CREATE INDEX IF NOT EXISTS idx_chat_subchat_chatID ON chat_subchat(chatID)`,
+		`CREATE INDEX IF NOT EXISTS idx_chat_subchat_subChatID ON chat_subchat(subChatID)`,
 	}
 	// role: user assistant system reasoning
 
@@ -102,6 +116,45 @@ func createTables(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// chat_sunchat插入数据
+func (m *SQLMemory) InsertChatSubChat(chatID, subChatID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	query := `INSERT INTO chat_subchat (chatID, subChatID) VALUES (?, ?)`
+	_, err := m.db.Exec(query, chatID, subChatID)
+	if err != nil {
+		return fmt.Errorf("failed to insert chat-subchat relation: %w", err)
+	}
+
+	return nil
+}
+
+func (m *SQLMemory) GenerateSubChatIDWithChatId(ChatID string) (string, error) {
+	subchatId := fmt.Sprintf("sub-%s", utils.GenerateChatID())
+	if err := m.InsertChatSubChat(ChatID, subchatId); err != nil {
+		logging.Error("插入子对话ID失败: %v", err)
+		return "", err
+	}
+	logging.Info("生成子对话ID: %s, 归属对话ID: %s", subchatId, ChatID)
+	return subchatId, nil
+
+}
+
+// GetChatSubChat 获取子对话的归属关系
+func (m *SQLMemory) GetChatSubChat(subChatID string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	query := `SELECT chatID FROM chat_subchat WHERE subChatID = ?`
+	var chatID string
+	err := m.db.QueryRow(query, subChatID).Scan(&chatID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get chat-subchat relation: %w", err)
+	}
+	return chatID, nil
 }
 
 // SaveConversation 保存或更新对话

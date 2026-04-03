@@ -21,4 +21,6 @@ export function ListConversation():Promise<Array<Record<string, any>>>;
 
 export function SendMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function StopChat(arg1:string):Promise<void>;
+
 export function UpdateConversationTitle(arg1:string,arg2:string):Promise<void>;

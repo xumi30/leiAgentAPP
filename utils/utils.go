@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -124,4 +125,28 @@ func getLunarDate(date time.Time) string {
 
 func IsBlank(s string) bool {
 	return len(strings.TrimSpace(s)) == 0
+}
+
+func ExtractJSON(raw string) string {
+	raw = strings.TrimSpace(raw)
+
+	// 去掉 markdown 包裹
+	raw = strings.TrimPrefix(raw, "```json")
+	raw = strings.TrimPrefix(raw, "```")
+	raw = strings.TrimSuffix(raw, "```")
+
+	// 找 JSON 区间
+	start := strings.Index(raw, "{")
+	end := strings.LastIndex(raw, "}")
+
+	if start >= 0 && end > start {
+		return raw[start : end+1]
+	}
+
+	return raw
+}
+
+func GenerateChatID() string {
+	chatID := fmt.Sprintf("%d%03d", time.Now().UnixMilli(), rand.Intn(1000))
+	return chatID
 }

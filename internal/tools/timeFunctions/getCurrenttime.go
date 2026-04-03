@@ -2,6 +2,7 @@ package timeFunctions
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"leiAgent/internal/tools"
 	"time"
@@ -41,8 +42,6 @@ func (t *CurrentTimeTool) Parameters() map[string]interface{} {
 func (t *CurrentTimeTool) Run(ctx context.Context, input string) (string, error) {
 	return t.Execute(ctx, input)
 }
-
-// Execute executes the tool with the given arguments
 func (t *CurrentTimeTool) Execute(ctx context.Context, args string) (string, error) {
 	now := time.Now()
 
@@ -53,13 +52,51 @@ func (t *CurrentTimeTool) Execute(ctx context.Context, args string) (string, err
 	// 获取节日信息
 	holiday := getHoliday(now)
 
-	// 构建详细的时间信息
-	result := fmt.Sprintf("当前时间: %s\n", now.Format("2006-01-02 15:04:05"))
-	result += fmt.Sprintf("星期: %s\n", weekday)
-	result += fmt.Sprintf("农历: %s\n", getLunarDate(now))
-	if holiday != "" {
-		result += fmt.Sprintf("节日: %s\n", holiday)
+	// 构建结构化的时间信息
+	result := map[string]interface{}{
+		"current_time": now.Format("2006-01-02 15:04:05"),
+		"weekday":      weekday,
+		"lunar_date":   getLunarDate(now),
 	}
 
-	return result, nil
+	if holiday != "" {
+		result["holiday"] = holiday
+	}
+
+	// 将结果序列化为JSON
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %v", err)
+	}
+
+	return string(jsonBytes), nil
 }
+func (t *CurrentTimeTool) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"description": "Current time information including date, weekday, lunar date, and holiday",
+		"properties": map[string]interface{}{
+			"current_time": map[string]interface{}{
+				"type":        "string",
+				"description": "Current date and time in format 'YYYY-MM-DD HH:MM:SS'",
+				"example":     "2024-01-15 10:30:45",
+			},
+			"weekday": map[string]interface{}{
+				"type":        "string",
+				"description": "Day of the week in Chinese",
+				"example":     "星期一",
+			},
+			"lunar_date": map[string]interface{}{
+				"type":        "string",
+				"description": "Chinese lunar calendar date",
+				"example":     "腊月初五",
+			},
+			"holiday": map[string]interface{}{
+				"type":        "string",
+				"description": "Holiday information (only present if it's a holiday)",
+				"example":     "春节",
+			},
+		},
+	}
+}
+

@@ -202,54 +202,71 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 }
 
 func (a *App) AppenAgentMessageToFrontRole(role, chatID string) {
-    dp := a.dispatcher(chatID)
-    outputChan := dp.DialogOutputChan
-    eventname := "dialogAppend"
-    
-    if role == utils.MessageRoleReasoning {
-        eventname = "reasoningAppend"
-        outputChan = dp.ReasonningOutputChan
-    }
-    
-    messageID := ""
-    content := ""
-    shouldGenerateNewID := true
-    
-    for {
-        if shouldGenerateNewID {
-            messageID = GenerateMessageID()
-            content = ""
-            shouldGenerateNewID = false
-        }
+	dp := a.dispatcher(chatID)
+	outputChan := dp.DialogOutputChan
+	eventname := "dialogAppend"
 
-        select {
-        case message, ok := <-outputChan:
-            if !ok {
-                logging.Info("Output channel closed for messageid: %s", messageID)
-                return
-            }
+	if role == utils.MessageRoleReasoning {
+		eventname = "reasoningAppend"
+		outputChan = dp.ReasonningOutputChan
+	}
 
-            if message == utils.FinishString {
-                if err := dataoperation.SendMessage(chatID, messageID, content, role); err != nil {
-                    logging.Error("Failed to save message: %v", err)
-                }
-                shouldGenerateNewID = true
-                continue
-            }
-            
-            content += message
-            appendMessage := map[string]interface{}{
-                "chatID":    chatID,
-                "messageID": messageID,
-                "content":   message,
-                "role":      "assistant",
-            }
-            time.Sleep(10 * time.Millisecond)
-            runtime.EventsEmit(a.ctx, eventname, appendMessage)
+	messageID := ""
+	content := ""
+	shouldGenerateNewID := true
 
-        case <-a.ctx.Done():
-            logging.Info("App context cancelled for chat: %s", chatID)
-            return
-        }
-    }
+	for {
+		if shouldGenerateNewID {
+			messageID = GenerateMessageID()
+			content = ""
+			shouldGenerateNewID = false
+		}
+
+		select {
+		case message, ok := <-outputChan:
+			if message == "" {
+				logging.Info("Received empty message for chatID: %s, skipping...", chatID)
+				continue
+			}
+			if !ok {
+				logging.Info("Output channel closed for messageid: %s", messageID)
+				return
+			}
+
+			if message == utils.FinishString {
+				if err := dataoperation.SendMessage(chatID, messageID, content, role); err != nil {
+					logging.Error("Failed to save message: %v", err)
+				}
+				shouldGenerateNewID = true
+				continue
+			}
+
+			content = fmt.Sprintf("%s%s", content, message)
+			appendMessage := map[string]interface{}{
+				"chatID":    chatID,
+				"messageID": messageID,
+				"content":   message,
+				"role":      "assistant",
+			}
+
+			runtime.EventsEmit(a.ctx, eventname, appendMessage)
+
+		case <-a.ctx.Done():
+			logging.Info("App context cancelled for chat: %s", chatID)
+			return
+		}
+	}
+}
+
+func (a *App) StopChat(chatID string) {
+	a.poolMutex.Lock()
+	defer a.poolMutex.Unlock()
+
+	if dp, ok := a.agentPool[chatID]; ok {
+		dp.Shutdown()
+		delete(a.agentPool, chatID)
+		logging.Info("Stopped and removed dispatcher for chatID: %s", chatID)
+	} else {
+		logging.Info("No dispatcher found for chatID: %s to stop", chatID)
+	}
 }

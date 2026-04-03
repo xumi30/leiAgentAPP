@@ -32,15 +32,15 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	tls := []openaistyle.ChatCompletionToolCall{}
 
 	dialogOutChan := utils.OutputChan
-	if dpOutchan, ok := ctx.Value(utils.DPDialogOutputChanString).(*chan string); ok {
+	if dpOutchan, ok := ctx.Value(utils.DPDialogOutputChanString).(chan string); ok {
 		//logging.Info("使用Dispatcher的输出通道")
-		dialogOutChan = *dpOutchan
+		dialogOutChan = dpOutchan
 	}
 
 	reasoningOutChan := utils.ReasoningChan
-	if dpReasoningOutchan, ok := ctx.Value(utils.DPReasoningOutputChanString).(*chan string); ok {
+	if dpReasoningOutchan, ok := ctx.Value(utils.DPReasoningOutputChanString).(chan string); ok {
 		//logging.Info("使用Dispatcher的推理输出通道")
-		reasoningOutChan = *dpReasoningOutchan
+		reasoningOutChan = dpReasoningOutchan
 	}
 
 	for scanner.Scan() {
@@ -144,8 +144,8 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	logging.Info("开始处理非流式响应")
 
 	outChan := utils.OutputChan
-	if dpOutchan, ok := ctx.Value(utils.DPDialogOutputChanString).(*chan string); ok {
-		outChan = *dpOutchan
+	if dpOutchan, ok := ctx.Value(utils.DPDialogOutputChanString).(chan string); ok {
+		outChan = dpOutchan
 	}
 
 	openaiResp, err := p.convertResponse(resp)

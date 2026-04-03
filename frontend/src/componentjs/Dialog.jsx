@@ -43,71 +43,71 @@ export default function Dialog() {
         return () => cancelAnimationFrame(scrollId);
     }, [messages]); // 消息变化就触发
 
-useEffect(() => {
-const handleMessage = (message) => {
-    console.log("收到消息更新事件:", message);
-    setMessages(prevMessages => {
-        // 如果消息列表为空或不存在，直接返回包含新消息的数组
-        if (!prevMessages?.length) {
-            return [message];
+    useEffect(() => {
+        const handleMessage = (message) => {
+            console.log("收到消息更新事件:", message);
+            setMessages(prevMessages => {
+                // 如果消息列表为空或不存在，直接返回包含新消息的数组
+                if (!prevMessages?.length) {
+                    return [message];
+                }
+
+                // 检查是否已存在该消息ID
+                const messageExists = prevMessages.some(msg => msg.messageID === message.messageID);
+
+                // 如果消息已存在，返回原数组；否则添加新消息
+                return messageExists ? prevMessages : [...prevMessages, message];
+            });
+
+            setChatId(message.chatID); // 更新当前对话ID
         }
-        
-        // 检查是否已存在该消息ID
-        const messageExists = prevMessages.some(msg => msg.messageID === message.messageID);
-        
-        // 如果消息已存在，返回原数组；否则添加新消息
-        return messageExists ? prevMessages : [...prevMessages, message];
-    });
-    
-    setChatId(message.chatID); // 更新当前对话ID
-}
 
-    const appendMessage = (message) => {
-        console.log("收到消息更新事件:", message);
-        setMessages((prevMessages) => {
-            if (!prevMessages || prevMessages.length === 0) {
-                return [message];
-            }
-            
-            // 检查是否已存在该消息ID
-            const messageExists = prevMessages.some(msg => msg.messageID === message.messageID);
-            
-            if (messageExists) {
-                // 使用 map 创建新数组，保持不可变性
-                return prevMessages.map((msg) => {
-                    if (msg.messageID === message.messageID) {
-                        // 创建新对象，保持不可变性
-                        return {
-                            ...msg,
-                            content: msg.content + message.content
-                        };
-                    }
-                    return msg;
-                });
-            } else {
-                // 如果是新消息，添加到列表中
-                return [...prevMessages, message];
-            }
-        });
-        
-        setChatId(message.chatID); // 更新当前对话ID
-    }
+        const appendMessage = (message) => {
+            console.log("收到消息更新事件:", message);
+            setMessages((prevMessages) => {
+                if (!prevMessages || prevMessages.length === 0) {
+                    return [message];
+                }
 
-    const handleSenderror = (error) => {
-        alert("发送消息失败: " + error);
-        console.log("发送消息失败: ", error);
-    }
+                // 检查是否已存在该消息ID
+                const messageExists = prevMessages.some(msg => msg.messageID === message.messageID);
 
-    EventsOn("dialogAppend", appendMessage); // 监听对话追加事件
-    EventsOn("GetMessagesByMessageID", handleMessage); // 监听消息更新事件
-    EventsOn("sendMessageError", handleSenderror); // 监听发送错误事件
-    
-    return () => {
-        EventsOff("dialogAppend", handleMessage); // 组件卸载时取消事件监听
-        EventsOff("GetMessagesByMessageID", handleMessage); // 组件卸载时取消事件监听
-        EventsOff("sendMessageError", handleSenderror); // 组件卸载时取消事件监听
-    }
-}, []);
+                if (messageExists) {
+                    // 使用 map 创建新数组，保持不可变性
+                    return prevMessages.map((msg) => {
+                        if (msg.messageID === message.messageID) {
+                            // 创建新对象，保持不可变性
+                            return {
+                                ...msg,
+                                content: msg.content + message.content
+                            };
+                        }
+                        return msg;
+                    });
+                } else {
+                    // 如果是新消息，添加到列表中
+                    return [...prevMessages, message];
+                }
+            });
+
+            setChatId(message.chatID); // 更新当前对话ID
+        }
+
+        const handleSenderror = (error) => {
+            alert("发送消息失败: " + error);
+            console.log("发送消息失败: ", error);
+        }
+
+        EventsOn("dialogAppend", appendMessage); // 监听对话追加事件
+        EventsOn("GetMessagesByMessageID", handleMessage); // 监听消息更新事件
+        EventsOn("sendMessageError", handleSenderror); // 监听发送错误事件
+
+        return () => {
+            EventsOff("dialogAppend", handleMessage); // 组件卸载时取消事件监听
+            EventsOff("GetMessagesByMessageID", handleMessage); // 组件卸载时取消事件监听
+            EventsOff("sendMessageError", handleSenderror); // 组件卸载时取消事件监听
+        }
+    }, []);
 
 
 
@@ -121,13 +121,24 @@ const handleMessage = (message) => {
             SendMessage(chatId, content, "user");
             input.value = ''; // 发送后清空输入框
         }
-        
+        // 让stoopbutton可见
+        const stopButton = document.getElementById('stop-button');
+        if (stopButton) {
+            stopButton.style.display = 'inline-block';
+        }
+
+    }
+
+    const stopDialog = () => {
+        console.log("停止对话");
+        StopChat(chatId); // 发送空消息作为停止信号
     }
 
     return (
-        <div id={"dialog_"+chatId} className="dialog">
+        <div id={"dialog_" + chatId} className="dialog">
             <div className="dialog__header">
                 对话
+
             </div>
             <div className="dialog__messages" ref={messagesRef}>
                 {
@@ -135,8 +146,8 @@ const handleMessage = (message) => {
                         const isUser = msg.role === 'user';
                         const colors = getRandomMacaronColor(msg.messageID);
                         return (
-                            <div key={"dialogmessage_"+msg.messageID}
-                            id={"dialogmessage_"+msg.messageID}
+                            <div key={"dialogmessage_" + msg.messageID}
+                                id={"dialogmessage_" + msg.messageID}
                                 data-role={isUser ? 'user' : 'assistant'}
                                 className={`dialogmessage dialogmessage_${isUser ? 'user' : 'assistant'}`}>
                                 <div className="message-avatar clay-card">
@@ -148,7 +159,7 @@ const handleMessage = (message) => {
                                 <div style={{
                                     backgroundColor: colors.bg,
                                     color: colors.text,
-                                     whiteSpace: 'pre-wrap',
+                                    whiteSpace: 'pre-wrap',
                                 }} className="messagecontent">
                                     {msg.content}
                                 </div>
@@ -157,7 +168,11 @@ const handleMessage = (message) => {
                     })
                 }
             </div>
+
             <div className="dialog__input">
+                <button id='stop-button' onClick={stopDialog}> 
+                    <span className="send-icon">🛑
+                </span></button>
                 <input type="text" placeholder="请输入消息"
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') {

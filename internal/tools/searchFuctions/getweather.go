@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"leiAgent/logging"
+	"leiAgent/utils"
 	"net/http"
 	"time"
 )
@@ -60,12 +62,34 @@ func (t *WeatherTool) Run(ctx context.Context, input string) (string, error) {
 
 // Execute executes the tool with the given arguments
 func (t *WeatherTool) Execute(ctx context.Context, args string) (string, error) {
+	args = utils.ExtractJSON(args)
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
-		return "", err
+		logging.Error("Error parsing parameters: %v", err)
+		return "", fmt.Errorf("failed to parse parameters: %v", err)
 	}
 
-	lat, lon := parseLatLon(params)
+	// 检查参数是否嵌套
+	if latObj, ok := params["latitude"].(map[string]interface{}); ok {
+		// 如果 latitude 是一个对象，尝试从中提取实际值
+		if latVal, ok := latObj["latitude"].(string); ok {
+			params["latitude"] = latVal
+		}
+		if lonVal, ok := latObj["longitude"].(string); ok {
+			params["longitude"] = lonVal
+		}
+	}
+
+	lat, ok := params["latitude"].(string)
+	if !ok {
+		return "", fmt.Errorf("latitude parameter is required and must be a string")
+	}
+
+	lon, ok := params["longitude"].(string)
+	if !ok {
+		return "", fmt.Errorf("longitude parameter is required and must be a string")
+	}
+
 	days := parseDays(params)
 
 	// 更新API请求，获取更多天的数据
@@ -74,19 +98,108 @@ func (t *WeatherTool) Execute(ctx context.Context, args string) (string, error) 
 		lat, lon, days,
 	)
 
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		logging.Error("Error creating HTTP request: %v", err)
+		return "", fmt.Errorf("failed to create HTTP request: %v", err)
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		logging.Error("Error making HTTP request: %v", err)
+		return "", fmt.Errorf("failed to make HTTP request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logging.Error("Error reading response body: %v", err)
+		return "", fmt.Errorf("failed to read response body: %v", err)
+	}
 
 	return t.formatWeatherData(body, days)
+}
+
+func (t *WeatherTool) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"description": "Weather forecast data with daily breakdown and insights",
+		"properties": map[string]interface{}{
+			"forecast_days": map[string]interface{}{
+				"type":        "integer",
+				"description": "Number of days in the forecast (1-16)",
+				"example":     3,
+			},
+			"overall_insights": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type": "string",
+				},
+				"description": "Overall weather trends and patterns for the forecast period",
+				"example": []string{
+					"Overall temperature trend: Warming up over the forecast period",
+					"Rain expected on 2 day(s) during the forecast period",
+				},
+			},
+			"daily_forecast": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"date": map[string]interface{}{
+							"type":        "string",
+							"description": "Date in YYYY-MM-DD format",
+							"example":     "2024-01-15",
+						},
+						"summary": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"condition": map[string]interface{}{
+									"type":        "string",
+									"description": "Primary weather condition",
+									"example":     "Partly cloudy",
+								},
+								"temperature_range": map[string]interface{}{
+									"type":        "string",
+									"description": "Temperature range in Celsius",
+									"example":     "15.5°C ~ 22.3°C",
+								},
+								"trend": map[string]interface{}{
+									"type":        "string",
+									"description": "Temperature trend (warming/cooling/stable)",
+									"example":     "warming",
+								},
+								"max_precip_prob": map[string]interface{}{
+									"type":        "integer",
+									"description": "Maximum precipitation probability (0-100)",
+									"example":     30,
+								},
+								"max_wind_speed": map[string]interface{}{
+									"type":        "number",
+									"description": "Maximum wind speed in km/h",
+									"example":     15.5,
+								},
+							},
+						},
+						"insights": map[string]interface{}{
+							"type": "array",
+							"items": map[string]interface{}{
+								"type": "string",
+							},
+							"description": "Daily weather insights and recommendations",
+							"example": []string{
+								"Temperature rising",
+								"High chance of rain - consider carrying an umbrella",
+							},
+						},
+					},
+				},
+				"description": "Array of daily weather forecasts",
+			},
+		},
+	}
 }
 
 // WeatherResponse represents the API response structure
@@ -248,15 +361,11 @@ func (t *WeatherTool) formatWeatherData(data []byte, days int) (string, error) {
 		"daily_forecast":   dailyData,
 	}
 
-	jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal weather data: %v", err)
+	}
 	return string(jsonBytes), nil
-}
-
-// 🔧 辅助函数
-func parseLatLon(params map[string]interface{}) (string, string) {
-	lat := fmt.Sprintf("%v", params["latitude"])
-	lon := fmt.Sprintf("%v", params["longitude"])
-	return lat, lon
 }
 
 func parseDays(params map[string]interface{}) int {

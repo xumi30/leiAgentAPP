@@ -1,12 +1,17 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"runtime"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // LogLevel 日志级别类型
@@ -21,15 +26,14 @@ const (
 
 // Logger 异步日志结构体
 type Logger struct {
-	name        string
-	level       LogLevel
-	logChan     chan string
-	file        *os.File
-	filePath    string
-	maxSize     int64
-	currentSize int64
-	wg          sync.WaitGroup
-	once        sync.Once
+	name     string
+	level    LogLevel
+	logger   zerolog.Logger
+	file     *os.File
+	filePath string
+	maxSize  int64
+	mu       sync.Mutex
+	once     sync.Once
 }
 
 // loggers 存储已创建的 Logger 实例
@@ -43,7 +47,24 @@ var defaultLogger *Logger
 
 // init 初始化默认 logger
 func init() {
+	// 设置全局时间格式为 RFC3339
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
+
+	// 设置全局日志级别为 Info
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
+	// 设置控制台输出格式
+	consoleWriter := &k8sConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: "2006-01-02T15:04:05.000Z07:00",
+		NoColor:    false,
+	}
+
+	// 创建默认 logger
 	defaultLogger = NewLogger("default", "logs/default.log", INFO, 10*1024*1024)
+
+	// 设置全局日志输出
+	log.Logger = zerolog.New(consoleWriter).With().Timestamp().Logger()
 }
 
 // NewLogger 创建新的日志实例
@@ -68,15 +89,6 @@ func NewLogger(name, filePath string, level LogLevel, maxSize int64) *Logger {
 		return logger
 	}
 
-	// 创建新的 Logger 实例
-	logger = &Logger{
-		name:     name,
-		level:    level,
-		logChan:  make(chan string, 1000), // 缓冲通道大小为1000
-		filePath: filePath,
-		maxSize:  maxSize,
-	}
-
 	// 确保日志目录存在
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -84,13 +96,30 @@ func NewLogger(name, filePath string, level LogLevel, maxSize int64) *Logger {
 	}
 
 	// 打开或创建日志文件
-	if err := logger.openFile(); err != nil {
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
 		panic(fmt.Sprintf("打开日志文件失败: %v", err))
 	}
 
-	// 启动日志写入协程
-	logger.wg.Add(1)
-	go logger.writeLog()
+	// 创建文件写入器，设置格式
+	fileWriter := &k8sConsoleWriter{
+		Out:        file,
+		TimeFormat: "2006-01-02T15:04:05.000Z07:00",
+		NoColor:    true,
+	}
+
+	// 创建新的 Logger 实例
+	zl := zerolog.New(fileWriter).With().Timestamp().Str("component", name).Logger()
+	zl = zl.Level(convertLevel(level))
+
+	logger = &Logger{
+		name:     name,
+		level:    level,
+		logger:   zl,
+		file:     file,
+		filePath: filePath,
+		maxSize:  maxSize,
+	}
 
 	// 存储新创建的 Logger 实例
 	loggers[key] = logger
@@ -130,18 +159,25 @@ func (l *Logger) openFile() error {
 		return err
 	}
 
-	// 获取当前文件大小
-	info, err := l.file.Stat()
-	if err != nil {
-		return err
+	// 创建文件写入器，设置格式
+	fileWriter := &k8sConsoleWriter{
+		Out:        l.file,
+		TimeFormat: "2006-01-02T15:04:05.000Z07:00",
+		NoColor:    true,
 	}
-	l.currentSize = info.Size()
+
+	// 更新 zerolog logger 的输出
+	l.logger = zerolog.New(fileWriter).With().Timestamp().Str("component", l.name).Logger()
+	l.logger = l.logger.Level(convertLevel(l.level))
 
 	return nil
 }
 
 // rotateFile 日志文件轮转
 func (l *Logger) rotateFile() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if l.file != nil {
 		l.file.Close()
 	}
@@ -157,113 +193,51 @@ func (l *Logger) rotateFile() error {
 	return l.openFile()
 }
 
-// writeLog 日志写入协程
-func (l *Logger) writeLog() {
-	defer l.wg.Done()
-
-	for log := range l.logChan {
-		// 检查是否需要轮转
-		if l.maxSize > 0 && l.currentSize >= l.maxSize {
-			if err := l.rotateFile(); err != nil {
-				fmt.Printf("日志文件轮转失败: %v\n", err)
-			}
-		}
-
-		// 写入日志
-		n, err := fmt.Fprintln(l.file, log)
-		if err != nil {
-			fmt.Printf("写入日志失败: %v\n", err)
-			continue
-		}
-		l.currentSize += int64(n)
-	}
-}
-
-// formatLog 格式化日志
-func (l *Logger) formatLog(level LogLevel, format string, v ...interface{}) string {
-	levelStr := ""
-	switch level {
-	case DEBUG:
-		levelStr = "DEBUG"
-	case INFO:
-		levelStr = "INFO"
-	case WARN:
-		levelStr = "WARN"
-	case ERROR:
-		levelStr = "ERROR"
+// checkRotation 检查是否需要轮转
+func (l *Logger) checkRotation() error {
+	if l.maxSize <= 0 {
+		return nil
 	}
 
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	return fmt.Sprintf("[%s] [%s] [%s] %s", timestamp, l.name, levelStr, fmt.Sprintf(format, v...))
-}
-
-// formatLogWithLocation 带位置的格式化日志
-func (l *Logger) formatLogWithLocation(level LogLevel, file string, line int, format string, v ...interface{}) string {
-	levelStr := ""
-	switch level {
-	case DEBUG:
-		levelStr = "DEBUG"
-	case INFO:
-		levelStr = "INFO"
-	case WARN:
-		levelStr = "WARN"
-	case ERROR:
-		levelStr = "ERROR"
+	info, err := l.file.Stat()
+	if err != nil {
+		return err
 	}
 
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	return fmt.Sprintf("[%s] [%s] [%s] [%s:%d] %s", timestamp, l.name, levelStr, filepath.Base(file), line, fmt.Sprintf(format, v...))
-}
-
-// log 内部日志方法
-func (l *Logger) log(level LogLevel, format string, v ...interface{}) {
-	if level < l.level {
-		return
+	if info.Size() >= l.maxSize {
+		return l.rotateFile()
 	}
 
-	log := l.formatLog(level, format, v...)
-	l.logChan <- log
-}
-
-// logWithLocation 带位置的内部日志方法
-func (l *Logger) logWithLocation(level LogLevel, file string, line int, format string, v ...interface{}) {
-	if level < l.level {
-		return
-	}
-
-	log := l.formatLogWithLocation(level, file, line, format, v...)
-	l.logChan <- log
+	return nil
 }
 
 // Debug 输出DEBUG级别日志
 func (l *Logger) Debug(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	l.logWithLocation(DEBUG, file, line, format, v...)
+	l.checkRotation()
+	l.logger.Debug().Caller(2).Msgf(format, v...)
 }
 
 // Info 输出INFO级别日志
 func (l *Logger) Info(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	l.logWithLocation(INFO, file, line, format, v...)
+	l.checkRotation()
+	l.logger.Info().Caller(2).Msgf(format, v...)
 }
 
 // Warn 输出WARN级别日志
 func (l *Logger) Warn(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	l.logWithLocation(WARN, file, line, format, v...)
+	l.checkRotation()
+	l.logger.Warn().Caller(2).Msgf(format, v...)
 }
 
 // Error 输出ERROR级别日志
 func (l *Logger) Error(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	l.logWithLocation(ERROR, file, line, format, v...)
+	l.checkRotation()
+	l.logger.Error().Caller(2).Msgf(format, v...)
 }
 
 // Close 关闭日志
 func (l *Logger) Close() error {
 	l.once.Do(func() {
-		close(l.logChan)
-		l.wg.Wait()
 		if l.file != nil {
 			l.file.Close()
 		}
@@ -275,24 +249,107 @@ func (l *Logger) Close() error {
 
 // Debug 输出DEBUG级别日志（使用默认 logger）
 func Debug(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	defaultLogger.logWithLocation(DEBUG, file, line, format, v...)
+	defaultLogger.Debug(format, v...)
 }
 
 // Info 输出INFO级别日志（使用默认 logger）
 func Info(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	defaultLogger.logWithLocation(INFO, file, line, format, v...)
+	defaultLogger.Info(format, v...)
 }
 
 // Warn 输出WARN级别日志（使用默认 logger）
 func Warn(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	defaultLogger.logWithLocation(WARN, file, line, format, v...)
+	defaultLogger.Warn(format, v...)
 }
 
 // Error 输出ERROR级别日志（使用默认 logger）
 func Error(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	defaultLogger.logWithLocation(ERROR, file, line, format, v...)
+	defaultLogger.Error(format, v...)
+}
+
+// convertLevel 将自定义日志级别转换为zerolog级别
+func convertLevel(level LogLevel) zerolog.Level {
+	switch level {
+	case DEBUG:
+		return zerolog.DebugLevel
+	case INFO:
+		return zerolog.InfoLevel
+	case WARN:
+		return zerolog.WarnLevel
+	case ERROR:
+		return zerolog.ErrorLevel
+	default:
+		return zerolog.InfoLevel
+	}
+}
+
+// k8sConsoleWriter 自定义控制台写入器，实现Kubernetes风格的日志输出
+type k8sConsoleWriter struct {
+	Out        io.Writer
+	TimeFormat string
+	NoColor    bool
+}
+
+// Write 实现io.Writer接口
+func (w *k8sConsoleWriter) Write(p []byte) (n int, err error) {
+	// 解析日志事件
+	var event map[string]interface{}
+	if err := json.Unmarshal(p, &event); err != nil {
+		return w.Out.Write(p)
+	}
+
+	// 构建日志输出
+	var builder strings.Builder
+
+	// 添加时间戳
+	if timestamp, ok := event[zerolog.TimestampFieldName].(string); ok {
+		builder.WriteString(timestamp)
+		builder.WriteString(" ")
+	}
+
+	// 添加日志级别
+	if level, ok := event[zerolog.LevelFieldName].(string); ok {
+		levelStr := strings.ToUpper(level)
+		if !w.NoColor {
+			switch levelStr {
+			case "DEBUG":
+				builder.WriteString("\x1b[36m") // 青色
+			case "INFO":
+				builder.WriteString("\x1b[32m") // 绿色
+			case "WARN":
+				builder.WriteString("\x1b[33m") // 黄色
+			case "ERROR":
+				builder.WriteString("\x1b[31m") // 红色
+			}
+		}
+		builder.WriteString(levelStr)
+		if !w.NoColor {
+			builder.WriteString("\x1b[0m") // 重置颜色
+		}
+		builder.WriteString(" ")
+	}
+
+	// 添加组件名称
+	if component, ok := event["component"].(string); ok {
+		builder.WriteString("[")
+		builder.WriteString(component)
+		builder.WriteString("] ")
+	}
+
+	// 添加调用位置
+	if caller, ok := event[zerolog.CallerFieldName].(string); ok {
+		builder.WriteString("(")
+		builder.WriteString(caller)
+		builder.WriteString(") ")
+	}
+
+	// 添加消息
+	if message, ok := event[zerolog.MessageFieldName].(string); ok {
+		builder.WriteString(message)
+	}
+
+	// 添加换行
+	builder.WriteString("\n")
+
+	return w.Out.Write([]byte(builder.String()))
 }

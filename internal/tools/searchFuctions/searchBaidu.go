@@ -211,3 +211,34 @@ func (t *BaiduSearchTool) isHighQuality(r SearchResult) bool {
 	}
 	return true
 }
+func (t *BaiduSearchTool) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "array",
+		"description": "Array of search results from Baidu search",
+		"items": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"title": map[string]interface{}{
+					"type":        "string",
+					"description": "Title of the search result",
+					"example":     "Example Article Title",
+				},
+				"url": map[string]interface{}{
+					"type":        "string",
+					"description": "URL of the search result",
+					"example":     "https://example.com/article",
+				},
+				"snippet": map[string]interface{}{
+					"type":        "string",
+					"description": "Brief description or snippet of the search result",
+					"example":     "This is a brief description of the article content...",
+				},
+				"content": map[string]interface{}{
+					"type":        "string",
+					"description": "Full content of the page (truncated to 500 characters for top 3 results)",
+					"example":     "This is the full content of the page...",
+				},
+			},
+		},
+	}
+}

@@ -54,17 +54,17 @@ func (t *CalculateTimeTool) Run(ctx context.Context, input string) (string, erro
 func (t *CalculateTimeTool) Execute(ctx context.Context, args string) (string, error) {
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
-		// If not JSON, treat the input as the query
 		return "", fmt.Errorf("invalid input format: %v", err)
 	}
-	// Get query parameter
+
 	op, ok := params["operation"].(string)
 	if !ok || op == "" {
-		return "", fmt.Errorf("query parameter is required")
+		return "", fmt.Errorf("operation parameter is required")
 	}
+
 	duration, ok := params["duration"].(string)
 	if !ok || duration == "" {
-		return "", fmt.Errorf("query parameter is required")
+		return "", fmt.Errorf("duration parameter is required")
 	}
 
 	// 处理天数单位
@@ -77,7 +77,6 @@ func (t *CalculateTimeTool) Execute(ctx context.Context, args string) (string, e
 		}
 		durationValue = time.Duration(days) * 24 * time.Hour
 	} else {
-		// Parse the duration string for other units
 		var err error
 		durationValue, err = time.ParseDuration(duration)
 		if err != nil {
@@ -97,5 +96,31 @@ func (t *CalculateTimeTool) Execute(ctx context.Context, args string) (string, e
 	default:
 		return "", fmt.Errorf("invalid operation: %s. Must be 'add' or 'subtract'", op)
 	}
-	return fmt.Sprintf("Calculated time: %s", result.Format(time.RFC3339)), nil
+
+	// 构建结构化的结果
+	resultMap := map[string]interface{}{
+		"calculated_time": result.Format(time.RFC3339),
+	}
+
+	// 将结果序列化为JSON
+	jsonBytes, err := json.MarshalIndent(resultMap, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %v", err)
+	}
+
+	return string(jsonBytes), nil
+}
+
+func (t *CalculateTimeTool) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"description": "Calculated time result",
+		"properties": map[string]interface{}{
+			"calculated_time": map[string]interface{}{
+				"type":        "string",
+				"description": "The calculated time in RFC3339 format",
+				"example":     "2024-01-15T10:30:00+08:00",
+			},
+		},
+	}
 }

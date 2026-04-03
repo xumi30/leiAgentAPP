@@ -423,19 +423,19 @@ func generateInsights(trend, risk, sentiment string) []string {
 	var insights []string
 
 	if trend == "uptrend" {
-		insights = append(insights, "📈 Market is trending upward")
+		insights = append(insights, "Market is trending upward")
 	}
 	if trend == "downtrend" {
-		insights = append(insights, "📉 Market is trending downward")
+		insights = append(insights, "Market is trending downward")
 	}
 	if risk == "high" {
-		insights = append(insights, "⚠️ High volatility — risk is elevated")
+		insights = append(insights, "High volatility - risk is elevated")
 	}
 	if sentiment == "bullish" {
-		insights = append(insights, "🐂 Bullish sentiment detected")
+		insights = append(insights, "Bullish sentiment detected")
 	}
 	if sentiment == "bearish" {
-		insights = append(insights, "🐻 Bearish sentiment detected")
+		insights = append(insights, "Bearish sentiment detected")
 	}
 
 	return insights
@@ -478,5 +478,107 @@ func normalizeSymbol(input string) string {
 
 	default:
 		return input
+	}
+}
+
+func (t *MarketTool) Results() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"description": "Structured market data analysis including price, trend, volatility, and insights",
+		"properties": map[string]interface{}{
+			"symbol": map[string]interface{}{
+				"type":        "string",
+				"description": "Market symbol (e.g., AAPL, BTC-USD)",
+				"example":     "AAPL",
+			},
+			"timestamp": map[string]interface{}{
+				"type":        "string",
+				"description": "Timestamp of the data in RFC3339 format",
+				"example":     "2024-01-15T10:30:00Z",
+			},
+			"summary": map[string]interface{}{
+				"type":        "object",
+				"description": "Summary of market data",
+				"properties": map[string]interface{}{
+					"current_price": map[string]interface{}{
+						"type":        "number",
+						"description": "Current market price",
+						"example":     150.25,
+					},
+					"open": map[string]interface{}{
+						"type":        "number",
+						"description": "Opening price for the current period",
+						"example":     148.50,
+					},
+					"previous_close": map[string]interface{}{
+						"type":        "number",
+						"description": "Previous closing price",
+						"example":     149.75,
+					},
+					"change": map[string]interface{}{
+						"type":        "number",
+						"description": "Price change from previous close",
+						"example":     0.50,
+					},
+					"change_percent": map[string]interface{}{
+						"type":        "string",
+						"description": "Percentage change from previous close",
+						"example":     "0.33%",
+					},
+					"volume": map[string]interface{}{
+						"type":        "integer",
+						"description": "Trading volume",
+						"example":     1000000,
+					},
+					"volume_trend": map[string]interface{}{
+						"type":        "string",
+						"description": "Volume trend (stable, increasing, decreasing)",
+						"example":     "stable",
+					},
+					"trend": map[string]interface{}{
+						"type":        "string",
+						"description": "Market trend (uptrend, downtrend, sideways)",
+						"example":     "uptrend",
+					},
+					"volatility": map[string]interface{}{
+						"type":        "string",
+						"description": "Volatility level (low, medium, high)",
+						"example":     "low",
+					},
+				},
+			},
+			"analysis": map[string]interface{}{
+				"type":        "object",
+				"description": "Market analysis and indicators",
+				"properties": map[string]interface{}{
+					"market_sentiment": map[string]interface{}{
+						"type":        "string",
+						"description": "Overall market sentiment (bullish, bearish, neutral)",
+						"example":     "bullish",
+					},
+					"risk_level": map[string]interface{}{
+						"type":        "string",
+						"description": "Risk level (low, medium, high)",
+						"example":     "low",
+					},
+					"liquidity": map[string]interface{}{
+						"type":        "string",
+						"description": "Market liquidity (low, normal, high)",
+						"example":     "normal",
+					},
+				},
+			},
+			"insights": map[string]interface{}{
+				"type":        "array",
+				"description": "Key market insights and observations",
+				"items": map[string]interface{}{
+					"type": "string",
+				},
+				"example": []string{
+					"Market is in uptrend phase",
+					"Volatility is low",
+				},
+			},
+		},
 	}
 }

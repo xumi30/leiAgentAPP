@@ -86,7 +86,7 @@ func (p *Proxy) doRequest(requestinfo *http.Request) (*http.Response, error) {
 
 	requestinfo.Header.Set("Content-Type", "application/json")
 
-	logging.Info("开始发送请求 %v", requestinfo)
+	//logging.Info("开始发送请求 %v", requestinfo)
 	resp, err := p.httpClient.Do(requestinfo)
 
 	if err != nil {
@@ -224,14 +224,14 @@ func selectProviderStrategy() *ModelAPIInfo {
 	//return "zhipu", "GLM-4-Flash-250414", "63491ae217a9403fb667ac808e095b85.sktEuU7i3XhwjnrI"
 	//"zhipu", "qwen-plus", "sk-da6d7a7da1914f6581d4825d7b790389"
 	// ModelAPIInfozhipu := &ModelAPIInfo{
-	// 	modelName: "glm-4.7-flash",
-	// 	token:     "6b4c950aa280432db0b47ecbcaea1cf0.HnGjIJXNRY4ttNKs",
+	// 	modelName: "GLM-Z1-Flash",
+	// 	token:     "6bcc667e09ca4c3cb17a3776cce58a7f.djKUYPXYC9SD1zYz",
 	// 	url:       "https://open.bigmodel.cn/api/paas/v4/chat/completions",
 	// 	isStream:  3,
 	// }
 
 	ModelAPIInfo2 := &ModelAPIInfo{
-		modelName: "qwen3.5-flash",
+		modelName: "qwen3.5-122b-a10b",
 		token:     "sk-da6d7a7da1914f6581d4825d7b790389",
 		url:       "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
 		isStream:  3,
