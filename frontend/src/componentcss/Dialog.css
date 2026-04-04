@@ -37,26 +37,30 @@
 
 
 .dialog__input {
-    padding: 15px 20px;
+    padding: 10px 20px;
     background: rgba(230, 240, 255, 0.25);
     border-top: 1px solid rgba(255, 255, 255, 0.4);
     backdrop-filter: blur(10px);
     display: flex;
     gap: 10px;
+    min-height: 10%;
+    max-height: 40%;
+
 }
 
-.dialog__input input {
+.dialog__input textarea {
     flex: 1;
-    padding: 10px 15px;
+    padding: 5px 15px;
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.5);
     background: rgba(255, 255, 255, 0.4);
     outline: none;
     color: rgba(100, 100, 150, 0.8);
+    height: 100%;
 }
 
-.dialog__input input::placeholder {
-    color: rgba(150, 150, 180, 0.6);
+.dialog__input textarea::placeholder {
+    color: rgba(173, 202, 26, 0.6);
 }
 
 #send-button {

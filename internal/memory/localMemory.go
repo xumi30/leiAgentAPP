@@ -152,7 +152,7 @@ func AddAssistantContentMessage(chatId string, assistantMessage string) {
 	memoryLocal.AddMessage(chatId, &assistantMsg)
 }
 
-func AddSetSystemPrompt(chatId string, systemprompt string) {
+func SetSystemPrompt(chatId string, systemprompt string) {
 	if utils.IsBlank(systemprompt) {
 		return
 	}

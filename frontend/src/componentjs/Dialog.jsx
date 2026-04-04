@@ -2,7 +2,7 @@
 import { getRandomMacaronColor } from './Constant';
 import React, { useState, useEffect, useRef } from 'react';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
-import { GetMessages, SendMessage } from '../../wailsjs/go/main/App';
+import { GetMessages, SendMessage,StopChat } from '../../wailsjs/go/main/App';
 
 export default function Dialog() {
     // 获取对话列表
@@ -113,7 +113,7 @@ export default function Dialog() {
 
     const sendMessage = () => {
         console.log("发送消息,当前chatId:", chatId);
-        const input = document.querySelector('.dialog__input input');
+        const input = document.querySelector('.dialog__input textarea');
         const content = input.value.trim();
         console.log("输入的消息内容:", content);
 
@@ -173,7 +173,7 @@ export default function Dialog() {
                 <button id='stop-button' onClick={stopDialog}> 
                     <span className="send-icon">🛑
                 </span></button>
-                <input type="text" placeholder="请输入消息"
+                <textarea type="text" placeholder="请输入消息"
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                             sendMessage();

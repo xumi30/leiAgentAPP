@@ -6,8 +6,8 @@ export function AddConversation(arg1) {
   return window['go']['main']['App']['AddConversation'](arg1);
 }
 
-export function AppenAgentMessageToFrontRole(arg1, arg2) {
-  return window['go']['main']['App']['AppenAgentMessageToFrontRole'](arg1, arg2);
+export function AppenAgentMessageToFrontRole(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AppenAgentMessageToFrontRole'](arg1, arg2, arg3);
 }
 
 export function DeleteConversation(arg1) {

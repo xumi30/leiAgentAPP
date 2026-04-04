@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	globalchannel "leiAgent/internal"
 	gemini "leiAgent/internal/provider/Gemin"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/logging"
@@ -31,17 +32,15 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	scanner := NewStreamScanner(resp.Body)
 	tls := []openaistyle.ChatCompletionToolCall{}
 
-	dialogOutChan := utils.OutputChan
-	if dpOutchan, ok := ctx.Value(utils.DPDialogOutputChanString).(chan string); ok {
-		//logging.Info("使用Dispatcher的输出通道")
-		dialogOutChan = dpOutchan
+	chatId, ok := ctx.Value(utils.ChatIDString).(string)
+	if !ok {
+		logging.Error("无法从 context 中获取 chatId")
+		return nil, fmt.Errorf("无法从 context 中获取 chatId")
 	}
 
-	reasoningOutChan := utils.ReasoningChan
-	if dpReasoningOutchan, ok := ctx.Value(utils.DPReasoningOutputChanString).(chan string); ok {
-		//logging.Info("使用Dispatcher的推理输出通道")
-		reasoningOutChan = dpReasoningOutchan
-	}
+	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatId)
+
+	reasoningOutChan := globalchannel.GetGlobalReasonOutChannel(chatId)
 
 	for scanner.Scan() {
 
@@ -143,10 +142,13 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
 	logging.Info("开始处理非流式响应")
 
-	outChan := utils.OutputChan
-	if dpOutchan, ok := ctx.Value(utils.DPDialogOutputChanString).(chan string); ok {
-		outChan = dpOutchan
+	chatId, ok := ctx.Value(utils.ChatIDString).(string)
+	if !ok {
+		logging.Error("无法从 context 中获取 chatId")
+		return nil, fmt.Errorf("无法从 context 中获取 chatId")
 	}
+
+	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatId)
 
 	openaiResp, err := p.convertResponse(resp)
 	if err != nil {
@@ -166,7 +168,7 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 		logging.Error("Message.Content不是字符串类型: %v", openaiResp.Choices[0].Message.Content)
 
 	} else {
-		go func() { outChan <- openaiResp.Choices[0].Message.Content.(string) + "\n" }()
+		go func() { dialogOutChan <- openaiResp.Choices[0].Message.Content.(string) + "\n" }()
 	}
 
 	if len(tools) > 0 {

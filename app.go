@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
 	"leiAgent/dataoperation"
+	globalchannel "leiAgent/internal"
 	"leiAgent/internal/dispatcher"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -108,9 +110,10 @@ func (a *App) GetMessagesByMessageID(messageID string) {
 }
 
 func (a *App) SendMessage(chatID, message, role string) {
-
+	a.dispatcher(chatID)
+	time.Sleep(100 * time.Millisecond) // 短暂等待确保 dispatcher 启动
 	//如果message为空，则不发送
-	if message == "" {
+	if strings.TrimSpace(message) == "" {
 		logging.Info("Message is empty, not sending")
 		runtime.EventsEmit(a.ctx, "sendMessageError", "messages is empty, not sending")
 		return
@@ -119,6 +122,7 @@ func (a *App) SendMessage(chatID, message, role string) {
 	if chatID == "" {
 		chatID = a.AddConversation(message)
 	}
+	inputChan := globalchannel.GetGlobalInputChannel(chatID)
 
 	messageID := GenerateMessageID()
 
@@ -131,10 +135,7 @@ func (a *App) SendMessage(chatID, message, role string) {
 	}
 	a.GetMessagesByMessageID(messageID)
 
-	//logging.Info("Sending message to conversation with ID: %s, messageID: %s, Message: %s, Role: %s", chatID, messageID, message, role)
-
-	dp := a.dispatcher(chatID)
-	dp.InputChan <- message
+	inputChan <- message
 	logging.Info("Sending message to conversation successfully")
 
 }
@@ -189,26 +190,27 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		ctx, cancel := context.WithCancel(context.Background())
 		ctx = context.WithValue(ctx, "chatID", chatID)
 
-		dp = dispatcher.NewDispatcher(ctx, cancel) // 传递 cancel 函数
+		dp = dispatcher.NewDispatcher(ctx, chatID, cancel) // 传递 cancel 函数
 		a.agentPool[chatID] = dp
 		// 启动 并处理返回
+		logging.Info("Starting dispatcher for conversation with ChatID: %s", chatID)
 		go dp.Run(ctx)
-		go a.AppenAgentMessageToFrontRole(utils.MessageRoleAssistant, chatID)
-		go a.AppenAgentMessageToFrontRole(utils.MessageRoleReasoning, chatID)
+		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
+		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
 	}
 
 	logging.Info("Getting dispatcher for conversation with ChatID: %s %v", chatID, dp)
 	return dp
 }
 
-func (a *App) AppenAgentMessageToFrontRole(role, chatID string) {
-	dp := a.dispatcher(chatID)
-	outputChan := dp.DialogOutputChan
+func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID string) {
+	outputChan := globalchannel.GetGlobalDialogOutChannel(chatID)
+	reasonningOutputChan := globalchannel.GetGlobalReasonOutChannel(chatID)
 	eventname := "dialogAppend"
 
 	if role == utils.MessageRoleReasoning {
 		eventname = "reasoningAppend"
-		outputChan = dp.ReasonningOutputChan
+		outputChan = reasonningOutputChan
 	}
 
 	messageID := ""
@@ -251,7 +253,7 @@ func (a *App) AppenAgentMessageToFrontRole(role, chatID string) {
 
 			runtime.EventsEmit(a.ctx, eventname, appendMessage)
 
-		case <-a.ctx.Done():
+		case <-ctx.Done():
 			logging.Info("App context cancelled for chat: %s", chatID)
 			return
 		}

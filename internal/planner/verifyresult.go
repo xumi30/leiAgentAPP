@@ -2,10 +2,13 @@ package planner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"leiAgent/internal/memory"
+	"leiAgent/internal/memory/sqlmemory"
 	"leiAgent/internal/proxy"
+	"leiAgent/logging"
 	"leiAgent/utils"
 )
 
@@ -15,7 +18,7 @@ func (p *Planning) VerifyResult(ctx context.Context, result string) (string, err
 	if !ok {
 		return "", errors.New("chatID not found in context")
 	}
-	sql, err := memory.GetSqlInstance("")
+	sql, err := sqlmemory.GetSqlInstance("")
 	if err != nil {
 		return "", err
 	}
@@ -27,17 +30,6 @@ func (p *Planning) VerifyResult(ctx context.Context, result string) (string, err
 	subctx, subcancel := context.WithCancel(context.Background())
 	defer subcancel()
 
-	dialogOutChan := utils.OutputChan
-	if dpOutchan, ok := ctx.Value(utils.DPDialogOutputChanString).(chan string); ok {
-		dialogOutChan = dpOutchan
-	}
-	reasoningOutChan := utils.ReasoningChan
-	if dpReasoningOutchan, ok := ctx.Value(utils.DPReasoningOutputChanString).(chan string); ok {
-		reasoningOutChan = dpReasoningOutchan
-	}
-
-	subctx = context.WithValue(subctx, utils.DPDialogOutputChanString, dialogOutChan)
-	subctx = context.WithValue(subctx, utils.DPReasoningOutputChanString, reasoningOutChan)
 	// 将subChatId放入subctx中
 	subctx = context.WithValue(subctx, utils.ChatIDString, subChatId)
 
@@ -166,16 +158,61 @@ Return:
 	
 	`
 
-	memory.AddSetSystemPrompt(subChatId, systemprompt)
+	retryTimes := 0
+	// 清楚之前的对话历史，避免干扰
+	memory.GetLocalMemory().Clear(subChatId)
+	memory.SetSystemPrompt(subChatId, systemprompt)
 	memory.AddUserMessage(subChatId, result)
 
 	proxy := proxy.NewProxy(nil)
 	response, err := proxy.Communicate(subctx)
 
 	retrySteps := utils.ExtractJSON(response.Content)
+	goalsteps := map[string]interface{}{}
 
-	fmt.Println("分析结果: ", retrySteps)
+	err = json.Unmarshal([]byte(retrySteps), &goalsteps)
+	if err != nil {
+		logging.Error("解析JSON失败: %v", err)
+		return "", fmt.Errorf("解析JSON失败: %v", err)
+	}
+	// 判断 goalsteps 中是否包含 "analysis" 和 "Goalsteps" 字段
+	if _, ok := goalsteps["analysis"]; !ok {
+		logging.Error("返回的JSON缺少 'analysis' 字段")
+		
+		//memory.AddUserMessage(subChatId, "执行结果分析失败，返回的JSON缺少 'analysis' 字段")
+		if retryTimes < 3 {
+			retryTimes++
+			p.VerifyResult(ctx, result)
+		}
+		return result, fmt.Errorf("返回的JSON缺少 'analysis' 字段")
+	}
+	if _, ok := goalsteps["Goalsteps"]; !ok {
+		logging.Error("返回的JSON缺少 'Goalsteps' 字段")
+		//memory.AddUserMessage(subChatId, "执行结果分析失败，返回的JSON缺少 'Goalsteps' 字段")
+		if retryTimes < 3 {
+			retryTimes++
+			p.VerifyResult(ctx, result)
+		}
+		return result, fmt.Errorf("返回的JSON缺少 'analysis' 字段")
+	}
+	fmt.Println("分析结果: ", goalsteps["analysis"])
 
-	return retrySteps, err
+	// 处理 Goalsteps 字段
+	var goalStepsJSON []byte
+
+	// 判断 Goalsteps 的类型
+	if goalstepsStr, ok := goalsteps["Goalsteps"].(string); ok {
+		// 如果已经是字符串，直接使用
+		goalStepsJSON = []byte(goalstepsStr)
+	} else {
+		// 如果是其他类型（如数组），则序列化为 JSON
+		goalStepsJSON, err = json.Marshal(goalsteps["Goalsteps"])
+		if err != nil {
+			logging.Error("序列化Goalsteps失败: %v", err)
+			return "", fmt.Errorf("序列化Goalsteps失败: %v", err)
+		}
+	}
+
+	return string(goalStepsJSON), nil
 
 }

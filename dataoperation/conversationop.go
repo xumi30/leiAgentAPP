@@ -2,16 +2,16 @@ package dataoperation
 
 import (
 	"fmt"
-	"leiAgent/internal/memory"
+	"leiAgent/internal/memory/sqlmemory"
 	"leiAgent/logging"
 	"path/filepath"
 )
 
 // Dialog represents a conversation structure
 
-func GetSqlInstance() *memory.SQLMemory {
+func GetSqlInstance() *sqlmemory.SQLMemory {
 	dbPath := filepath.Join(".", "data", "memory.db")
-	sql, err := memory.GetSqlInstance(dbPath)
+	sql, err := sqlmemory.GetSqlInstance(dbPath)
 	if err != nil {
 		logging.Error("获取数据库实例失败: %v", err)
 		return nil
@@ -40,7 +40,7 @@ func ListConverstions() []map[string]interface{} {
 	// 根据id查询message 如果对话内容为空，则删除
 	var validConversations []map[string]interface{}
 	for _, conversation := range conversations {
-		chatID := conversation["id"].(string)  // 使用 "id" 而不是 "chatID"
+		chatID := conversation["id"].(string) // 使用 "id" 而不是 "chatID"
 		messages, err := GetSqlInstance().GetMessages(chatID)
 		if err != nil {
 			logging.Error("获取对话失败: %v", err)
@@ -59,7 +59,6 @@ func ListConverstions() []map[string]interface{} {
 
 	return validConversations
 }
-
 
 func GetConversation(chatID string) map[string]interface{} {
 	if GetSqlInstance() == nil {

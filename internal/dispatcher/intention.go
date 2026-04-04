@@ -114,7 +114,6 @@ func parseIntention(data string) (*Intention, error) {
 		return nil, err
 	}
 
-	// ✅ 基础校验
 	if i.Intent == "" {
 		return nil, errors.New("intent is empty")
 	}

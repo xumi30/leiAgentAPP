@@ -9,20 +9,28 @@ const (
 ║                              Version %s                                   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 `
-	ChatIDString                = "chatID"
-	Channelstring               = "channel"
-	Clientstring                = "httpClient"
-	IsStreamString              = "IsStreamString"
-	ToolsString                 = "tools"
-	IsPlanningString            = "isPlanning"
-	DPDialogOutputChanString    = "outputChan"
-	DPReasoningOutputChanString = "reasoningOutputChan"
-	FinishString                = "[DONE940720]"
-	IntentKey                   = "intentkey"
-	ChatModeString              = "CHAT"
-	PlanModeString              = "PLAN"
-	ToolModeString              = "TOOL"
-	SwitchModeString            = "SWITCH"
+	ChatIDString     = "chatID"
+	Channelstring    = "channel"
+	Clientstring     = "httpClient"
+	IsStreamString   = "IsStreamString"
+	ToolsString      = "tools"
+	IsPlanningString = "isPlanning"
+
+	FinishString     = "[DONE940720]"
+	IntentKey        = "intentkey"
+	ChatModeString   = "CHAT"
+	PlanModeString   = "PLAN"
+	ToolModeString   = "TOOL"
+	SwitchModeString = "SWITCH"
+
+	taskFailed     = "failed"
+	taskCompleted  = "completed"
+	taskInProgress = "inProgress"
+
+	stepFailed    = "failed"
+	stepCompleted = "completed"
+	stepPending   = "pending"
+	stepRunning   = "running"
 
 	// MessageRoleUser represents a user message
 	MessageRoleUser = "user"
