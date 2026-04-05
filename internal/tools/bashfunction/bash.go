@@ -24,12 +24,15 @@ func (t *BashTool) Name() string {
 
 // Description returns a description of what the tool does
 func (t *BashTool) Description() string {
+	systemType := runtime.GOOS
+
 	return "Tool for executing local bash (Linux/Mac) or cmd (Windows) commands. " +
 		"Use this tool when user needs to run system commands, check system status, " +
 		"or perform local operations. " +
 		"Returns command output, error messages, and exit code. " +
 		"当用户需要执行系统命令、根据软件运行的系统类型，选择对应的系统命令。" +
-		"使用这个工具时，务必确保输入的命令是安全的，并且不会对系统造成破坏。"
+		"使用这个工具时，务必确保输入的命令是安全的，并且不会对系统造成破坏。" +
+		"系统的类型是:" + systemType
 }
 
 // Parameters returns the parameters that the tool accepts
@@ -137,7 +140,6 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 
 	return string(jsonBytes), nil
 }
-
 
 // 危险命令列表，包括可能造成系统破坏的命令
 var dangerousCommands = []string{

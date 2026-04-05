@@ -18,6 +18,34 @@ export function GetConversation(arg1) {
   return window['go']['main']['App']['GetConversation'](arg1);
 }
 
+export function GetLLMConfigEditorState() {
+  return window['go']['main']['App']['GetLLMConfigEditorState']();
+}
+
+export function GetLLMConnectionStatus() {
+  return window['go']['main']['App']['GetLLMConnectionStatus']();
+}
+
+export function GetLLMResolvedConfigPath() {
+  return window['go']['main']['App']['GetLLMResolvedConfigPath']();
+}
+
+export function GetLLMThinkingDisabled() {
+  return window['go']['main']['App']['GetLLMThinkingDisabled']();
+}
+
+export function GetMemoCalendarDates() {
+  return window['go']['main']['App']['GetMemoCalendarDates']();
+}
+
+export function GetMemoContent() {
+  return window['go']['main']['App']['GetMemoContent']();
+}
+
+export function GetMemoFilePath() {
+  return window['go']['main']['App']['GetMemoFilePath']();
+}
+
 export function GetMessages(arg1) {
   return window['go']['main']['App']['GetMessages'](arg1);
 }
@@ -38,8 +66,20 @@ export function ListConversation() {
   return window['go']['main']['App']['ListConversation']();
 }
 
+export function SaveLLMConfigText(arg1) {
+  return window['go']['main']['App']['SaveLLMConfigText'](arg1);
+}
+
+export function SaveMemoContent(arg1) {
+  return window['go']['main']['App']['SaveMemoContent'](arg1);
+}
+
 export function SendMessage(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendMessage'](arg1, arg2, arg3);
+}
+
+export function SetLLMThinkingDisabled(arg1) {
+  return window['go']['main']['App']['SetLLMThinkingDisabled'](arg1);
 }
 
 export function StopChat(arg1) {

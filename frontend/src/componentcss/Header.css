@@ -44,6 +44,95 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .header-thinking-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--apple-fill);
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--apple-label);
+  }
+
+  .header-thinking-toggle input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #007aff;
+    cursor: pointer;
+  }
+
+  .header-thinking-toggle__text {
+    letter-spacing: 0.02em;
+  }
+
+  .header-settings-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 999px;
+    background: var(--apple-fill);
+    color: var(--apple-blue);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+
+  .header-settings-btn:hover {
+    background: rgba(0, 122, 255, 0.12);
+  }
+
+  .header-settings-btn__icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .header-settings-btn__text {
+    letter-spacing: 0.02em;
+  }
+
+  .header-connection {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .header-refresh-btn {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    border-radius: 10px;
+    background: var(--apple-fill);
+    color: var(--apple-blue);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.2s ease;
+  }
+
+  .header-refresh-btn:hover:not(:disabled) {
+    background: rgba(0, 122, 255, 0.12);
+  }
+
+  .header-refresh-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .header-refresh-btn:not(:disabled):active {
+    transform: rotate(60deg);
   }
 
   .header-memo-btn {
@@ -91,9 +180,30 @@
     transition: var(--transition-smooth);
   }
   
+  .status-indicator.connected .status-text {
+    color: #1d7a3a;
+  }
+
+  .status-indicator.disconnected .status-text {
+    color: #c62828;
+  }
+
+  .status-indicator.checking .status-text {
+    color: var(--light-text);
+  }
+
   .status-dot.active {
     background-color: #34c759;
     animation: pulse 2s infinite;
+  }
+
+  .status-dot.error {
+    background-color: #ff3b30;
+  }
+
+  .status-dot.pending {
+    background-color: #8e8e93;
+    animation: pulse 1.4s infinite;
   }
   
   .status-text {

@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
+
 	"leiAgent/dataoperation"
 	globalchannel "leiAgent/internal"
 	"leiAgent/internal/memory"
@@ -81,14 +84,24 @@ OUTPUT REQUIREMENTS:
 - Do NOT include comments
 - Do NOT include extra text
 
-If you cannot produce a valid plan, output:
+If you cannot produce a valid plan yet (need clarification), output ONLY:
 
-{ "error": "reason" }
+{ "error": "your question to the user in their language" }
 
-If you are unsure, just keep asking questions.
-If you need more information, ask for it.
-If you need clarification, ask for it.
+In that case do not include "goal" or "steps". For a runnable plan, never use the "error" key.
 `
+
+	// PlanSummarySystemPrompt 在计划执行结束后，将结果 JSON 转为用户可读总结
+	PlanSummarySystemPrompt = `You summarize a completed multi-step plan execution for the end user.
+
+Input context contains JSON with "goal", "steps" (id, tool, status, result, error fields), and plan status.
+
+Rules:
+- Write in the same language as the user's goal when you can infer it.
+- Use Markdown: headings and bullet lists are encouraged.
+- Cover: what they asked for; what each step did and whether it succeeded; key outcomes (summarize large results, do not paste huge blobs).
+- End with overall outcome (full success / partial / failed) and short next-step suggestions if helpful.
+- Do not repeat the full raw JSON.`
 )
 
 type Planning struct {
@@ -143,7 +156,10 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		return nil, err
 	}
 
-	plannerProxy := proxy.NewProxy(nil)
+	plannerProxy, err := proxy.NewProxy(nil)
+	if err != nil {
+		return nil, err
+	}
 	memory.GetLocalMemory().SetSystemPrompt(chatId, PlannerPromotion)
 	logging.Info("planning系统提示词已加载...")
 
@@ -151,20 +167,30 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 
 	response, err := plannerProxy.Communicate(ctx)
 	if err != nil {
-		logging.Error("Response: %s", response.Content)
+		logging.Error("规划请求失败: %v", err)
 		dialogOutChan <- "规划失败: " + err.Error()
-
+		return nil, err
 	}
 
 	logging.Info("Agent 处理消息完成，返回结果: %s", response.Content)
 
-	// unmarshal response.Content to Step[]
-	var planner Planning
+	rawJSON := utils.ExtractJSON(response.Content)
 
-	err = json.Unmarshal([]byte(response.Content), &planner)
+	var probe struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(rawJSON), &probe); err == nil && strings.TrimSpace(probe.Error) != "" {
+		return nil, fmt.Errorf("需要先确认：%s", probe.Error)
+	}
+
+	var planner Planning
+	err = json.Unmarshal([]byte(rawJSON), &planner)
 	if err != nil {
 		logging.Error("解析规划结果失败: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("规划结果不是合法 JSON，请重试或换一种描述方式：%v", err)
+	}
+	if len(planner.Steps) == 0 {
+		return nil, fmt.Errorf("模型未生成任何执行步骤；若你只是在讨论或补充信息，可用较短说法触发模式重判，或把任务写得更具体后再发")
 	}
 	planner.Status = "pending"
 	err = planner.saveTodb(chatId)

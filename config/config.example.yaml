@@ -1,0 +1,30 @@
+# 复制为 config/config.yaml 后填写下列字段。
+# LEIAGENT_CONFIG_PATH 可指向自定义 YAML 路径。
+#
+# 单后端：配置 llm。
+# 多后端故障转移：配置 llm_backends（非空时忽略 llm）；按数组顺序尝试，失败则换下一个。
+#
+# 单后端时可用环境变量覆盖：LEIAGENT_LLM_API_KEY、LEIAGENT_LLM_BASE_URL、LEIAGENT_LLM_MODEL、
+# LEIAGENT_LLM_PROVIDER、LEIAGENT_LLM_STREAM_MODE。
+# 多后端时每行须写全 base_url、model、api_key（api_key 可留空则回退到环境变量中的 Key）。
+#
+# 可选：provider 留空为 Bearer；Google Gemini 填 gemini（使用 x-goog-api-key）。
+# 可选：stream_mode 为 nonstream | stream | both（默认 both；Gemini 未指定时默认 nonstream）。
+
+llm:
+  api_key: "sk-da6d7a7da1914f6581d4825d7b790389"
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+  model: "qwen3.5-plus-2026-02-15"
+  provider: ""
+  stream_mode: both
+
+# 与上方 llm 二选一示例：
+# llm_backends:
+#   - name: primary
+#     api_key: "sk-1"
+#     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+#     model: "qwen-turbo"
+#   - name: backup
+#     api_key: "sk-2"
+#     base_url: "https://api.deepseek.com/v1/chat/completions"
+#     model: "deepseek-chat"

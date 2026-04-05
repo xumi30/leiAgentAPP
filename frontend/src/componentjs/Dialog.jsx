@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
 import { GetMessages, SendMessage,StopChat } from '../../wailsjs/go/main/App';
 import MessageContent from './MessageContent.jsx';
@@ -8,6 +8,7 @@ export default function Dialog() {
     const [chatId, setChatId] = useState('');
     const [messages, setMessages] = useState([]);
     const [stopVisible, setStopVisible] = useState(false);
+    const [streamPulse, setStreamPulse] = useState(null);
     const messagesRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -15,6 +16,7 @@ export default function Dialog() {
         const handleConversationChange = (event) => {
             const { conversationId } = event.detail;
             setChatId(conversationId);
+            setStreamPulse(null);
             const getMessages = async () => {
                 const messages = await GetMessages(conversationId);
                 setMessages(messages);
@@ -30,19 +32,12 @@ export default function Dialog() {
         };
     }, []);
 
-    // 新增：监听 messages 变化，自动滚动到底部
-    useEffect(() => {
+    // 消息变化或流式输出时，将列表滚到底部（layout 后执行，减少闪动）
+    useLayoutEffect(() => {
         const container = messagesRef.current;
         if (!container) return;
-
-        // 2. requestAnimationFrame 确保 DOM 渲染完成再滚动
-        const scrollId = requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
-        });
-
-        // 3. 清理：防止组件卸载后报错
-        return () => cancelAnimationFrame(scrollId);
-    }, [messages]); // 消息变化就触发
+        container.scrollTop = container.scrollHeight;
+    }, [messages, streamPulse]);
 
     useEffect(() => {
         const handleMessage = (message) => {
@@ -65,6 +60,10 @@ export default function Dialog() {
 
         const appendMessage = (message) => {
             console.log("收到消息更新事件:", message);
+            setStreamPulse({
+                chatID: String(message.chatID ?? ''),
+                messageID: String(message.messageID ?? ''),
+            });
             setMessages((prevMessages) => {
                 if (!prevMessages || prevMessages.length === 0) {
                     return [message];
@@ -99,12 +98,24 @@ export default function Dialog() {
             console.log("发送消息失败: ", error);
         }
 
+        const handleDialogStreamEnd = (payload) => {
+            const cid = String(payload?.chatID ?? '');
+            const mid = String(payload?.messageID ?? '');
+            setStreamPulse((prev) => {
+                if (!prev) return prev;
+                if (prev.chatID === cid && prev.messageID === mid) return null;
+                return prev;
+            });
+        };
+
         EventsOn("dialogAppend", appendMessage); // 监听对话追加事件
+        EventsOn("dialogStreamEnd", handleDialogStreamEnd);
         EventsOn("GetMessagesByMessageID", handleMessage); // 监听消息更新事件
         EventsOn("sendMessageError", handleSenderror); // 监听发送错误事件
 
         return () => {
             EventsOff("dialogAppend");
+            EventsOff("dialogStreamEnd");
             EventsOff("GetMessagesByMessageID");
             EventsOff("sendMessageError");
         };
@@ -128,6 +139,7 @@ export default function Dialog() {
     const stopDialog = () => {
         StopChat(chatId);
         setStopVisible(false);
+        setStreamPulse(null);
     };
 
     /** @param {React.KeyboardEvent<HTMLTextAreaElement>} e */
@@ -145,8 +157,21 @@ export default function Dialog() {
             </div>
             <div className="dialog__messages" ref={messagesRef}>
                 {
-                    messages && messages.filter(msg => msg.role != 'reasoning').map((msg) => {
+                    messages && messages.filter((msg) => {
+                        if (msg.role === 'reasoning') return false;
+                        const hasText = String(msg.content ?? '').trim() !== '';
+                        const streamingHere =
+                            streamPulse &&
+                            String(streamPulse.chatID) === String(chatId) &&
+                            String(streamPulse.messageID) === String(msg.messageID);
+                        return hasText || streamingHere;
+                    }).map((msg) => {
                         const isUser = msg.role === 'user';
+                        const streamingHere =
+                            !isUser &&
+                            streamPulse &&
+                            String(streamPulse.chatID) === String(chatId) &&
+                            String(streamPulse.messageID) === String(msg.messageID);
                         return (
                             <div key={"dialogmessage_" + msg.messageID}
                                 id={"dialogmessage_" + msg.messageID}
@@ -159,9 +184,23 @@ export default function Dialog() {
                                     </span>
                                 </div>
                                 <div
-                                    className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}`}
+                                    className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}${streamingHere ? ' messagecontent--streaming' : ''}`}
                                 >
-                                    <MessageContent content={msg.content || ''} variant={isUser ? 'user' : 'assistant'} />
+                                    {streamingHere ? (
+                                        <span
+                                            className="message-streaming-indicator"
+                                            role="status"
+                                            aria-live="polite"
+                                            aria-label="正在生成"
+                                        >
+                                            <span className="message-streaming-indicator__dot" aria-hidden />
+                                        </span>
+                                    ) : null}
+                                    <MessageContent
+                                        content={msg.content || ''}
+                                        variant={isUser ? 'user' : 'assistant'}
+                                        isStreaming={Boolean(streamingHere)}
+                                    />
                                 </div>
                             </div>
                         )

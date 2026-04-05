@@ -21,11 +21,14 @@
     display: flex;
     flex-direction: row;
     flex: 1;
-    
+    align-items: stretch;
     padding: 12px 14px 14px;
     margin-top: 0;
     border-radius: 0;
     gap: 0;
+    /* 对话列 min-width:0 可收缩；仍溢出时横向滚动以露出推理栏 */
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 /* 圆润毛玻璃卡片 */
@@ -44,6 +47,7 @@
 }
 
 .resizer {
+    flex: 0 0 auto;
     width: 5px;
     background: rgba(60, 60, 67, 0.1);
     cursor: col-resize;
@@ -63,9 +67,25 @@
     background: rgba(0, 122, 255, 0.5);
 }
 
-.main-content {
+.main-content__sidebar-slot {
+    flex: 0 0 auto;
+    min-height: 0;
     display: flex;
-    flex-direction: row;
-    height: calc(100vh - 60px);
-    overflow: hidden;
+    flex-direction: column;
+}
+
+.main-content__dialog-slot {
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content__reasoning-slot {
+    flex: 0 0 auto;
+    min-width: 110px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }

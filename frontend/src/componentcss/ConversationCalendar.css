@@ -1,0 +1,150 @@
+/* 侧边栏：简洁日历（Apple 灰白 + 系统蓝点缀） */
+.conv-cal {
+  margin-bottom: 14px;
+  padding: 12px 10px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--apple-separator);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.conv-cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+.conv-cal__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-label);
+  letter-spacing: -0.01em;
+}
+
+.conv-cal__nav {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: var(--apple-fill);
+  color: var(--apple-blue);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.conv-cal__nav:hover {
+  background: rgba(0, 122, 255, 0.12);
+  transform: scale(1.04);
+}
+
+.conv-cal__weekrow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.conv-cal__weekday {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--apple-secondary);
+  padding: 2px 0;
+}
+
+.conv-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.conv-cal__cell {
+  position: relative;
+  min-height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(242, 242, 247, 0.85);
+  color: var(--apple-label);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 0 4px;
+}
+
+.conv-cal__cell--empty {
+  min-height: 34px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.conv-cal__cell:hover:not(.conv-cal__cell--empty) {
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.conv-cal__cell.is-today {
+  box-shadow: 0 0 0 2px var(--apple-blue);
+}
+
+.conv-cal__cell.is-selected {
+  background: rgba(0, 122, 255, 0.14);
+  box-shadow: none;
+  font-weight: 600;
+  color: var(--apple-blue);
+}
+
+.conv-cal__daynum {
+  line-height: 1.2;
+}
+
+.conv-cal__memo-dot {
+  font-size: 9px;
+  line-height: 1;
+  margin-top: 1px;
+  opacity: 0.92;
+}
+
+.conv-cal__footer {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.conv-cal__clear {
+  border: none;
+  background: var(--apple-fill);
+  color: var(--apple-blue);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.conv-cal__clear:hover {
+  background: rgba(0, 122, 255, 0.12);
+}
+
+.conv-cal__filter-hint {
+  font-size: 10px;
+  color: var(--apple-secondary);
+}
+
+.conv-cal__filter-hint strong {
+  font-weight: 600;
+  color: var(--apple-label);
+}

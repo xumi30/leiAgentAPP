@@ -33,16 +33,20 @@ func WithCtx(ctx context.Context) options {
 	}
 }
 
-func NewAgent(opts ...options) *Agent {
+func NewAgent(opts ...options) (*Agent, error) {
+	p, err := proxy.NewProxy(nil)
+	if err != nil {
+		return nil, err
+	}
 	a := &Agent{
-		proxy: proxy.NewProxy(nil),
+		proxy: p,
 	}
 	for _, opt := range opts {
 		opt(a)
 	}
 	a.taskLoopTimes = 10 //单个任务的最大循环次数，防止死循环，默认5次
 
-	return a
+	return a, nil
 }
 func (a *Agent) Run() (string, error) {
 	inputChan := utils.InputChan
@@ -53,7 +57,7 @@ func (a *Agent) Run() (string, error) {
 			return "", a.ctx.Err()
 		case message := <-inputChan:
 			logging.Debug("收到消息: %s", message)
-			rp, err := a.HandleChat(message)
+			rp, err := a.HandleChat(a.ctx, message)
 			if err != nil {
 				logging.Error("处理消息失败: %v", err)
 			}
@@ -62,11 +66,11 @@ func (a *Agent) Run() (string, error) {
 	}
 }
 
-func (a *Agent) HandleChat(message string) (string, error) {
+func (a *Agent) HandleChat(ctx context.Context, message string) (string, error) {
 
 	logging.Info("Agent begin to handle chat")
 
-	chatId := a.ctx.Value(utils.ChatIDString).(string)
+	chatId := ctx.Value(utils.ChatIDString).(string)
 	logging.Info("chatId: %s", chatId)
 
 	if a.systemPrompt != "" {
@@ -74,7 +78,7 @@ func (a *Agent) HandleChat(message string) (string, error) {
 	}
 	memory.AddUserMessage(chatId, message)
 
-	toolAndContent, err := a.proxy.Communicate(a.ctx)
+	toolAndContent, err := a.proxy.Communicate(ctx)
 	//logging.Info("代理返回信息: %v", toolAndContent)
 
 	if err != nil {
@@ -85,7 +89,7 @@ func (a *Agent) HandleChat(message string) (string, error) {
 		return "", fmt.Errorf("代理返回空内容")
 	}
 
-	a.recordMeomoryFromResponse(a.ctx, toolAndContent)
+	a.recordMeomoryFromResponse(ctx, toolAndContent)
 
 	return toolAndContent.Content, nil
 }
@@ -171,7 +175,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 	if a.taskLoopTimes >= 0 {
 		logging.Info("工具执行完成,继续请求模型生成最终回复")
 		a.taskLoopTimes--
-		a.HandleChat("工具已经执行完成,请继续。如果需要调用工具，请继续调用。如果不需要调用工具了，请直接给出最终回复。")
+		a.HandleChat(ctx, "工具已经执行完成,请继续。如果需要调用工具，请继续调用。如果不需要调用工具了，请直接给出最终回复。")
 	}
 	logging.Info("工具执行完成,或者达到最大循环次数,结束工具执行")
 

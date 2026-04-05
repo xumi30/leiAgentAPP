@@ -183,8 +183,11 @@ func (p *Planning) verifyResultWithRetry(ctx context.Context, subChatId, result 
 
 func sendMessage(ctx context.Context) (string, error) {
 
-	proxy := proxy.NewProxy(nil)
-	response, err := proxy.Communicate(ctx)
+	px, err := proxy.NewProxy(nil)
+	if err != nil {
+		return "", err
+	}
+	response, err := px.Communicate(ctx)
 
 	if err != nil {
 		return "", err

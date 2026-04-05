@@ -8,11 +8,12 @@ import (
 )
 
 type ModelAPIInfo struct {
-	provider  string
-	url       string
-	token     string
-	modelName string
-	isStream  int // 0 : false, 1: true 3:both
+	backendName string // YAML name，用于日志
+	provider    string
+	url         string
+	token       string
+	modelName   string
+	isStream    int // 0 : false, 1: true 3:both
 
 	//状态
 	status string
@@ -27,6 +28,13 @@ type ModelAPIInfo struct {
 // GetProvider 获取provider
 func (m *ModelAPIInfo) GetProvider() string {
 	return m.provider
+}
+
+func (m *ModelAPIInfo) logLabel() string {
+	if m.backendName != "" {
+		return m.backendName
+	}
+	return m.modelName
 }
 
 // ModelAPIPool 模型池，使用单例模式
@@ -99,7 +107,7 @@ func (p *ModelAPIPool) GetModel(token string) (*ModelAPIInfo, error) {
 	tokenMD5 := md5.Sum([]byte(token))
 	tokenKey := hex.EncodeToString(tokenMD5[:])
 
-	model, exists := p.models[token]
+	model, exists := p.models[tokenKey]
 	if !exists {
 		return nil, fmt.Errorf("model %s not found", tokenKey)
 	}

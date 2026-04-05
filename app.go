@@ -10,8 +10,8 @@ import (
 
 	"leiAgent/dataoperation"
 	globalchannel "leiAgent/internal"
-	"leiAgent/internal/memo"
 	"leiAgent/internal/dispatcher"
+	"leiAgent/internal/memo"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -238,6 +238,16 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 	content := ""
 	shouldGenerateNewID := true
 
+	emitDialogStreamEnd := func(mid string) {
+		if eventname != "dialogAppend" || mid == "" {
+			return
+		}
+		runtime.EventsEmit(a.ctx, "dialogStreamEnd", map[string]interface{}{
+			"chatID":    chatID,
+			"messageID": mid,
+		})
+	}
+
 	for {
 		if shouldGenerateNewID {
 			messageID = GenerateMessageID()
@@ -247,19 +257,25 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 
 		select {
 		case message, ok := <-outputChan:
+			if !ok {
+				logging.Info("Output channel closed for messageid: %s", messageID)
+				emitDialogStreamEnd(messageID)
+				return
+			}
 			if message == "" {
 				logging.Info("Received empty message for chatID: %s, skipping...", chatID)
 				continue
 			}
-			if !ok {
-				logging.Info("Output channel closed for messageid: %s", messageID)
-				return
-			}
 
 			if message == utils.FinishString {
-				if err := dataoperation.SendMessage(chatID, messageID, content, role); err != nil {
-					logging.Error("Failed to save message: %v", err)
+				// 流式回合可能只有 tool_calls、无可见文本；仍会收到 FinishString。
+				// 此前会把 content=="" 整行写入 DB，前端加载后显示空气泡。
+				if strings.TrimSpace(content) != "" {
+					if err := dataoperation.SendMessage(chatID, messageID, content, role); err != nil {
+						logging.Error("Failed to save message: %v", err)
+					}
 				}
+				emitDialogStreamEnd(messageID)
 				shouldGenerateNewID = true
 				continue
 			}
@@ -269,12 +285,13 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				"chatID":    chatID,
 				"messageID": messageID,
 				"content":   message,
-				"role":      "assistant",
+				"role":      role,
 			}
 
 			runtime.EventsEmit(a.ctx, eventname, appendMessage)
 
 		case <-ctx.Done():
+			emitDialogStreamEnd(messageID)
 			logging.Info("App context cancelled for chat: %s", chatID)
 			return
 		}

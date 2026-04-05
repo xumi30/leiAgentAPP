@@ -1,15 +1,34 @@
+:root {
+    --apple-bg: #f5f5f7;
+    --apple-surface: rgba(255, 255, 255, 0.78);
+    --apple-surface-solid: #ffffff;
+    --apple-label: #1d1d1f;
+    --apple-secondary: #86868b;
+    --apple-tertiary: #aeaeb2;
+    --apple-separator: rgba(60, 60, 67, 0.12);
+    --apple-separator-opaque: #d1d1d6;
+    --apple-blue: #007aff;
+    --apple-blue-hover: #0066d6;
+    --apple-fill: rgba(120, 120, 128, 0.12);
+    --apple-tint: rgba(0, 122, 255, 0.1);
+    --primary-color: #007aff;
+    --light-text: #86868b;
+    --border-radius-sm: 10px;
+    --transition-smooth: 0.2s ease;
+}
+
 html {
-    background-color: white;
-    text-align: center;
-    color: white;
+    background-color: var(--apple-bg);
+    text-align: left;
+    color: var(--apple-label);
 }
 
 body {
     margin: 0;
-    color: black;
-    font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+    color: var(--apple-label);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
+        "Helvetica Neue", "Nunito", sans-serif;
+    -webkit-font-smoothing: antialiased;
 }
 
 @font-face {

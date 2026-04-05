@@ -48,6 +48,7 @@ type ChatCompletionRequest struct {
 	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`   // 响应格式
 	Seed             *int            `json:"seed,omitempty"`              // 随机种子
 	Enablesearch     bool            `json:"enable_search,omitempty"`     // 是否启用搜索QWEN
+	EnableThinking   *bool           `json:"enable_thinking,omitempty"`     // 百炼/DashScope Qwen 思考开关（兼容 OpenAI 扩展字段）
 }
 
 // ChatMessage 对话消息结构体
@@ -122,8 +123,8 @@ type ToolCall struct {
 
 // ChatThinking 思维链配置
 type ChatThinking struct {
-	Type          string `json:"type"`           // 是否开启思维链: enabled/disabled
-	ClearThinking bool   `json:"clear_thinking"` // 是否清除历史思维链
+	Type          string `json:"type"`                      // 是否开启思维链: enabled/disabled
+	ClearThinking bool   `json:"clear_thinking,omitempty"` // 是否清除历史思维链
 }
 
 // VisionMultimodalContent 视觉多模态内容

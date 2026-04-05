@@ -16,12 +16,12 @@ import (
 	"time"
 )
 
-func (p *Proxy) handleResponse(ctx context.Context, resp *http.Response, isStream bool) (*ToolAndContent, error) {
+func (p *Proxy) handleResponse(ctx context.Context, resp *http.Response, isStream bool, info *ModelAPIInfo) (*ToolAndContent, error) {
 
 	if isStream {
 		return p.handleStreamResponse(ctx, resp)
 	}
-	return p.handleNonStreamResponse(ctx, resp)
+	return p.handleNonStreamResponse(ctx, resp, info)
 }
 
 func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
@@ -139,7 +139,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	}, nil
 }
 
-func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
+func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response, info *ModelAPIInfo) (*ToolAndContent, error) {
 	logging.Info("开始处理非流式响应")
 
 	chatId, ok := ctx.Value(utils.ChatIDString).(string)
@@ -150,7 +150,7 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 
 	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatId)
 
-	openaiResp, err := p.convertResponse(resp)
+	openaiResp, err := p.convertResponse(resp, info)
 	if err != nil {
 		return nil, err
 	}
@@ -162,14 +162,16 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 
 	tools := openaiResp.Choices[0].Message.ToolCalls
 
-	content, ok := openaiResp.Choices[0].Message.Content.(string)
-
-	if !ok {
-		logging.Error("Message.Content不是字符串类型: %v", openaiResp.Choices[0].Message.Content)
-
-	} else {
-		go func() { dialogOutChan <- openaiResp.Choices[0].Message.Content.(string) + "\n" }()
+	var content string
+	switch c := openaiResp.Choices[0].Message.Content.(type) {
+	case string:
+		content = c
+	default:
+		if openaiResp.Choices[0].Message.Content != nil {
+			content = fmt.Sprint(openaiResp.Choices[0].Message.Content)
+		}
 	}
+	dialogOutChan <- content + "\n"
 
 	if len(tools) > 0 {
 		logging.Info("tools: %s", tools[0].Function.Name)
@@ -181,14 +183,14 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	}, nil
 }
 
-func (p *Proxy) convertResponse(resp *http.Response) (*openaistyle.ChatCompletionResponse, error) {
+func (p *Proxy) convertResponse(resp *http.Response, info *ModelAPIInfo) (*openaistyle.ChatCompletionResponse, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应体失败: %w", err)
 	}
 	logging.Info("响应体: %s", string(body))
 
-	if p.modelAPIInfo.provider == "gemini" {
+	if info.provider == "gemini" {
 		//fmt.Println("convertResponse gemini")
 
 		geminiResponse := &gemini.ChatCompletionResponse{}

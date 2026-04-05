@@ -15,6 +15,10 @@
     }
 
 .dialog__header {
+    display: flex;
+    flex-shrink: 0;
+    min-width: 0;
+    overflow: hidden;
     padding: 12px 20px;
     background: rgba(255, 255, 255, 0.65);
     backdrop-filter: blur(20px) saturate(180%);
@@ -25,20 +29,34 @@
     color: var(--apple-label);
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
 }
 
 .dialog__header-title {
+    flex: 1;
+    min-width: 0;
     font-size: 16px;
     letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .dialog__messages {
     flex: 1;
+    min-width: 0;
+    overflow-x: hidden;
     overflow-y: auto;
     padding: 18px 20px 22px;
     display: flex;
     flex-direction: column;
     gap: 18px;
-    
+    background: linear-gradient(
+        180deg,
+        rgba(250, 248, 255, 0.55) 0%,
+        rgba(240, 252, 255, 0.35) 50%,
+        rgba(255, 248, 252, 0.4) 100%
+    );
+
     scrollbar-width: none;
     -ms-overflow-style: none;
     scroll-behavior: smooth;  /* 添加这行以实现平滑滚动 */
@@ -181,6 +199,13 @@
 
 
 
+.dialogmessage {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+}
+
 .dialogmessage_user {
     align-self: flex-end;
     align-items: flex-end;
@@ -219,25 +244,65 @@
 }
 
 .messagecontent {
+    position: relative;
     padding: 12px 16px 14px;
     border-radius: 18px;
-    backdrop-filter: none;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    box-shadow: 0 2px 14px rgba(80, 100, 160, 0.06);
     word-wrap: break-word;
+    overflow-wrap: anywhere;
     text-align: left;
-    max-width: min(96%, 820px);
+    min-width: 0;
+    max-width: min(100%, 820px);
+    box-sizing: border-box;
     border: 1px solid transparent;
     color: var(--apple-label);
+}
+
+.messagecontent--streaming {
+    padding-top: 26px;
+}
+
+.message-streaming-indicator {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.message-streaming-indicator__dot {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid rgba(140, 130, 200, 0.35);
+    border-top-color: rgba(90, 120, 255, 0.92);
+    box-sizing: border-box;
+    animation: message-streaming-spin 0.65s linear infinite;
+}
+
+@keyframes message-streaming-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* 单条消息主体：限制高度，内部滚动，避免撑满整屏 */
 .message-body {
     max-height: min(52vh, 440px);
+    min-width: 0;
+    max-width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     font-size: 14px;
     line-height: 1.65;
     scrollbar-width: thin;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
 }
 
 .message-body::-webkit-scrollbar {
@@ -247,6 +312,84 @@
 .message-body::-webkit-scrollbar-thumb {
     background: rgba(60, 60, 67, 0.25);
     border-radius: 999px;
+}
+
+/* 鼠标场景：未悬停/未聚焦消息时不显示滑块；需滚动时悬停即出现 */
+@media (hover: hover) and (pointer: fine) {
+    .message-body {
+        scrollbar-width: none;
+    }
+
+    .message-body:hover,
+    .message-body:focus-within {
+        scrollbar-width: thin;
+    }
+
+    .message-body::-webkit-scrollbar {
+        width: 0;
+    }
+
+    .message-body:hover::-webkit-scrollbar,
+    .message-body:focus-within::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .message-body::-webkit-scrollbar-thumb {
+        background: transparent;
+    }
+
+    .message-body:hover::-webkit-scrollbar-thumb,
+    .message-body:focus-within::-webkit-scrollbar-thumb {
+        background: rgba(60, 60, 67, 0.25);
+    }
+
+    .message-markdown pre,
+    .msg-json-snippet__pre,
+    .msg-fence-block {
+        scrollbar-width: none;
+    }
+
+    .message-markdown pre:hover,
+    .message-markdown pre:focus-within,
+    .msg-json-snippet__pre:hover,
+    .msg-json-snippet__pre:focus-within,
+    .msg-fence-block:hover,
+    .msg-fence-block:focus-within {
+        scrollbar-width: thin;
+    }
+
+    .message-markdown pre::-webkit-scrollbar,
+    .msg-json-snippet__pre::-webkit-scrollbar,
+    .msg-fence-block::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+    }
+
+    .message-markdown pre:hover::-webkit-scrollbar,
+    .message-markdown pre:focus-within::-webkit-scrollbar,
+    .msg-json-snippet__pre:hover::-webkit-scrollbar,
+    .msg-json-snippet__pre:focus-within::-webkit-scrollbar,
+    .msg-fence-block:hover::-webkit-scrollbar,
+    .msg-fence-block:focus-within::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    .message-markdown pre::-webkit-scrollbar-thumb,
+    .msg-json-snippet__pre::-webkit-scrollbar-thumb,
+    .msg-fence-block::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 999px;
+    }
+
+    .message-markdown pre:hover::-webkit-scrollbar-thumb,
+    .message-markdown pre:focus-within::-webkit-scrollbar-thumb,
+    .msg-json-snippet__pre:hover::-webkit-scrollbar-thumb,
+    .msg-json-snippet__pre:focus-within::-webkit-scrollbar-thumb,
+    .msg-fence-block:hover::-webkit-scrollbar-thumb,
+    .msg-fence-block:focus-within::-webkit-scrollbar-thumb {
+        background: rgba(60, 60, 67, 0.25);
+    }
 }
 
 .message-markdown {
@@ -284,11 +427,14 @@
 
 .message-markdown pre {
     max-height: 200px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 10px 12px;
     border-radius: 10px;
     background: rgba(60, 60, 67, 0.06);
     font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .message-markdown a {
@@ -315,6 +461,10 @@
     cursor: pointer;
     transition: transform 0.12s ease, box-shadow 0.15s ease;
     overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .msg-json-snippet:hover {
@@ -354,14 +504,16 @@
 .msg-json-snippet__pre {
     margin: 0;
     padding: 10px 12px 12px;
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: 12px;
+    line-height: 1.5;
     font-family: ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', Consolas, monospace;
     color: var(--apple-label);
     white-space: pre-wrap;
-    word-break: break-word;
+    overflow-x: hidden;
+    overflow-y: auto;
     max-height: 160px;
-    overflow: hidden;
+    word-break: break-word;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* 非 JSON 代码块 */
@@ -374,8 +526,12 @@
     font-size: 12px;
     line-height: 1.45;
     max-height: 220px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     position: relative;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .msg-fence-block__lang {
@@ -398,7 +554,7 @@
 .msg-json-modal-overlay {
     position: fixed;
     inset: 0;
-    z-index: 950;
+    z-index: 1100;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -409,7 +565,7 @@
 }
 
 .msg-json-modal {
-    width: min(900px, 100%);
+    width: min(min(96vw, 980px), 100%);
     max-height: min(86vh, 720px);
     display: flex;
     flex-direction: column;
@@ -460,50 +616,110 @@
     word-break: break-word;
 }
 
+/* 用户气泡：马卡龙渐变 + 半透明玻璃 + 轻赛博描边光晕 */
 .dialogmessage_user .messagecontent {
-    background: #007aff;
-    color: #fff;
+    background: linear-gradient(
+        145deg,
+        rgba(186, 225, 255, 0.42) 0%,
+        rgba(220, 198, 255, 0.38) 42%,
+        rgba(255, 205, 228, 0.44) 100%
+    );
+    color: rgba(32, 36, 72, 0.94);
     border-radius: 18px 18px 4px 18px;
-    border: none;
-    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.22);
+    border: 1px solid rgba(100, 220, 255, 0.38);
+    box-shadow:
+        0 4px 22px rgba(90, 160, 255, 0.14),
+        0 0 32px rgba(200, 140, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(16px) saturate(165%);
+    -webkit-backdrop-filter: blur(16px) saturate(165%);
 }
 
 .dialogmessage_user .message-markdown a {
-    color: rgba(255, 255, 255, 0.95);
+    color: rgba(0, 122, 200, 0.92);
+    text-shadow: 0 0 12px rgba(0, 200, 255, 0.2);
 }
 
 .dialogmessage_user .message-markdown code {
-    background: rgba(255, 255, 255, 0.22);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.4);
+    color: rgba(45, 50, 95, 0.95);
+    border: 1px solid rgba(120, 200, 255, 0.25);
 }
 
+/* 助手气泡：粉紫 / 薄荷马卡龙，更透、偏终端感描边 */
 .dialogmessage_assistant .messagecontent {
-    background: #e9e9eb;
-    color: var(--apple-label);
+    background: linear-gradient(
+        165deg,
+        rgba(245, 232, 255, 0.4) 0%,
+        rgba(218, 244, 240, 0.36) 48%,
+        rgba(255, 244, 220, 0.34) 100%
+    );
+    color: rgba(38, 40, 52, 0.94);
     border-radius: 18px 18px 18px 4px;
-    border: 1px solid rgba(60, 60, 67, 0.08);
+    border: 1px solid rgba(200, 120, 255, 0.22);
+    box-shadow:
+        0 3px 18px rgba(140, 120, 200, 0.1),
+        0 0 24px rgba(100, 220, 200, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(14px) saturate(155%);
+    -webkit-backdrop-filter: blur(14px) saturate(155%);
 }
 
 .dialogmessage_user .message-markdown pre {
-    background: rgba(255, 255, 255, 0.18);
-    color: rgba(255, 255, 255, 0.96);
+    background: rgba(255, 255, 255, 0.32);
+    color: rgba(28, 32, 68, 0.96);
+    border: 1px solid rgba(100, 200, 255, 0.2);
 }
 
 .dialogmessage_user .msg-fence-block {
-    background: rgba(255, 255, 255, 0.14);
-    border-color: rgba(255, 255, 255, 0.22);
-    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.28);
+    border-color: rgba(120, 210, 255, 0.35);
+    color: rgba(28, 32, 65, 0.95);
+    box-shadow: inset 0 0 20px rgba(180, 160, 255, 0.06);
 }
 
 .dialogmessage_user .msg-fence-block__lang {
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(80, 90, 140, 0.85);
 }
 
 .dialogmessage_user .msg-json-snippet {
-    background: rgba(255, 255, 255, 0.95);
-    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.52);
+    border-color: rgba(140, 200, 255, 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(100, 160, 255, 0.1);
 }
 
 .dialogmessage_user .msg-json-snippet__bar {
-    background: rgba(242, 242, 247, 0.95);
+    background: rgba(236, 240, 255, 0.75);
+    border-bottom-color: rgba(140, 200, 255, 0.25);
+}
+
+/* 助手侧内嵌块：与气泡同系的马卡龙半透明 */
+.dialogmessage_assistant .message-markdown code {
+    background: rgba(200, 180, 255, 0.2);
+    border: 1px solid rgba(180, 160, 255, 0.2);
+}
+
+.dialogmessage_assistant .message-markdown pre {
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(160, 220, 210, 0.35);
+}
+
+.dialogmessage_assistant .msg-fence-block {
+    background: rgba(255, 255, 255, 0.32);
+    border-color: rgba(180, 140, 255, 0.22);
+    box-shadow: inset 0 0 18px rgba(120, 200, 255, 0.05);
+}
+
+.dialogmessage_assistant .msg-json-snippet {
+    background: rgba(255, 255, 255, 0.48);
+    border-color: rgba(180, 160, 255, 0.28);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.dialogmessage_assistant .msg-json-snippet__bar {
+    background: rgba(240, 236, 255, 0.72);
+    border-bottom-color: rgba(180, 160, 255, 0.2);
 }

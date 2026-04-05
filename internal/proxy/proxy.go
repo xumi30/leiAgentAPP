@@ -5,26 +5,38 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"leiAgent/internal/memory"
 	gemini "leiAgent/internal/provider/Gemin"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
 	"leiAgent/utils"
-
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 )
 
+const (
+	streamModeNonStream = 0 // 仅非流式
+	streamModeStream    = 1 // 仅流式
+	streamModeBoth      = 3 // 由请求/上下文决定
+)
+
 type Proxy struct {
-	httpClient   *http.Client
-	modelAPIInfo *ModelAPIInfo
-	// TODO: add fields
+	httpClient *http.Client
+	backends   []*ModelAPIInfo // 按顺序尝试，失败则故障转移到下一条
 }
 
-func NewProxy(httpClient *http.Client) *Proxy {
-	if httpClient == nil {
-		httpClient = &http.Client{
+var (
+	defaultHTTPClient     *http.Client
+	defaultHTTPClientOnce sync.Once
+)
+
+func sharedHTTPClient() *http.Client {
+	defaultHTTPClientOnce.Do(func() {
+		defaultHTTPClient = &http.Client{
 			Timeout: 300 * time.Second,
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
@@ -32,61 +44,96 @@ func NewProxy(httpClient *http.Client) *Proxy {
 				IdleConnTimeout:     90 * time.Second,
 			},
 		}
-	}
-	modelAPIInfo := selectProviderStrategy()
-	return &Proxy{
-		httpClient:   httpClient,
-		modelAPIInfo: modelAPIInfo,
-	}
+	})
+	return defaultHTTPClient
+}
 
+// NewProxy 创建代理。httpClient 为 nil 时使用进程内共享的默认 Client。
+// 配置见 config/config.yaml：llm（api_key、base_url、model）或多后端 llm_backends（按顺序 failover）。
+func NewProxy(httpClient *http.Client) (*Proxy, error) {
+	if httpClient == nil {
+		httpClient = sharedHTTPClient()
+	}
+	backends, err := loadModelConfigs()
+	if err != nil {
+		return nil, err
+	}
+	if len(backends) == 0 {
+		return nil, fmt.Errorf("未加载到任何 LLM 后端")
+	}
+	return &Proxy{
+		httpClient: httpClient,
+		backends:   backends,
+	}, nil
 }
 
 func (p *Proxy) Communicate(ctx context.Context) (*ToolAndContent, error) {
-
 	isStream := true
 	if val, ok := ctx.Value(utils.IsStreamString).(bool); ok {
 		isStream = val
 	}
 
-	jsonData, err := p.makeRequestJson(ctx)
-	if err != nil {
-		return nil, err
+	var lastErr error
+	for i, info := range p.backends {
+		label := info.logLabel()
+		if label == "" {
+			label = fmt.Sprintf("#%d", i)
+		}
+
+		jsonData, err := p.makeRequestJson(ctx, info)
+		if err != nil {
+			lastErr = err
+			logging.Error("LLM 后端 %s 构造请求失败: %v", label, err)
+			continue
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", info.url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			lastErr = err
+			logging.Error("LLM 后端 %s 创建 HTTP 请求失败: %v", label, err)
+			continue
+		}
+
+		resp, err := p.doRequest(req, info)
+		if err != nil {
+			lastErr = err
+			logging.Warn("LLM 后端 %s 请求失败，尝试下一后端: %v", label, err)
+			continue
+		}
+
+		if info.isStream == streamModeNonStream {
+			isStream = false
+		}
+
+		toolAndContent, err := p.handleResponse(ctx, resp, isStream, info)
+		_ = resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			logging.Warn("LLM 后端 %s 解析响应失败，尝试下一后端: %v", label, err)
+			continue
+		}
+
+		logging.Info("LLM 后端 %s 处理响应成功", label)
+		return toolAndContent, nil
 	}
 
-	requestinfo, err := http.NewRequest("POST", p.modelAPIInfo.url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		logging.Error("创建请求失败：%v", err)
-		return nil, err
+	if lastErr != nil {
+		return nil, fmt.Errorf("全部 LLM 后端均失败（共 %d 条）: %w", len(p.backends), lastErr)
 	}
-
-	resp, err := p.doRequest(requestinfo)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if p.modelAPIInfo.isStream == 0 {
-		isStream = false
-	}
-
-	toolAndContent, err := p.handleResponse(ctx, resp, isStream)
-	logging.Info("处理响应成功")
-
-	return toolAndContent, nil
+	return nil, fmt.Errorf("全部 LLM 后端均失败（共 %d 条）", len(p.backends))
 }
 
-func (p *Proxy) doRequest(requestinfo *http.Request) (*http.Response, error) {
-	switch p.modelAPIInfo.provider {
+func (p *Proxy) doRequest(requestinfo *http.Request, info *ModelAPIInfo) (*http.Response, error) {
+	switch info.provider {
 	case "gemini":
-		requestinfo.Header.Set("x-goog-api-key", p.modelAPIInfo.token)
+		requestinfo.Header.Set("x-goog-api-key", info.token)
 
 	default:
-		requestinfo.Header.Set("Authorization", "Bearer "+p.modelAPIInfo.token)
+		requestinfo.Header.Set("Authorization", "Bearer "+info.token)
 	}
 
 	requestinfo.Header.Set("Content-Type", "application/json")
 
-	//logging.Info("开始发送请求 %v", requestinfo)
 	resp, err := p.httpClient.Do(requestinfo)
 
 	if err != nil {
@@ -95,15 +142,25 @@ func (p *Proxy) doRequest(requestinfo *http.Request) (*http.Response, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		logging.Error("请求失败,状态码：%d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		_ = resp.Body.Close()
+		msg := strings.TrimSpace(string(body))
+		logging.Error("请求失败,状态码：%d, body: %s", resp.StatusCode, msg)
+		if msg != "" {
+			return nil, fmt.Errorf("请求失败,状态码：%d：%s", resp.StatusCode, msg)
+		}
 		return nil, fmt.Errorf("请求失败,状态码：%d", resp.StatusCode)
 	}
 	logging.Info("发送请求成功")
 	return resp, nil
 }
 
-func (p *Proxy) makeRequestJson(ctx context.Context) ([]byte, error) {
-	chatID := ctx.Value(utils.ChatIDString).(string)
+func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte, error) {
+	chatIDVal := ctx.Value(utils.ChatIDString)
+	chatID, ok := chatIDVal.(string)
+	if !ok || chatID == "" {
+		return nil, fmt.Errorf("context 缺少有效的 chatID")
+	}
 
 	isStream := true
 	if val, ok := ctx.Value(utils.IsStreamString).(bool); ok {
@@ -120,48 +177,29 @@ func (p *Proxy) makeRequestJson(ctx context.Context) ([]byte, error) {
 		tls = toolRegister.ConvertTools()
 	}
 
-	// 依靠记忆传递对话信息
 	chatMessages := convertMessages(memory.GetLocalMemory().GetMessages(chatID))
 
-	req := openaistyle.NewChatCompletionRequest(
-		openaistyle.WithModel(p.modelAPIInfo.modelName),
+	opts := []openaistyle.Option{
+		openaistyle.WithModel(info.modelName),
 		openaistyle.WithMessages(chatMessages),
-		// Token 控制
 		openaistyle.WithMaxTokens(3000),
-		// 采样参数
-		// openaistyle.WithTemperature(0.4),
-		// openaistyle.WithTopP(0.9),
-		// openaistyle.WithDoSample(true),
-		// 频率惩罚
-		// openaistyle.WithFrequencyPenalty(0.3),
-		// 存在惩罚
-		// openaistyle.WithPresencePenalty(0.2),
-		// 停止词
-		// openaistyle.WithStop(nil),
-		// 流式输出
 		openaistyle.WithStream(isStream),
-		// 用户标识
-		// openaistyle.WithUserID(""),
-		// // 请求ID
-		// openaistyle.WithRequestID(""),
-		// 工具调用
 		openaistyle.WithTools(tls),
+	}
+	if IsLLMThinkingDisabled() {
+		opts = append(opts,
+			openaistyle.WithEnableThinking(false),
+			openaistyle.WithThinking(&openaistyle.ChatThinking{Type: openaistyle.ThinkingDisabled}),
+		)
+	}
 
-		// openaistyle.WithEnablesearch(true),
-		// 思维链配置
-		// openaistyle.WithThinking(nil),
-
-		// openaistyle.WithThinking(&chatThinking),
-
-	)
+	req := openaistyle.NewChatCompletionRequest(opts...)
 
 	jsonData, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-	// fmt.Println(1111, string(jsonData))
-	if p.modelAPIInfo.provider == "gemini" {
-		// 2. 转换为 Gemini 格式
+	if info.provider == "gemini" {
 		req := gemini.ConvertFromOpenAIRequest(req)
 
 		jsonData, err = json.Marshal(req)
@@ -170,7 +208,6 @@ func (p *Proxy) makeRequestJson(ctx context.Context) ([]byte, error) {
 		}
 	}
 
-	//logging.Info("请求体：%s", string(jsonData))
 	return jsonData, nil
 }
 
@@ -183,24 +220,33 @@ func convertMessages(messages []*memory.Message) []openaistyle.ChatMessage {
 			Content: msg.Content,
 		}
 
-		// 如果有工具调用,添加工具调用信息
 		if len(msg.ToolCalls) > 0 {
 			toolCalls := make([]openaistyle.ToolCall, 0, len(msg.ToolCalls))
 			for _, tc := range msg.ToolCalls {
 				toolName := tc.Function.Name
-				tl, flag := tools.Getregistry().Get(toolName)
-				if flag != true {
+				tl, regOK := tools.Getregistry().Get(toolName)
+				var desc string
+				var params map[string]interface{}
+				if regOK {
+					desc = tl.Description()
+					params = tl.Parameters()
+				} else {
 					logging.Error("工具 %s 不存在", toolName)
-					continue
+				}
+				var args map[string]interface{}
+				if tc.Function.Arguments != "" {
+					if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+						logging.Error("解析工具调用参数失败 %s: %v", toolName, err)
+					}
 				}
 				toolCalls = append(toolCalls, openaistyle.ToolCall{
 					ID:   tc.ID,
 					Type: tc.Type,
 					Function: &openaistyle.Function{
 						Name:        tc.Function.Name,
-						Description: tl.Description(),
-						Parameters:  tl.Parameters(),
-						Arguments:   tl.Parameters(),
+						Description: desc,
+						Parameters:  params,
+						Arguments:   args,
 					},
 					Index: tc.Index,
 				})
@@ -208,7 +254,6 @@ func convertMessages(messages []*memory.Message) []openaistyle.ChatMessage {
 			chatMsg.ToolCalls = toolCalls
 		}
 
-		// 如果是工具结果消息,添加工具调用ID
 		if msg.ToolCallID != "" {
 			chatMsg.ToolCallID = msg.ToolCallID
 		}
@@ -216,40 +261,4 @@ func convertMessages(messages []*memory.Message) []openaistyle.ChatMessage {
 		chatMessages = append(chatMessages, chatMsg)
 	}
 	return chatMessages
-}
-
-func selectProviderStrategy() *ModelAPIInfo {
-	// TODO: 实现选择提供商的策略
-	//panic("未实现选择提供商的策略")
-	//return "zhipu", "GLM-4-Flash-250414", "63491ae217a9403fb667ac808e095b85.sktEuU7i3XhwjnrI"
-	//"zhipu", "qwen-plus", "sk-da6d7a7da1914f6581d4825d7b790389"
-	// ModelAPIInfozhipu := &ModelAPIInfo{
-	// 	modelName: "GLM-Z1-Flash",
-	// 	token:     "6bcc667e09ca4c3cb17a3776cce58a7f.djKUYPXYC9SD1zYz",
-	// 	url:       "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-	// 	isStream:  3,
-	// }
-
-	ModelAPIInfo2 := &ModelAPIInfo{
-		modelName: "qwen3.5-35b-a3b",
-		token:     "sk-da6d7a7da1914f6581d4825d7b790389",
-		url:       "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-		isStream:  3,
-	}
-
-	// ModelAPIInfo2 := &ModelAPIInfo{
-	// 	modelName: "Pro/zai-org/GLM-4.7",
-	// 	token:     "sk-ubwbvugdhbqzbrddvqzgndxoaimnzwilhavgytxzvjbnsaev",
-	// 	url:       "https://api.siliconflow.cn/v1/chat/completions",
-	// }
-
-	// ModelAPIInfoGemini := &ModelAPIInfo{
-	// 	provider:  "gemini",
-	// 	modelName: "gemini-3-flash-preview",
-	// 	token:     "AIzaSyCdvYIXmvG9N2wdmh-lWJUAu_-ZtbuTMpA",
-	// 	url:       "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
-	// 	isStream:  0,
-	// }
-
-	return ModelAPIInfo2
 }

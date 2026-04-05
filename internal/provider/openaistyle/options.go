@@ -101,6 +101,13 @@ func WithEnablesearch(enable bool) Option {
 	}
 }
 
+// WithEnableThinking 设置百炼等兼容接口的 enable_thinking（true/false）。
+func WithEnableThinking(enable bool) Option {
+	return func(r *ChatCompletionRequest) {
+		r.EnableThinking = &enable
+	}
+}
+
 // NewChatCompletionRequest 创建新的对话补全请求
 func NewChatCompletionRequest(opts ...Option) *ChatCompletionRequest {
 	req := &ChatCompletionRequest{

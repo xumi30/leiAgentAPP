@@ -26,7 +26,10 @@ func MakeSubAgent(ctx context.Context, systemprompt string) (*Agent, error) {
 	defer subcancel()
 	subctx = context.WithValue(subctx, utils.ChatIDString, subChatId)
 
-	agent := NewAgent(WithSystemPrompt(systemprompt), WithCtx(subctx))
+	agent, err := NewAgent(WithSystemPrompt(systemprompt), WithCtx(subctx))
+	if err != nil {
+		return nil, err
+	}
 
 	return agent, nil
 

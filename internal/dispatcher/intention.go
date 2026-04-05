@@ -8,6 +8,8 @@ import (
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
 	"leiAgent/utils"
+	"strings"
+	"unicode/utf8"
 )
 
 type Intention struct {
@@ -15,10 +17,11 @@ type Intention struct {
 	Confidence            float64 `json:"confidence"`
 	Reason                string  `json:"reason"`
 	RequiresClarification bool    `json:"requires_clarification"`
-	Goal                  string  `json:"goal", omitempty`
+	Goal                  string  `json:"goal,omitempty"`
 }
 
 func ConfirmIntention(ctx context.Context, message string) (*Intention, error) {
+	userMessage := message
 
 	promotion := `You are an intent classification module in an AI agent system.
 
@@ -86,7 +89,10 @@ You MUST return a JSON object with the following structure:
 
 	message = `这个json的message这是用户请求,TOOL_LIST是可用的工具列表,根据这个信息，帮我判断用户请求的意图:` + string(intentJSON)
 
-	p := proxy.NewProxy(nil)
+	p, err := proxy.NewProxy(nil)
+	if err != nil {
+		return nil, err
+	}
 	memory.GetLocalMemory().SetSystemPrompt(ctx.Value(utils.ChatIDString).(string), promotion)
 	memory.AddUserMessage(ctx.Value(utils.ChatIDString).(string), message)
 
@@ -101,9 +107,79 @@ You MUST return a JSON object with the following structure:
 		logging.Error("Failed to parse intention: %v", err)
 		return nil, err
 	}
-	result.Goal = message // 保存原始请求作为目标
+	result.Goal = userMessage
 	return result, nil
 
+}
+
+// ShouldReclassifyIntent 在已有意图时判断是否需要再次调用 ConfirmIntention。
+// 用规则过滤掉大部分消息，只在「明显可能换模式」时才走 LLM，避免每条消息都分类。
+func ShouldReclassifyIntent(currentIntent, userMessage string) bool {
+	cur := strings.ToUpper(strings.TrimSpace(currentIntent))
+	msg := strings.TrimSpace(userMessage)
+	if msg == "" {
+		return false
+	}
+	low := strings.ToLower(msg)
+	runes := utf8.RuneCountInString(msg)
+
+	// 显式切换 / 重置（与 intention prompt 中 SWITCH 描述对齐）
+	switchHints := []string{
+		"切换到", "换模式", "换个模式", "重置意图", "重新确认", "重新分类",
+		"switch to", "change to", "change mode", "reset intent", "new mode",
+	}
+	for _, h := range switchHints {
+		if strings.Contains(low, h) {
+			return true
+		}
+	}
+
+	switch cur {
+	case utils.PlanModeString:
+		// 仍在规划/长任务中，但新输入很短且像单次工具或闲聊
+		if runes <= 120 && messageLooksLikeAtomicToolOrChat(low) {
+			return true
+		}
+	case utils.ToolModeString, utils.ChatModeString:
+		// 当前是轻量模式，但新输入明显像多步任务
+		if runes >= 40 && messageLooksLikeMultiStepPlan(low) {
+			return true
+		}
+	}
+	return false
+}
+
+func messageLooksLikeAtomicToolOrChat(low string) bool {
+	hints := []string{
+		"天气", "气温", "weather", "温度",
+		"价格", "股价", "行情", "bitcoin", "btc", "汇率",
+		"翻译", "translate",
+		"几点", "现在时间", "当前时间", "时间", "timezone",
+		"搜索", "查一下", "查询", "google",
+		// 在 PLAN 模式下：明确表示先聊天/不跑执行，便于重判为 CHAT/TOOL
+		"闲聊", "聊聊天", "先别执行", "不要执行", "仅讨论", "只讨论", "先讨论",
+		"switch to chat", "chat only", "no execution",
+	}
+	for _, h := range hints {
+		if strings.Contains(low, h) {
+			return true
+		}
+	}
+	return false
+}
+
+func messageLooksLikeMultiStepPlan(low string) bool {
+	hints := []string{
+		"计划", "规划", "步骤", "分步", "多步", "阶段", "里程碑",
+		"帮我做", "帮我实现", "实现一个", "开发一个", "搭建",
+		"workflow", "roadmap", "step by step", "multi-step",
+	}
+	for _, h := range hints {
+		if strings.Contains(low, h) {
+			return true
+		}
+	}
+	return false
 }
 
 func parseIntention(data string) (*Intention, error) {
