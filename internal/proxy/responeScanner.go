@@ -24,6 +24,19 @@ func (p *Proxy) handleResponse(ctx context.Context, resp *http.Response, isStrea
 	return p.handleNonStreamResponse(ctx, resp, info)
 }
 
+// effectiveDialogChatID 用于 UI 管道：可与 memory 用的 ChatIDString（临时子会话）不同。
+func effectiveDialogChatID(ctx context.Context) string {
+	if v, ok := ctx.Value(utils.DialogOutChatIDString).(string); ok {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	if v, ok := ctx.Value(utils.ChatIDString).(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
 func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
 	logging.Info("开始处理流式响应: %v", resp)
 	var fullContent strings.Builder
@@ -34,15 +47,30 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	var lastFinishReason string
 	var lastUsage *openaistyle.TokenUsage
 
-	chatId, ok := ctx.Value(utils.ChatIDString).(string)
-	if !ok {
+	memChatID, ok := ctx.Value(utils.ChatIDString).(string)
+	if !ok || strings.TrimSpace(memChatID) == "" {
 		logging.Error("无法从 context 中获取 chatId")
 		return nil, fmt.Errorf("无法从 context 中获取 chatId")
 	}
 
-	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatId)
+	dialogChatID := effectiveDialogChatID(ctx)
+	if dialogChatID == "" {
+		dialogChatID = memChatID
+	}
 
-	reasoningOutChan := globalchannel.GetGlobalReasonOutChannel(chatId)
+	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(dialogChatID)
+
+	reasoningOutChan := globalchannel.GetGlobalReasonOutChannel(dialogChatID)
+
+	skipDialog := false
+	if v, ok := ctx.Value(utils.SkipDialogToUIString).(bool); ok && v {
+		skipDialog = true
+	}
+
+	skipPersist := false
+	if v, ok := ctx.Value(utils.SkipPersistAssistantRoundString).(bool); ok && v {
+		skipPersist = true
+	}
 
 	for scanner.Scan() {
 
@@ -107,18 +135,16 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		content, ok := delta.Content.(string)
 		if ok && content != "" {
 			fullContent.WriteString(content)
-			//返回生成内容
-			//fmt.Println("生成内容: ", content)
-			dialogOutChan <- content
+			if !skipDialog {
+				dialogOutChan <- content
+			}
 		}
 
 		// 处理推理内容
 		reasoningContent := delta.ReasoningContent
 		if reasoningContent != "" {
 			fullReasoningContent.WriteString(reasoningContent)
-			//可选：是否输出推理内容
-			if reasoningContent != "" {
-				//fmt.Println("推理内容: ", reasoningContent)
+			if !skipDialog {
 				reasoningOutChan <- reasoningContent
 			}
 		}
@@ -141,9 +167,14 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	} else {
 		logging.Info("返回调用tools: %s", string(tlsJSON))
 	}
-	// 如果流结束，发送一个"[DONE]"
-	dialogOutChan <- utils.FinishString
-	reasoningOutChan <- utils.FinishString
+	if !skipDialog {
+		if skipPersist {
+			dialogOutChan <- utils.FinishStringEphemeral
+		} else {
+			dialogOutChan <- utils.FinishString
+		}
+		reasoningOutChan <- utils.FinishString
+	}
 	if lastUsage != nil {
 		logging.Info("流式响应结束 finish_reason=%q completion_tokens=%d prompt_tokens=%d total=%d 正文长度=%d 字符",
 			lastFinishReason,
@@ -168,13 +199,28 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response, info *ModelAPIInfo) (*ToolAndContent, error) {
 	logging.Info("开始处理非流式响应")
 
-	chatId, ok := ctx.Value(utils.ChatIDString).(string)
-	if !ok {
+	memChatID, ok := ctx.Value(utils.ChatIDString).(string)
+	if !ok || strings.TrimSpace(memChatID) == "" {
 		logging.Error("无法从 context 中获取 chatId")
 		return nil, fmt.Errorf("无法从 context 中获取 chatId")
 	}
 
-	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatId)
+	dialogChatID := effectiveDialogChatID(ctx)
+	if dialogChatID == "" {
+		dialogChatID = memChatID
+	}
+
+	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(dialogChatID)
+
+	skipDialog := false
+	if v, ok := ctx.Value(utils.SkipDialogToUIString).(bool); ok && v {
+		skipDialog = true
+	}
+
+	skipPersist := false
+	if v, ok := ctx.Value(utils.SkipPersistAssistantRoundString).(bool); ok && v {
+		skipPersist = true
+	}
 
 	openaiResp, err := p.convertResponse(resp, info)
 	if err != nil {
@@ -207,7 +253,16 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 			content = fmt.Sprint(openaiResp.Choices[0].Message.Content)
 		}
 	}
-	dialogOutChan <- content + "\n"
+	if !skipDialog {
+		if strings.TrimSpace(content) != "" {
+			dialogOutChan <- content + "\n"
+		}
+		if skipPersist {
+			dialogOutChan <- utils.FinishStringEphemeral
+		} else {
+			dialogOutChan <- utils.FinishString
+		}
+	}
 
 	if len(tools) > 0 {
 		logging.Info("tools: %s", tools[0].Function.Name)

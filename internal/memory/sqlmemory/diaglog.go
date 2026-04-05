@@ -74,17 +74,26 @@ func (m *SQLMemory) GetChatSubChat(subChatID string) (string, error) {
 
 // SaveConversation 保存或更新对话
 
-// SaveMessage 保存消息
+// SaveMessage 保存消息（写入时刻作为 timestamp）
 func (m *SQLMemory) SaveMessage(chatID, messageID, role, content string) error {
+	return m.SaveMessageWithTimestamp(chatID, messageID, role, content, time.Now())
+}
+
+// SaveMessageWithTimestamp 保存消息并指定 timestamp（用于流式首包到达时间，保证会话内排序正确）
+func (m *SQLMemory) SaveMessageWithTimestamp(chatID, messageID, role, content string, ts time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if ts.IsZero() {
+		ts = time.Now()
+	}
+
 	query := `
-		INSERT INTO messages (chatID,messageID, role, content, timestamp)
-		VALUES (?, ?,?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO messages (chatID, messageID, role, content, timestamp)
+		VALUES (?, ?, ?, ?, ?)
 	`
 
-	_, err := m.db.Exec(query, chatID, messageID, role, content)
+	_, err := m.db.Exec(query, chatID, messageID, role, content, ts.UTC())
 	if err != nil {
 		return fmt.Errorf("failed to save message: %w", err)
 	}
@@ -147,7 +156,7 @@ func (m *SQLMemory) GetMessages(chatID string) ([]map[string]interface{}, error)
 	var messages []map[string]interface{}
 
 	for rows.Next() {
-		var chatID int
+		var chatID string
 		var messageID string
 		var role, content string
 		var timestamp time.Time

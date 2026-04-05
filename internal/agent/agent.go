@@ -48,6 +48,14 @@ func NewAgent(opts ...options) (*Agent, error) {
 
 	return a, nil
 }
+
+// SetCtx 在会话中断后替换根 context（与 Dispatcher 换 ctx 同步，避免内部仍引用已取消的 ctx）。
+func (a *Agent) SetCtx(ctx context.Context) {
+	if a == nil {
+		return
+	}
+	a.ctx = ctx
+}
 func (a *Agent) Run() (string, error) {
 	inputChan := utils.InputChan
 

@@ -16,7 +16,19 @@ const (
 	ToolsString      = "tools"
 	IsPlanningString = "isPlanning"
 
-	FinishString     = "[DONE940720]"
+	// SkipDialogToUI 为 true 时，proxy 不把模型输出写入 DialogOut（避免临时 chatID 未注册时落入全局 OutputChan，
+	// 被 chatID 为空的 Dispatcher 误当成用户输入）。
+	SkipDialogToUIString = "skipDialogToUI"
+
+	// DialogOutChatIDString 若设置，流式/非流式写入 DialogOut、ReasonOut 时使用该 chatID（已注册的会话），
+	// 与 ChatIDString（用于 memory 取消息，常为临时 id）分离。
+	DialogOutChatIDString = "dialogOutChatID"
+
+	// SkipPersistAssistantRoundString 为 true 时，本轮助手输出只推 UI，结束符用 FinishStringEphemeral，不写 SQLite 对话表。
+	SkipPersistAssistantRoundString = "skipPersistAssistantRound"
+
+	FinishString          = "[DONE940720]"
+	FinishStringEphemeral = "[DONE940721]"
 	IntentKey        = "intentkey"
 	ChatModeString   = "CHAT"
 	PlanModeString   = "PLAN"

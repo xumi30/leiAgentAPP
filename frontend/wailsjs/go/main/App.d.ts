@@ -59,6 +59,8 @@ export function SaveMemoContent(arg1:string):Promise<void>;
 
 export function SendMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function SendUserDisplayOnly(arg1:string,arg2:string):Promise<void>;
+
 export function SetLLMThinkingDisabled(arg1:boolean):Promise<void>;
 
 export function StopChat(arg1:string):Promise<void>;

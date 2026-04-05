@@ -89,12 +89,18 @@ You MUST return a JSON object with the following structure:
 
 	message = `这个json的message这是用户请求,TOOL_LIST是可用的工具列表,根据这个信息，帮我判断用户请求的意图:` + string(intentJSON)
 
+	chatIDVal := ctx.Value(utils.ChatIDString)
+	chatIDStr, ok := chatIDVal.(string)
+	if !ok || strings.TrimSpace(chatIDStr) == "" {
+		return nil, errors.New("ConfirmIntention: context 缺少有效的 chatID")
+	}
+
 	p, err := proxy.NewProxy(nil)
 	if err != nil {
 		return nil, err
 	}
-	memory.GetLocalMemory().SetSystemPrompt(ctx.Value(utils.ChatIDString).(string), promotion)
-	memory.AddUserMessage(ctx.Value(utils.ChatIDString).(string), message)
+	memory.GetLocalMemory().SetSystemPrompt(chatIDStr, promotion)
+	memory.AddUserMessage(chatIDStr, message)
 
 	response, err := p.Communicate(ctx)
 	if err != nil {

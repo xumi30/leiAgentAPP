@@ -125,9 +125,14 @@ func (a *App) SendMessage(chatID, message, role string) {
 	//如果chatID为空，则生成一个新的chatID，并创建一个新的conversation
 	if chatID == "" {
 		logging.Info("ChatID is empty, adding new conversation")
-		chatID = a.AddConversation(message)
+		title := proxy.GenerateConversationTitle(context.Background(), message)
+		chatID = a.AddConversation(title)
 		logging.Info("New conversation added with ID: %s", chatID)
 		a.SwitchChat(chatID)
+	}
+	// StopChat 会从 agentPool 移除 dispatcher，无 goroutine 再接收 inputChan，此处会永久阻塞；用户消息需先重新拉起 dispatcher。
+	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
+		a.dispatcher(chatID)
 	}
 	inputChan := globalchannel.GetGlobalInputChannel(chatID)
 
@@ -142,9 +147,36 @@ func (a *App) SendMessage(chatID, message, role string) {
 	}
 	a.GetMessagesByMessageID(messageID)
 
-	inputChan <- message
+	// 仅用户消息进入 Dispatcher，避免助手/推理等内容若误走 SendMessage 时再次触发意图识别与死循环。
+	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
+		inputChan <- message
+	}
 	logging.Info("Sending message to conversation successfully")
 
+}
+
+// SendUserDisplayOnly 将用户消息写入对话并通知前端，但不送入 Dispatcher（用于「暂停」等控制话术，避免再次触发意图识别）。
+func (a *App) SendUserDisplayOnly(chatID, message string) {
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		logging.Info("SendUserDisplayOnly: message is empty")
+		runtime.EventsEmit(a.ctx, "sendMessageError", "messages is empty, not sending")
+		return
+	}
+	if chatID == "" {
+		logging.Info("SendUserDisplayOnly: ChatID is empty, adding new conversation")
+		title := proxy.GenerateConversationTitle(context.Background(), msg)
+		chatID = a.AddConversation(title)
+		logging.Info("New conversation added with ID: %s", chatID)
+		a.SwitchChat(chatID)
+	}
+	messageID := GenerateMessageID()
+	err := dataoperation.SendMessage(chatID, messageID, msg, utils.MessageRoleUser)
+	if err != nil {
+		runtime.EventsEmit(a.ctx, "sendMessageError", err.Error())
+		return
+	}
+	a.GetMessagesByMessageID(messageID)
 }
 
 func GenerateChatID() string {
@@ -205,7 +237,7 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 
 		// 使用可取消的 context
 		ctx, cancel := context.WithCancel(context.Background())
-		ctx = context.WithValue(ctx, "chatID", chatID)
+		ctx = context.WithValue(ctx, utils.ChatIDString, chatID)
 
 		var err error
 		dp, err = dispatcher.NewDispatcher(ctx, chatID, cancel) // 传递 cancel 函数
@@ -227,6 +259,20 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 	return dp
 }
 
+// restartDispatcherBackground 中断后重新拉起 Run 与输出监听，不重建 Dispatcher，以保留 Intention 等内存态。
+func (a *App) restartDispatcherBackground(chatID string, dp *dispatcher.Dispatcher) {
+	if dp == nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = context.WithValue(ctx, utils.ChatIDString, chatID)
+	dp.ReplaceRunContext(ctx, cancel)
+	go dp.Run(ctx)
+	go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
+	go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
+	logging.Info("Dispatcher 已重新监听 input/output，chatID=%s（保留原 Dispatcher 与意图）", chatID)
+}
+
 func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID string) {
 	outputChan := globalchannel.GetGlobalDialogOutChannel(chatID)
 	reasonningOutputChan := globalchannel.GetGlobalReasonOutChannel(chatID)
@@ -240,6 +286,8 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 	messageID := ""
 	content := ""
 	shouldGenerateNewID := true
+	// 流式首段到达时刻，作为入库 timestamp，避免仅用回合结束写入时间导致多条助手消息排序错乱
+	var streamStartTime time.Time
 
 	emitDialogStreamEnd := func(mid string) {
 		if eventname != "dialogAppend" || mid == "" {
@@ -255,6 +303,7 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 		if shouldGenerateNewID {
 			messageID = GenerateMessageID()
 			content = ""
+			streamStartTime = time.Time{}
 			shouldGenerateNewID = false
 		}
 
@@ -270,11 +319,16 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				continue
 			}
 
-			if message == utils.FinishString {
+			if message == utils.FinishString || message == utils.FinishStringEphemeral {
 				// 流式回合可能只有 tool_calls、无可见文本；仍会收到 FinishString。
-				// 此前会把 content=="" 整行写入 DB，前端加载后显示空气泡。
-				if strings.TrimSpace(content) != "" {
-					if err := dataoperation.SendMessage(chatID, messageID, content, role); err != nil {
+				// FinishStringEphemeral：仅展示（如小说工具内部多轮），不写入对话 DB，也不进入后续 LLM 记忆。
+				ephemeral := message == utils.FinishStringEphemeral
+				if strings.TrimSpace(content) != "" && !ephemeral {
+					ts := streamStartTime
+					if ts.IsZero() {
+						ts = time.Now()
+					}
+					if err := dataoperation.SendMessageWithCreateTime(chatID, messageID, content, role, ts); err != nil {
 						logging.Error("Failed to save message: %v", err)
 					}
 				}
@@ -283,12 +337,17 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				continue
 			}
 
+			if streamStartTime.IsZero() {
+				streamStartTime = time.Now()
+			}
 			content = fmt.Sprintf("%s%s", content, message)
 			appendMessage := map[string]interface{}{
 				"chatID":    chatID,
 				"messageID": messageID,
 				"content":   message,
 				"role":      role,
+				// 与入库 streamStartTime 一致，便于前端在重载前列顺序/展示时间
+				"timestamp": streamStartTime.UTC().Format(time.RFC3339Nano),
 			}
 
 			runtime.EventsEmit(a.ctx, eventname, appendMessage)
@@ -307,8 +366,8 @@ func (a *App) StopChat(chatID string) {
 
 	if dp, ok := a.agentPool[chatID]; ok {
 		dp.Shutdown()
-		delete(a.agentPool, chatID)
-		logging.Info("Stopped and removed dispatcher for chatID: %s", chatID)
+		a.restartDispatcherBackground(chatID, dp)
+		logging.Info("已中断当前任务并保留 Dispatcher（上下文/意图仍在）chatID=%s", chatID)
 	} else {
 		logging.Info("No dispatcher found for chatID: %s to stop", chatID)
 	}

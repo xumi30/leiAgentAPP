@@ -122,6 +122,14 @@
   word-break: break-word;
 }
 
+/* 当前对话标题：单行省略，避免与侧栏长标题抢版面 */
+.memo-context__block--chat .memo-context__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+
 .memo-context__meta {
   display: block;
   margin-top: 4px;

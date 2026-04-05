@@ -91,7 +91,7 @@ func (m *localMemory) GetMessages(chatID string) []*Message {
 	m.RwLock.RLock()
 	defer m.RwLock.RUnlock()
 	if msgs, ok := m.Messages[chatID]; ok {
-		logging.Info("Messages found for chatID:", chatID)
+		logging.Info("Messages found for chatID: %s", chatID)
 		return msgs
 	}
 	return []*Message{}

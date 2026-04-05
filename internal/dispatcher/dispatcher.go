@@ -13,6 +13,7 @@ import (
 	fileFunctions "leiAgent/internal/tools/fileFunction"
 	"leiAgent/internal/tools/libraryfs"
 	"leiAgent/internal/tools/memotool"
+	"leiAgent/internal/tools/noveltool"
 	searchFunctions "leiAgent/internal/tools/searchFuctions"
 	"leiAgent/internal/tools/timeFunctions"
 	"leiAgent/logging"
@@ -31,6 +32,9 @@ type Dispatcher struct {
 }
 
 func NewDispatcher(ctx context.Context, chatID string, cancel context.CancelFunc) (*Dispatcher, error) {
+	if strings.TrimSpace(chatID) == "" {
+		return nil, fmt.Errorf("NewDispatcher: chatID 不能为空（空 id 会与全局 OutputChan 混用，导致误把模型输出当成用户输入）")
+	}
 
 	globalchannel.RegisterGlobalInputChannel(chatID)
 	globalchannel.RegisterGlobalDialogOutChannel(chatID)
@@ -70,6 +74,15 @@ func (d *Dispatcher) Shutdown() {
 		d.cancel()
 	}
 	globalchannel.GetGlobalDialogOutChannel(d.ChatID) <- "终止任务运行..."
+}
+
+// ReplaceRunContext 在 Shutdown 之后使用：保留同一 Dispatcher（含 Intention），仅换新可取消的 context 并重新 Run。
+func (d *Dispatcher) ReplaceRunContext(ctx context.Context, cancel context.CancelFunc) {
+	d.ctx = ctx
+	d.cancel = cancel
+	if d.agent != nil {
+		d.agent.SetCtx(ctx)
+	}
 }
 
 func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
@@ -199,6 +212,7 @@ func toolsInfo() []byte {
 	toolRegistry.Register(fileFunctions.GetFileWriteTool())
 	toolRegistry.Register(libraryfs.New())
 	toolRegistry.Register(memotool.NewMemoWriteTool())
+	toolRegistry.Register(noveltool.New())
 	toolRegistry.Register(getcurrenttime)
 	toolRegistry.Register(financeMarket)
 	toolRegistry.Register(getLongitude)

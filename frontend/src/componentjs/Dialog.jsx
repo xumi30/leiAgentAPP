@@ -1,7 +1,20 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
-import { GetMessages, SendMessage,StopChat } from '../../wailsjs/go/main/App';
+import { GetMessages, SendMessage, SendUserDisplayOnly, StopChat } from '../../wailsjs/go/main/App';
 import MessageContent from './MessageContent.jsx';
+import {
+    classifyUserMessage,
+    classifyUserMessageLabel,
+} from '../utils/messageClassify.js';
+
+const MAIN_SHEET_ID = 'main';
+
+function clipSheetTitle(text) {
+    const line = String(text ?? '').split(/\r?\n/)[0].trim();
+    if (!line) return '便签';
+    const max = 22;
+    return line.length > max ? `${line.slice(0, max)}…` : line;
+}
 
 export default function Dialog() {
     // 获取对话列表
@@ -9,14 +22,79 @@ export default function Dialog() {
     const [messages, setMessages] = useState([]);
     const [stopVisible, setStopVisible] = useState(false);
     const [streamPulse, setStreamPulse] = useState(null);
+    /** @type {[{ id: string, title: string, startIdx: number }]} */
+    const [sheets, setSheets] = useState([
+        { id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 },
+    ]);
+    const [activeSheetId, setActiveSheetId] = useState(MAIN_SHEET_ID);
+    const [classifyHint, setClassifyHint] = useState('');
     const messagesRef = useRef(null);
     const inputRef = useRef(null);
+    const hintTimerRef = useRef(null);
+
+    const sortedSheets = useMemo(
+        () => [...sheets].sort((a, b) => a.startIdx - b.startIdx),
+        [sheets],
+    );
+
+    const activeSheet = useMemo(
+        () => sortedSheets.find((s) => s.id === activeSheetId) ?? sortedSheets[0],
+        [sortedSheets, activeSheetId],
+    );
+
+    const { visibleMessages, streamInActiveSheet } = useMemo(() => {
+        const sh = activeSheet;
+        const all = messages ?? [];
+        let idx = -1;
+        if (streamPulse) {
+            idx = all.findIndex(
+                (m) => String(m.messageID) === String(streamPulse.messageID),
+            );
+        }
+        if (!sh) {
+            return {
+                visibleMessages: all,
+                streamInActiveSheet: false,
+            };
+        }
+        const si = sortedSheets.findIndex((s) => s.id === sh.id);
+        const start = sh.startIdx;
+        const end =
+            si >= 0 && si < sortedSheets.length - 1
+                ? sortedSheets[si + 1].startIdx
+                : all.length;
+        const slice = all.slice(start, end);
+        const inSheet = idx >= start && idx < end;
+        return {
+            visibleMessages: slice,
+            streamInActiveSheet: inSheet,
+        };
+    }, [messages, activeSheet, sortedSheets, streamPulse]);
+
+    const showClassifyHint = useCallback((kind) => {
+        const label = classifyUserMessageLabel(kind);
+        setClassifyHint(`已归类为「${label}」`);
+        if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+        hintTimerRef.current = setTimeout(() => {
+            setClassifyHint('');
+            hintTimerRef.current = null;
+        }, 2200);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         const handleConversationChange = (event) => {
             const { conversationId } = event.detail;
             setChatId(conversationId);
             setStreamPulse(null);
+            setSheets([{ id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 }]);
+            setActiveSheetId(MAIN_SHEET_ID);
+            setClassifyHint('');
             const getMessages = async () => {
                 const messages = await GetMessages(conversationId);
                 setMessages(messages);
@@ -37,7 +115,7 @@ export default function Dialog() {
         const container = messagesRef.current;
         if (!container) return;
         container.scrollTop = container.scrollHeight;
-    }, [messages, streamPulse]);
+    }, [messages, streamPulse, visibleMessages]);
 
     useEffect(() => {
         const handleMessage = (message) => {
@@ -73,19 +151,19 @@ export default function Dialog() {
                 const messageExists = prevMessages.some(msg => msg.messageID === message.messageID);
 
                 if (messageExists) {
-                    // 使用 map 创建新数组，保持不可变性
+                    // 使用 map 创建新数组，保持不可变性；timestamp 以首包为准
                     return prevMessages.map((msg) => {
                         if (msg.messageID === message.messageID) {
                             // 创建新对象，保持不可变性
                             return {
                                 ...msg,
-                                content: msg.content + message.content
+                                content: msg.content + message.content,
                             };
                         }
                         return msg;
                     });
                 } else {
-                    // 如果是新消息，添加到列表中
+                    // 新消息：携带后端首包时间，与 DB 排序一致
                     return [...prevMessages, message];
                 }
             });
@@ -123,17 +201,45 @@ export default function Dialog() {
 
 
 
-    const sendMessage = () => {
+    const sendMessage = async () => {
         const el = inputRef.current;
         if (!el) return;
         const content = el.value.trim();
 
-        if (content) {
-            SendMessage(chatId, content, "user");
+        if (!content) return;
+
+        const streaming = Boolean(streamPulse);
+        const kind = classifyUserMessage(content, { isStreaming: streaming });
+        showClassifyHint(kind);
+
+        if (kind === 'control') {
+            try {
+                await SendUserDisplayOnly(chatId, content);
+            } catch (e) {
+                console.error('SendUserDisplayOnly:', e);
+            }
+            StopChat(chatId);
+            setStopVisible(false);
+            setStreamPulse(null);
             el.value = '';
             el.style.height = 'auto';
-            setStopVisible(true);
+            return;
         }
+
+        if (kind === 'newTopic') {
+            const newId = `sheet_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            const startIdx = messages.length;
+            setSheets((prev) => [
+                ...prev,
+                { id: newId, title: clipSheetTitle(content), startIdx },
+            ]);
+            setActiveSheetId(newId);
+        }
+
+        SendMessage(chatId, content, "user");
+        el.value = '';
+        el.style.height = 'auto';
+        setStopVisible(true);
     };
 
     const stopDialog = () => {
@@ -152,15 +258,42 @@ export default function Dialog() {
 
     return (
         <div id={"dialog_" + chatId} className="dialog">
-            <div className="dialog__header">
-                <span className="dialog__header-title">对话</span>
+            <div className="dialog__header dialog__header--tabs">
+                <div
+                    className="dialog__tabs"
+                    role="tablist"
+                    aria-label="同一会话便签页"
+                >
+                    {sortedSheets.map((s) => (
+                        <button
+                            key={s.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={activeSheetId === s.id}
+                            className={
+                                'dialog__tab' +
+                                (activeSheetId === s.id ? ' dialog__tab--active' : '')
+                            }
+                            onClick={() => setActiveSheetId(s.id)}
+                            title={s.title}
+                        >
+                            <span className="dialog__tab-label">{s.title}</span>
+                        </button>
+                    ))}
+                </div>
             </div>
+            {classifyHint ? (
+                <div className="dialog__classify-hint" role="status">
+                    {classifyHint}
+                </div>
+            ) : null}
             <div className="dialog__messages" ref={messagesRef}>
                 {
-                    messages && messages.filter((msg) => {
+                    visibleMessages && visibleMessages.filter((msg) => {
                         if (msg.role === 'reasoning') return false;
                         const hasText = String(msg.content ?? '').trim() !== '';
                         const streamingHere =
+                            streamInActiveSheet &&
                             streamPulse &&
                             String(streamPulse.chatID) === String(chatId) &&
                             String(streamPulse.messageID) === String(msg.messageID);
@@ -169,6 +302,7 @@ export default function Dialog() {
                         const isUser = msg.role === 'user';
                         const streamingHere =
                             !isUser &&
+                            streamInActiveSheet &&
                             streamPulse &&
                             String(streamPulse.chatID) === String(chatId) &&
                             String(streamPulse.messageID) === String(msg.messageID);

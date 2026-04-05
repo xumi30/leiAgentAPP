@@ -1,7 +1,10 @@
 package dataoperation
 
 import (
+	"time"
+
 	"leiAgent/logging"
+	"leiAgent/utils"
 )
 
 func GetDialogs(chatID string) []map[string]interface{} {
@@ -59,7 +62,7 @@ func SendMessage(chatID, messageID, message, role string) error {
 	conversations, err := sql.GetConversation(chatID)
 	if err != nil || conversations == nil {
 		logging.Error("SendMessage 没有发现存在的对话id，现在新建对话: %v", err)
-		err := sql.SaveConversation(chatID, message, "chat")
+		err := sql.SaveConversation(chatID, utils.TruncateRunes(message, utils.ChatTitleMaxRunes), "chat")
 		if err != nil {
 			logging.Error("创建对话失败: %v", err)
 			return err
@@ -74,4 +77,29 @@ func SendMessage(chatID, messageID, message, role string) error {
 	}
 	return nil
 
+}
+
+// SendMessageWithCreateTime 写入消息并使用 createTime 作为库内 timestamp（流式首包到达时间，避免仅用收尾写入时刻导致乱序）
+func SendMessageWithCreateTime(chatID, messageID, message, role string, createTime time.Time) error {
+	sql := GetSqlInstance()
+	if sql == nil {
+		return nil
+	}
+
+	conversations, err := sql.GetConversation(chatID)
+	if err != nil || conversations == nil {
+		logging.Error("SendMessageWithCreateTime 没有发现存在的对话id，现在新建对话: %v", err)
+		err := sql.SaveConversation(chatID, utils.TruncateRunes(message, utils.ChatTitleMaxRunes), "chat")
+		if err != nil {
+			logging.Error("创建对话失败: %v", err)
+			return err
+		}
+	}
+
+	err = sql.SaveMessageWithTimestamp(chatID, messageID, role, message, createTime)
+	if err != nil {
+		logging.Error("保存消息失败: %v", err)
+		return err
+	}
+	return nil
 }

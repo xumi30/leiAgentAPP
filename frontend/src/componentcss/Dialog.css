@@ -41,6 +41,80 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+.dialog__header--tabs {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.dialog__tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+}
+
+.dialog__tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.dialog__tabs::-webkit-scrollbar-thumb {
+    background: rgba(60, 60, 67, 0.22);
+    border-radius: 999px;
+}
+
+.dialog__tab {
+    flex: 0 1 auto;
+    max-width: 160px;
+    min-width: 0;
+    padding: 6px 12px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px 8px 4px 4px;
+    background: rgba(255, 255, 255, 0.5);
+    color: var(--apple-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition:
+        background 0.12s ease,
+        color 0.12s ease,
+        border-color 0.12s ease;
+}
+
+.dialog__tab:hover {
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--apple-label);
+}
+
+.dialog__tab--active {
+    background: rgba(0, 122, 255, 0.12);
+    border-color: rgba(0, 122, 255, 0.35);
+    color: var(--apple-label);
+}
+
+.dialog__tab-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dialog__classify-hint {
+    flex-shrink: 0;
+    padding: 6px 20px 8px;
+    font-size: 12px;
+    color: var(--apple-secondary);
+    background: rgba(250, 248, 255, 0.55);
+    border-bottom: 1px solid var(--apple-separator);
+}
 .dialog__messages {
     flex: 1;
     min-width: 0;
