@@ -2,14 +2,15 @@
 .conversation-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 5px 10px;
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  max-height: calc(100vh - 150px);
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--apple-separator);
+  max-height: calc(100vh - 320px);
   overflow-y: auto;
 }
 
@@ -29,8 +30,9 @@
 }
 
 .conversation_item:hover {
-  box-shadow: 10px 10px 2px 0px rgba(154, 207, 31, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   cursor: pointer;
+  filter: brightness(0.98);
 }
 
 /* 对话名称 */
@@ -73,14 +75,16 @@
   position: absolute;
   right: 0;
   top: auto;
-  color: rgb(5, 1, 12);
+  color: var(--apple-label);
+  background: rgba(255, 255, 255, 0.94);
   margin-top: 8px;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
   min-width: 140px;
   overflow: visible;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--apple-separator);
   z-index: 1000; /* 添加这行，确保菜单显示在其他元素之上 */
 }
 
@@ -95,7 +99,7 @@
 }
 
 .conversation-menu div:hover {
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 122, 255, 0.08);
   padding-left: 20px;
 }
 
@@ -106,21 +110,25 @@
   justify-content: center;
   width: 100%;
   padding: 12px;
-  margin-bottom: 16px;
-  background: linear-gradient(135deg, rgba(197, 206, 234, 0.6) 0%, rgba(224, 187, 228, 0.6) 100%);
+  margin-bottom: 12px;
+  background: linear-gradient(180deg, #0a84ff 0%, #007aff 100%);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #3A4A6A;
-  font-weight: 500;
+  border: none;
+  color: #fff;
+  font-weight: 600;
   font-size: 15px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(197, 206, 234, 0.25);
+  transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.28);
 }
 
 .new-conversation-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(197, 206, 234, 0.35);
+  opacity: 0.94;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.35);
+}
+
+.new-conversation-btn:active {
+  transform: scale(0.99);
 }
 
 .btn-icon {
@@ -135,15 +143,27 @@
 }
 
 .conversation-list::-webkit-scrollbar-track {
-  background: white;
+  background: transparent;
   border-radius: 3px;
 }
 
 .conversation-list::-webkit-scrollbar-thumb {
-    background: white;
+    background: rgba(60, 60, 67, 0.2);
   border-radius: 3px;
 }
 
 .conversation-list::-webkit-scrollbar-thumb:hover {
-    background: white;
+    background: rgba(60, 60, 67, 0.35);
+}
+
+.conversation-filter-empty {
+  margin: 16px 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--apple-secondary);
+  text-align: center;
+  border-radius: 12px;
+  background: rgba(242, 242, 247, 0.9);
+  border: 1px dashed var(--apple-separator-opaque);
 }

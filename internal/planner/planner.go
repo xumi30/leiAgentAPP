@@ -128,9 +128,6 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 
 	ctx = context.WithValue(ctx, utils.IsPlanningString, true)
 
-	dialogOutChan <- utils.FinishString
-	dialogOutChan <- "正在加载工具信息...\n"
-
 	planInput := struct {
 		Message string      `json:"message"`
 		Goal    string      `json:"goal"`
@@ -162,24 +159,25 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 	logging.Info("Agent 处理消息完成，返回结果: %s", response.Content)
 
 	// unmarshal response.Content to Step[]
-	var planner *Planning
+	var planner Planning
 
-	err = json.Unmarshal([]byte(response.Content), planner)
+	err = json.Unmarshal([]byte(response.Content), &planner)
 	if err != nil {
 		logging.Error("解析规划结果失败: %v", err)
 		return nil, err
 	}
-	planner.saveTodb()
-	return planner, nil
+	planner.Status = "pending"
+	err = planner.saveTodb(chatId)
+	if err != nil {
+		logging.Error("保存规划到数据库失败: %v", err)
+		return nil, err
+	}
+	return &planner, nil
 }
 
-// saveTodb 是 Planning 结构体的方法，用于将规划信息保存到数据库
-// 该方法接收一个 Planning 类型的指针作为接收器
-// 返回值类型为 error，表示保存操作可能出现的错误
-func (p *Planning) saveTodb() error {
-	// 记录日志信息，表明正在执行保存规划到数据库的操作
+func (p *Planning) saveTodb(chatId string) error {
+
 	logging.Info("正在保存规划到数据库...")
-	// 调用 dataoperation 包中的 SavePlan 函数，传入规划的目标、状态和重试次数
-	// 并将可能的错误返回给调用者
-	return dataoperation.SavePlan(p.Goal, p.Status, p.RetryCount)
+
+	return dataoperation.SavePlan(chatId, p.Goal, p.Status, p.RetryCount)
 }

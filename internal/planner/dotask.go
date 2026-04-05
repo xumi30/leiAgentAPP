@@ -6,10 +6,12 @@ import (
 	globalchannel "leiAgent/internal"
 	"leiAgent/internal/memory"
 	"leiAgent/logging"
+	"leiAgent/utils"
 )
 
 func (planner *Planning) DoTask(ctx context.Context) (string, error) {
-	chatId, ok := ctx.Value("chatId").(string)
+	logging.Info("开始执行规划...")
+	chatId, ok := ctx.Value(utils.ChatIDString).(string)
 	if !ok {
 		logging.Error("chatId is not found in context")
 		return "", fmt.Errorf("chatId is not found in context")

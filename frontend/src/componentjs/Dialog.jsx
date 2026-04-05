@@ -1,14 +1,15 @@
-
-import { getRandomMacaronColor } from './Constant';
 import React, { useState, useEffect, useRef } from 'react';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
 import { GetMessages, SendMessage,StopChat } from '../../wailsjs/go/main/App';
+import MessageContent from './MessageContent.jsx';
 
 export default function Dialog() {
     // 获取对话列表
     const [chatId, setChatId] = useState('');
     const [messages, setMessages] = useState([]);
+    const [stopVisible, setStopVisible] = useState(false);
     const messagesRef = useRef(null);
+    const inputRef = useRef(null);
 
     useEffect(() => {
         const handleConversationChange = (event) => {
@@ -103,48 +104,49 @@ export default function Dialog() {
         EventsOn("sendMessageError", handleSenderror); // 监听发送错误事件
 
         return () => {
-            EventsOff("dialogAppend", handleMessage); // 组件卸载时取消事件监听
-            EventsOff("GetMessagesByMessageID", handleMessage); // 组件卸载时取消事件监听
-            EventsOff("sendMessageError", handleSenderror); // 组件卸载时取消事件监听
-        }
+            EventsOff("dialogAppend");
+            EventsOff("GetMessagesByMessageID");
+            EventsOff("sendMessageError");
+        };
     }, []);
 
 
 
     const sendMessage = () => {
-        console.log("发送消息,当前chatId:", chatId);
-        const input = document.querySelector('.dialog__input textarea');
-        const content = input.value.trim();
-        console.log("输入的消息内容:", content);
+        const el = inputRef.current;
+        if (!el) return;
+        const content = el.value.trim();
 
         if (content) {
             SendMessage(chatId, content, "user");
-            input.value = ''; // 发送后清空输入框
+            el.value = '';
+            el.style.height = 'auto';
+            setStopVisible(true);
         }
-        // 让stoopbutton可见
-        const stopButton = document.getElementById('stop-button');
-        if (stopButton) {
-            stopButton.style.display = 'inline-block';
-        }
-
-    }
+    };
 
     const stopDialog = () => {
-        console.log("停止对话");
-        StopChat(chatId); // 发送空消息作为停止信号
-    }
+        StopChat(chatId);
+        setStopVisible(false);
+    };
+
+    /** @param {React.KeyboardEvent<HTMLTextAreaElement>} e */
+    const onInputKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    };
 
     return (
         <div id={"dialog_" + chatId} className="dialog">
             <div className="dialog__header">
-                对话
-
+                <span className="dialog__header-title">对话</span>
             </div>
             <div className="dialog__messages" ref={messagesRef}>
                 {
                     messages && messages.filter(msg => msg.role != 'reasoning').map((msg) => {
                         const isUser = msg.role === 'user';
-                        const colors = getRandomMacaronColor(msg.messageID);
                         return (
                             <div key={"dialogmessage_" + msg.messageID}
                                 id={"dialogmessage_" + msg.messageID}
@@ -156,12 +158,10 @@ export default function Dialog() {
                                         {msg.timestamp}
                                     </span>
                                 </div>
-                                <div style={{
-                                    backgroundColor: colors.bg,
-                                    color: colors.text,
-                                    whiteSpace: 'pre-wrap',
-                                }} className="messagecontent">
-                                    {msg.content}
+                                <div
+                                    className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}`}
+                                >
+                                    <MessageContent content={msg.content || ''} variant={isUser ? 'user' : 'assistant'} />
                                 </div>
                             </div>
                         )
@@ -170,19 +170,41 @@ export default function Dialog() {
             </div>
 
             <div className="dialog__input">
-                <button id='stop-button' onClick={stopDialog}> 
-                    <span className="send-icon">🛑
-                </span></button>
-                <textarea type="text" placeholder="请输入消息"
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            sendMessage();
-                        }
-                    }}
-                />
-                <button id="send-button" onClick={sendMessage}>
-                    <span className="send-icon">🚀</span>
-                </button>
+                <div className="dialog__input-row">
+                    <button
+                        type="button"
+                        className={`dialog__btn-stop${stopVisible ? ' dialog__btn-stop--visible' : ''}`}
+                        onClick={stopDialog}
+                        aria-label="停止生成"
+                        title="停止生成"
+                    >
+                        <span className="dialog__btn-stop-icon" aria-hidden>⏹</span>
+                        <span className="dialog__btn-stop-text">停止</span>
+                    </button>
+                    <div className="dialog__textarea-shell">
+                        <textarea
+                            ref={inputRef}
+                            className="dialog__textarea"
+                            placeholder="输入消息，Enter 发送 · Shift+Enter 换行"
+                            rows={1}
+                            onKeyDown={onInputKeyDown}
+                            onInput={(e) => {
+                                const ta = e.target;
+                                ta.style.height = 'auto';
+                                ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+                            }}
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        className="dialog__btn-send"
+                        onClick={sendMessage}
+                        aria-label="发送"
+                        title="发送"
+                    >
+                        <span className="dialog__btn-send-icon" aria-hidden>🚀</span>
+                    </button>
+                </div>
             </div>
         </div>
     )

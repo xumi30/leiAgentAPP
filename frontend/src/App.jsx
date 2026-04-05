@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import './App.css';
 
@@ -6,12 +6,42 @@ import ConversationList from './componentjs/ConversationList.jsx';
 import Dialog from './componentjs/Dialog.jsx';
 import Header from './componentjs/Header.jsx';
 import Reasoning from './componentjs/Reasonging.jsx';
+import MemoModal from './componentjs/MemoModal.jsx';
+import { GetMemoCalendarDates } from '../wailsjs/go/main/App';
 
 function App() {
 
     const [leftWidth, setLeftWidth] = useState(260); // ConversationList宽度
     const [rightWidth, setRightWidth] = useState(800); // Reasoning宽度
     const [isDragging, setIsDragging] = useState(null); // 当前拖动的边界: 'left' 或 'right'
+
+    const [memoOpen, setMemoOpen] = useState(false);
+    const [activeChatId, setActiveChatId] = useState('');
+    const [activeChatTitle, setActiveChatTitle] = useState('');
+    const [memoDates, setMemoDates] = useState(() => new Set());
+
+    const refreshMemoDates = useCallback(async () => {
+        try {
+            const arr = await GetMemoCalendarDates();
+            setMemoDates(new Set(Array.isArray(arr) ? arr : []));
+        } catch (e) {
+            console.error('GetMemoCalendarDates:', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        refreshMemoDates();
+    }, [refreshMemoDates]);
+
+    useEffect(() => {
+        const onConv = (e) => {
+            const d = e.detail || {};
+            setActiveChatId(d.conversationId ?? '');
+            setActiveChatTitle(d.title ?? '');
+        };
+        window.addEventListener('conversationChanged', onConv);
+        return () => window.removeEventListener('conversationChanged', onConv);
+    }, []);
 
     const handleMouseDown = (e, border) => {
         e.preventDefault();
@@ -55,10 +85,18 @@ function App() {
             <Header
                 isConnected={true}
                 showReasoningPanel={true}
+                onOpenMemo={() => setMemoOpen(true)}
+            />
+            <MemoModal
+                open={memoOpen}
+                onClose={() => setMemoOpen(false)}
+                activeChatId={activeChatId}
+                activeChatTitle={activeChatTitle}
+                onMemoSaved={refreshMemoDates}
             />
             <div className="main-content">
                 <div style={{ width: `${leftWidth}px`, minWidth: '200px', maxWidth: '400px' }}>
-                    <ConversationList />
+                    <ConversationList memoDates={memoDates} refreshMemoDates={refreshMemoDates} />
                 </div>
                 <div
                     className="resizer left-resizer"

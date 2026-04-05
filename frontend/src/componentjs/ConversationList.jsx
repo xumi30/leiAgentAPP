@@ -1,12 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { AddConversation, ListConversation, DeleteConversation, UpdateConversationTitle, GetMessages } from '../../wailsjs/go/main/App';
-import { getRandomMacaronColor, makeChatId } from './Constant';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { SwitchChat, ListConversation, DeleteConversation, UpdateConversationTitle } from '../../wailsjs/go/main/App';
+import { getRandomMacaronColor } from './Constant';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
+import ConversationCalendar from './ConversationCalendar.jsx';
 
-export default function ConversationList() {
+/** 对话的创建/更新日期（本地日历日）是否与选中日期一致 */
+function conversationMatchesCalendarDay(conv, ymd) {
+    if (!ymd) return true;
+    for (const key of ['updated_at', 'created_at']) {
+        const v = conv[key];
+        if (v == null || v === '') continue;
+        const d = new Date(v);
+        if (Number.isNaN(d.getTime())) continue;
+        const s = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (s === ymd) return true;
+    }
+    return false;
+}
+
+export default function ConversationList({ memoDates = new Set(), refreshMemoDates }) {
     const [openMenuId, setOpenMenuId] = useState(null);
     const menuRef = useRef(null);
     const [cons, setCons] = useState([]);
+    const [selectedDate, setSelectedDate] = useState(null);
+
+    const displayedCons = useMemo(() => {
+        if (!selectedDate) return cons;
+        return cons.filter((c) => conversationMatchesCalendarDay(c, selectedDate));
+    }, [cons, selectedDate]);
 
     // 点击外部关闭菜单
     useEffect(() => {
@@ -29,8 +50,8 @@ export default function ConversationList() {
                 const conversations = await ListConversation();
                 console.log("loadConversations:", conversations);
                 setCons(conversations);
-                if (conversations.length>0){
-                    switchDialog(conversations[0].id);
+                if (conversations.length > 0) {
+                    switchDialog(conversations[0].id, conversations[0].title);
                 }
                
             } catch (error) {
@@ -52,25 +73,27 @@ export default function ConversationList() {
                 // 然后添加新的对话
                 return [updatedConversation, ...filteredCons];
             });
-            switchDialog(updatedConversation.id)
+            switchDialog(updatedConversation.id, updatedConversation.title);
         };
 
         const handleConversationListError = (error) => {
             alert("更新失败: " + error);
-        }
+        };
 
-        
-          // 页面刷新
-        EventsOn("deleteConversationSuccess", () => { window.location.reload()} );
+        const handleDeleteSuccess = () => {
+            window.location.reload();
+        };
+
+        EventsOn("deleteConversationSuccess", handleDeleteSuccess);
         EventsOn("getConversationError", handleConversationListError);
         EventsOn("getConversation", handleConversationListUpdated);
         EventsOn("updateConversationError", handleConversationListError);
-      
 
         return () => {
-            EventsOff("updateConversationError", handleConversationListUpdated);
-            EventsOff("updateConversationError", handleConversationListError);
-            EventsOff("getConversation", handleConversationListUpdated);
+            EventsOff("deleteConversationSuccess");
+            EventsOff("getConversationError");
+            EventsOff("getConversation");
+            EventsOff("updateConversationError");
         };
     }, []);
 
@@ -105,7 +128,7 @@ export default function ConversationList() {
     };
 
     const handleNewConversation = () => {
-        switchDialog("");
+        switchDialog("", '');
         // const newConversationName = prompt("请输入新对话的名称:");
         // if (!newConversationName) {
         //     console.log("用户取消了输入或未输入内容");
@@ -115,18 +138,27 @@ export default function ConversationList() {
         // AddConversation(newConversationName)
     };
 
-    const switchDialog = (conversationId) => {
-
-        console.log("切换到对话ID:", conversationId);
-        // 这里可以添加切换对话的逻辑
-        const event = new CustomEvent('conversationChanged', { detail: { conversationId } });
-        window.dispatchEvent(event);
-    }
+    const switchDialog = (conversationId, titleHint) => {
+        SwitchChat(conversationId);
+        const title =
+            titleHint !== undefined && titleHint !== null
+                ? titleHint
+                : cons.find((c) => c.id === conversationId)?.title ?? '';
+        window.dispatchEvent(
+            new CustomEvent('conversationChanged', { detail: { conversationId, title } }),
+        );
+    };
 
 
 
     return (
-        <div  >
+        <div>
+            <ConversationCalendar
+                memoDates={memoDates}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                onVisibleMonthChange={typeof refreshMemoDates === 'function' ? refreshMemoDates : undefined}
+            />
             <button className="new-conversation-btn" onClick={handleNewConversation}>
                 <span className="btn-icon"> + </span>
                 <span className="btn-text">新建对话</span>
@@ -134,7 +166,8 @@ export default function ConversationList() {
 
             <div className="conversation-list">
                 <div className="conversation">
-                    {cons && cons.length > 0 && cons.map((conversation) => {
+                    {displayedCons && displayedCons.length > 0 &&
+                        displayedCons.map((conversation) => {
                         const colors = getRandomMacaronColor(conversation.id);
                         const isMenuOpen = openMenuId === conversation.id;
 
@@ -142,7 +175,7 @@ export default function ConversationList() {
                             <div key={conversation.id}
                                 className="conversation_item"
                                 id={conversation.id}
-                                onClick={() => switchDialog(conversation.id)}
+                                onClick={() => switchDialog(conversation.id, conversation.title)}
                                 style={{
                                     backgroundColor: colors.bg,
                                     color: colors.text,
@@ -172,6 +205,11 @@ export default function ConversationList() {
                             </div>
                         );
                     })}
+                    {displayedCons.length === 0 && cons.length > 0 && selectedDate ? (
+                        <p className="conversation-filter-empty">
+                            这一天还没有对话，试试其它日期或点下方「显示全部对话」。
+                        </p>
+                    ) : null}
                 </div>
             </div>
         </div>

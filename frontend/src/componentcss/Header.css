@@ -3,12 +3,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 15px;
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 2px 10px rgba(129, 73, 73, 0.05);
+    padding: 8px 18px;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--apple-separator);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
   
-    height: 40px;
+    min-height: 48px;
   }
   
   .header-logo {
@@ -24,21 +26,52 @@
     align-items: center;
     justify-content: center;
     font-size: 20px;
-    font-weight: bold;
-    color: var(--primary-color);
-    border-radius: 50%;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(180deg, #0a84ff 0%, #007aff 100%);
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
   }
   
   .logo-title {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 600;
-
+    letter-spacing: -0.03em;
+    color: var(--apple-label);
   }
   
   .header-controls {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+  }
+
+  .header-memo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 999px;
+    background: var(--apple-fill);
+    color: var(--apple-blue);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+
+  .header-memo-btn:hover {
+    background: rgba(0, 122, 255, 0.12);
+  }
+
+  .header-memo-btn__icon {
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .header-memo-btn__text {
+    letter-spacing: 0.02em;
   }
   
   /* 状态指示器 */
@@ -59,11 +92,16 @@
   }
   
   .status-dot.active {
-    background-color: #4CAF50;
+    background-color: #34c759;
     animation: pulse 2s infinite;
   }
   
   .status-text {
     font-size: 14px;
     color: var(--light-text);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
   }

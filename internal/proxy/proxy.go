@@ -231,7 +231,7 @@ func selectProviderStrategy() *ModelAPIInfo {
 	// }
 
 	ModelAPIInfo2 := &ModelAPIInfo{
-		modelName: "qwen3.5-122b-a10b",
+		modelName: "qwen3.5-35b-a3b",
 		token:     "sk-da6d7a7da1914f6581d4825d7b790389",
 		url:       "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
 		isStream:  3,

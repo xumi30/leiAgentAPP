@@ -10,12 +10,15 @@ import (
 
 const planstable = `CREATE TABLE IF NOT EXISTS plans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+	chat_id TEXT NOT NULL,
     goal TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed')),
     retry_count INTEGER NOT NULL DEFAULT 6,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	Foreign KEY (chat_id) REFERENCES conversations(id) ON DELETE CASCADE
 )`
+
 
 const planstepstable = `CREATE TABLE IF NOT EXISTS plan_steps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,21 +38,22 @@ const planstepstable = `CREATE TABLE IF NOT EXISTS plan_steps (
 )`
 
 // SavePlan 保存或更新计划
-func (m *SQLMemory) SavePlan(goal string, status string, retryCount int) error {
+func (m *SQLMemory) SavePlan(chatID, goal, status string, retryCount int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	query := `
-        INSERT INTO plans (id, goal, status, retry_count, updated_at)
+        INSERT INTO plans (chat_id, goal, status, retry_count, updated_at)
         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
+            chat_id = excluded.chat_id,
             goal = excluded.goal,
             status = excluded.status,
             retry_count = excluded.retry_count,
             updated_at = CURRENT_TIMESTAMP
     `
 
-	_, err := m.db.Exec(query, goal, status, retryCount)
+	_, err := m.db.Exec(query, chatID, goal, status, retryCount)
 	if err != nil {
 		return fmt.Errorf("failed to save plan: %w", err)
 	}
@@ -62,16 +66,17 @@ func (m *SQLMemory) GetPlan(planID int64) (map[string]interface{}, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	query := `SELECT id, goal, status, retry_count, created_at, updated_at FROM plans WHERE id = ?`
+	query := `SELECT id, chat_id, goal, status, retry_count, created_at, updated_at FROM plans WHERE id = ?`
 
 	row := m.db.QueryRow(query, planID)
 
 	var id int64
+	var chatID string
 	var goal, status string
 	var retryCount int
 	var createdAt, updatedAt time.Time
 
-	if err := row.Scan(&id, &goal, &status, &retryCount, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&id, &chatID, &goal, &status, &retryCount, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			logging.Warn("Plan with ID %d not found", planID)
 			return nil, fmt.Errorf("plan not found")
@@ -81,6 +86,41 @@ func (m *SQLMemory) GetPlan(planID int64) (map[string]interface{}, error) {
 
 	return map[string]interface{}{
 		"id":          id,
+		"chat_id":     chatID,
+		"goal":        goal,
+		"status":      status,
+		"retry_count": retryCount,
+		"created_at":  createdAt,
+		"updated_at":  updatedAt,
+	}, nil
+}
+
+// GetPlanWithChatid 通过chat_id获取计划信息
+func (m *SQLMemory) GetPlanWithChatid(chatid string) (map[string]interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	query := `SELECT id, chat_id, goal, status, retry_count, created_at, updated_at FROM plans WHERE chat_id = ?`
+
+	row := m.db.QueryRow(query, chatid)
+
+	var id int64
+	var chatID string
+	var goal, status string
+	var retryCount int
+	var createdAt, updatedAt time.Time
+
+	if err := row.Scan(&id, &chatID, &goal, &status, &retryCount, &createdAt, &updatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			logging.Warn("Plan with chat_id %s not found", chatid)
+			return nil, fmt.Errorf("plan not found")
+		}
+		return nil, fmt.Errorf("failed to get plan: %w", err)
+	}
+
+	return map[string]interface{}{
+		"id":          id,
+		"chat_id":     chatID,
 		"goal":        goal,
 		"status":      status,
 		"retry_count": retryCount,
@@ -94,7 +134,7 @@ func (m *SQLMemory) ListPlans() ([]map[string]interface{}, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	query := `SELECT id, goal, status, retry_count, created_at, updated_at FROM plans ORDER BY created_at DESC`
+	query := `SELECT id, chat_id, goal, status, retry_count, created_at, updated_at FROM plans ORDER BY created_at DESC`
 
 	rows, err := m.db.Query(query)
 	if err != nil {
@@ -106,16 +146,18 @@ func (m *SQLMemory) ListPlans() ([]map[string]interface{}, error) {
 
 	for rows.Next() {
 		var id int64
+		var chatID string
 		var goal, status string
 		var retryCount int
 		var createdAt, updatedAt time.Time
 
-		if err := rows.Scan(&id, &goal, &status, &retryCount, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&id, &chatID, &goal, &status, &retryCount, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan plan: %w", err)
 		}
 
 		plans = append(plans, map[string]interface{}{
 			"id":          id,
+			"chat_id":     chatID,
 			"goal":        goal,
 			"status":      status,
 			"retry_count": retryCount,
@@ -145,6 +187,20 @@ func (m *SQLMemory) DeletePlan(planID int64) error {
 	return nil
 }
 
+// DeletePlanByChatid 通过chat_id删除计划及其所有步骤
+func (m *SQLMemory) DeletePlanByChatid(chatID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// SQLite 的外键约束会自动删除相关步骤
+	_, err := m.db.Exec("DELETE FROM plans WHERE chat_id = ?", chatID)
+	if err != nil {
+		return fmt.Errorf("failed to delete plan by chat_id: %w", err)
+	}
+
+	return nil
+}
+
 // UpdatePlanStatus 更新计划状态
 func (m *SQLMemory) UpdatePlanStatus(planID int64, status string) error {
 	m.mu.Lock()
@@ -159,6 +215,25 @@ func (m *SQLMemory) UpdatePlanStatus(planID int64, status string) error {
 	_, err := m.db.Exec(query, status, planID)
 	if err != nil {
 		return fmt.Errorf("failed to update plan status: %w", err)
+	}
+
+	return nil
+}
+
+// UpdatePlanStatusByChatid 通过chat_id更新计划状态
+func (m *SQLMemory) UpdatePlanStatusByChatid(chatID, status string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	query := `
+        UPDATE plans 
+        SET status = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE chat_id = ?
+    `
+
+	_, err := m.db.Exec(query, status, chatID)
+	if err != nil {
+		return fmt.Errorf("failed to update plan status by chat_id: %w", err)
 	}
 
 	return nil
@@ -345,4 +420,67 @@ func (m *SQLMemory) UpdatePlanStepResult(planID int64, stepID string, result int
 	}
 
 	return nil
+}
+
+// GetPlanStepsByChatid 通过chat_id获取计划的所有步骤
+func (m *SQLMemory) GetPlanStepsByChatid(chatid string) ([]map[string]interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// 首先获取plan_id
+	query := `SELECT id FROM plans WHERE chat_id = ?`
+	row := m.db.QueryRow(query, chatid)
+	
+	var planID int64
+	if err := row.Scan(&planID); err != nil {
+		if err == sql.ErrNoRows {
+			logging.Warn("Plan with chat_id %s not found", chatid)
+			return nil, fmt.Errorf("plan not found")
+		}
+		return nil, fmt.Errorf("failed to get plan id: %w", err)
+	}
+	
+	// 然后获取该plan的所有步骤
+	return m.ListPlanSteps(planID)
+}
+
+// UpdatePlanByChatid 通过chat_id更新计划信息
+func (m *SQLMemory) UpdatePlanByChatid(chatid, goal, status string, retryCount int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	query := `
+        UPDATE plans 
+        SET goal = ?, status = ?, retry_count = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE chat_id = ?
+    `
+
+	_, err := m.db.Exec(query, goal, status, retryCount, chatid)
+	if err != nil {
+		return fmt.Errorf("failed to update plan by chat_id: %w", err)
+	}
+
+	return nil
+}
+
+// SavePlanStepByChatid 通过chat_id保存或更新计划步骤
+func (m *SQLMemory) SavePlanStepByChatid(chatid, stepID, tool, input, dependsOn string, result interface{}, status, error string, indegree int) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// 首先获取plan_id
+	query := `SELECT id FROM plans WHERE chat_id = ?`
+	row := m.db.QueryRow(query, chatid)
+	
+	var planID int64
+	if err := row.Scan(&planID); err != nil {
+		if err == sql.ErrNoRows {
+			logging.Warn("Plan with chat_id %s not found", chatid)
+			return fmt.Errorf("plan not found")
+		}
+		return fmt.Errorf("failed to get plan id: %w", err)
+	}
+	
+	// 然后使用plan_id保存步骤
+	return m.SavePlanStep(planID, stepID, tool, input, dependsOn, result, status, error, indegree)
 }

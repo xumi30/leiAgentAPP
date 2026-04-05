@@ -51,14 +51,14 @@ func ListPlans() ([]map[string]interface{}, error) {
 }
 
 // SavePlan 保存计划
-func SavePlan(goal string, status string, retryCount int) error {
+func SavePlan(chatid string, goal string, status string, retryCount int) error {
 	sql := GetSqlInstance()
 	if sql == nil {
 		logging.Error("获取SQL实例失败")
 		return ErrSQLInstanceNotAvailable
 	}
 
-	err := sql.SavePlan(goal, status, retryCount)
+	err := sql.SavePlan(chatid, goal, status, retryCount)
 	if err != nil {
 		logging.Error("保存计划失败: %v", err)
 		return err

@@ -79,6 +79,7 @@ func createTables(db *sql.DB) error {
 		dialogindextimestamp,
 		subchattable,
 		chatIDindex,
+		planstable,
 		planstepstable,
 	}
 

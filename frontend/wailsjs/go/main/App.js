@@ -46,6 +46,10 @@ export function StopChat(arg1) {
   return window['go']['main']['App']['StopChat'](arg1);
 }
 
+export function SwitchChat(arg1) {
+  return window['go']['main']['App']['SwitchChat'](arg1);
+}
+
 export function UpdateConversationTitle(arg1, arg2) {
   return window['go']['main']['App']['UpdateConversationTitle'](arg1, arg2);
 }

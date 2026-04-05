@@ -1,4 +1,4 @@
-export default function Header({ isConnected, showReasoningPanel, onToggleReasoning }) {
+export default function Header({ isConnected, showReasoningPanel, onToggleReasoning, onOpenMemo }) {
   return (
     <header className="app-header">
       <div className="header-logo">
@@ -7,8 +7,16 @@ export default function Header({ isConnected, showReasoningPanel, onToggleReason
         </div>
         <h1 className="logo-title">LeiAgent</h1>
       </div>
-      
+
       <div className="header-controls">
+        {typeof onOpenMemo === 'function' ? (
+          <button type="button" className="header-memo-btn clay-card" onClick={onOpenMemo} title="与 memo_write 共用 data/memo.md">
+            <span className="header-memo-btn__icon" aria-hidden>
+              📝
+            </span>
+            <span className="header-memo-btn__text">备忘录</span>
+          </button>
+        ) : null}
 
         <div className={`status-indicator clay-card ${isConnected ? 'connected' : 'disconnected'}`}>
           <span className={`status-dot ${isConnected ? 'active' : ''}`}></span>
@@ -17,4 +25,4 @@ export default function Header({ isConnected, showReasoningPanel, onToggleReason
       </div>
     </header>
   );
-};
+}

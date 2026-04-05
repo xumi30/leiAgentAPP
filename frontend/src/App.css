@@ -1,4 +1,5 @@
 @import "componentcss/Conversationlist.css";
+@import "componentcss/ConversationCalendar.css";
 @import "componentcss/Dialog.css";
 @import "componentcss/Header.css";
 @import "componentcss/Reasoning.css";
@@ -13,6 +14,7 @@
     flex-direction: column;
     height: 100vh;
     width: 100vw;
+    background: var(--apple-bg);
 }
 
 .main-content {
@@ -20,42 +22,45 @@
     flex-direction: row;
     flex: 1;
     
-    padding: 14px;
-    margin-top: 5px;
-    border-radius: 5px;
+    padding: 12px 14px 14px;
+    margin-top: 0;
+    border-radius: 0;
+    gap: 0;
 }
 
 /* 圆润毛玻璃卡片 */
 .card {
-  background: rgba(255,255,255,0.4);
-  backdrop-filter: blur(12px);
-  border-radius: 24px;
+  background: var(--apple-surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 14px;
   padding: 20px;
-  box-shadow: 4px 4px 12px rgba(0,0,0,0.05),
-             -4px -4px 12px rgba(255,255,255,0.7);
-  transition: 0.3s;
+  border: 1px solid var(--apple-separator);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .card:hover {
-  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .resizer {
     width: 5px;
-    background: #c7e094;
+    background: rgba(60, 60, 67, 0.1);
     cursor: col-resize;
-    transition: background 0.2s;
-    margin: 0 15px;
+    transition: background 0.2s ease;
+    margin: 0 12px;
+    border-radius: 999px;
 }
 .right-resizer{
-    margin-left: 20px;
+    margin-left: 16px;
 } 
 
 .resizer:hover {
-    background: #9be704;
+    background: rgba(0, 122, 255, 0.35);
 }
 
 .resizer:active {
-    background: #9be704;
+    background: rgba(0, 122, 255, 0.5);
 }
 
 .main-content {

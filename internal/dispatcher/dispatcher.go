@@ -180,6 +180,14 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 
 	// 计划 执行 校验 重试
 	planner, err := planner.GeneratePlan(ctx, message, string(toolsInfo()))
+	if err != nil {
+		logging.Error("生成计划失败: %v", err)
+		return
+	}
+	if planner == nil {
+		dialogOutputChan <- "生成计划失败，请确认任务意图是否正确"
+		return
+	}
 
 	planner.DoTask(ctx)
 
