@@ -161,7 +161,7 @@ func (p *Planning) verifyResultWithRetry(ctx context.Context, subChatId, result 
 
 		var goalStepsJSON []byte
 		if goalstepsStr, ok := goalsteps["Goalsteps"].(string); ok {
-			goalStepsJSON = []byte(goalstepsStr)
+			goalStepsJSON = []byte(utils.EscapeRawNewlinesInJSONStrings(goalstepsStr))
 		} else {
 			goalStepsJSON, err = json.Marshal(goalsteps["Goalsteps"])
 			if err != nil {
@@ -193,7 +193,7 @@ func sendMessage(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	retrySteps := utils.ExtractJSON(response.Content)
+	retrySteps := utils.PrepareLLMJSON(response.Content)
 	logging.Info("VerifyResult: %s", retrySteps)
 	return retrySteps, nil
 }

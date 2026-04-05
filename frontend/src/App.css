@@ -1,6 +1,7 @@
 @import "componentcss/Conversationlist.css";
 @import "componentcss/ConversationCalendar.css";
 @import "componentcss/Dialog.css";
+@import "componentcss/DocLibraryModal.css";
 @import "componentcss/Header.css";
 @import "componentcss/Reasoning.css";
 #App {

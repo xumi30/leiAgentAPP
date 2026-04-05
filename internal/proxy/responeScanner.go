@@ -31,6 +31,8 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 
 	scanner := NewStreamScanner(resp.Body)
 	tls := []openaistyle.ChatCompletionToolCall{}
+	var lastFinishReason string
+	var lastUsage *openaistyle.TokenUsage
 
 	chatId, ok := ctx.Value(utils.ChatIDString).(string)
 	if !ok {
@@ -55,9 +57,21 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 			continue
 		}
 
+		ch0 := response.Choices[0]
+		if fr := strings.TrimSpace(ch0.FinishReason); fr != "" {
+			lastFinishReason = fr
+		}
+		if response.Usage != nil {
+			lastUsage = response.Usage
+		}
+		if ch0.Delta == nil {
+			continue
+		}
+		delta := ch0.Delta
+
 		// 处理工具调用
 
-		tools := response.Choices[0].Delta.ToolCalls
+		tools := delta.ToolCalls
 		if len(tools) > 0 {
 			for _, tool := range tools {
 				index := tool.Index
@@ -90,7 +104,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		}
 
 		// 处理普通内容
-		content, ok := response.Choices[0].Delta.Content.(string)
+		content, ok := delta.Content.(string)
 		if ok && content != "" {
 			fullContent.WriteString(content)
 			//返回生成内容
@@ -99,7 +113,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		}
 
 		// 处理推理内容
-		reasoningContent := response.Choices[0].Delta.ReasoningContent
+		reasoningContent := delta.ReasoningContent
 		if reasoningContent != "" {
 			fullReasoningContent.WriteString(reasoningContent)
 			//可选：是否输出推理内容
@@ -130,7 +144,19 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	// 如果流结束，发送一个"[DONE]"
 	dialogOutChan <- utils.FinishString
 	reasoningOutChan <- utils.FinishString
-	logging.Info("流式响应处理完成，返回结果")
+	if lastUsage != nil {
+		logging.Info("流式响应结束 finish_reason=%q completion_tokens=%d prompt_tokens=%d total=%d 正文长度=%d 字符",
+			lastFinishReason,
+			lastUsage.CompletionTokens,
+			lastUsage.PromptTokens,
+			lastUsage.TotalTokens,
+			len(result))
+	} else {
+		logging.Info("流式响应结束 finish_reason=%q（无 usage 块）正文长度=%d 字符", lastFinishReason, len(result))
+	}
+	if lastFinishReason == "length" {
+		logging.Warn("模型因 max_tokens 上限结束（finish_reason=length），输出可能被截断；可在 config 增加 max_output_tokens 或设置环境变量 LEIAGENT_LLM_MAX_OUTPUT_TOKENS")
+	}
 
 	return &ToolAndContent{
 		ToolList:         tls,
@@ -157,6 +183,16 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 
 	if len(openaiResp.Choices) == 0 {
 		return nil, fmt.Errorf("响应中没有选择")
+	}
+	fr := strings.TrimSpace(openaiResp.Choices[0].FinishReason)
+	if openaiResp.Usage != nil {
+		logging.Info("非流式响应 finish_reason=%q completion_tokens=%d prompt_tokens=%d total=%d",
+			fr, openaiResp.Usage.CompletionTokens, openaiResp.Usage.PromptTokens, openaiResp.Usage.TotalTokens)
+	} else {
+		logging.Info("非流式响应 finish_reason=%q（无 usage）", fr)
+	}
+	if fr == "length" {
+		logging.Warn("模型因 max_tokens 上限结束（finish_reason=length），输出可能被截断；可调大 max_output_tokens 或 LEIAGENT_LLM_MAX_OUTPUT_TOKENS")
 	}
 	logging.Info("响应内容: %s", openaiResp.Choices[0].Message.Content)
 

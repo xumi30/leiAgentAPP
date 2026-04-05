@@ -19,6 +19,8 @@ export function GetLLMResolvedConfigPath():Promise<string>;
 
 export function GetLLMThinkingDisabled():Promise<boolean>;
 
+export function GetLibraryWorkspaceRoot():Promise<string>;
+
 export function GetMemoCalendarDates():Promise<Array<string>>;
 
 export function GetMemoContent():Promise<string>;
@@ -33,7 +35,23 @@ export function GetMessagesEvent(arg1:string):Promise<void>;
 
 export function GetReasoningMessage(arg1:string):Promise<Array<Record<string, any>>>;
 
+export function LibraryWorkspaceDelete(arg1:string,arg2:boolean):Promise<void>;
+
+export function LibraryWorkspaceMkdir(arg1:string):Promise<void>;
+
+export function LibraryWorkspaceRename(arg1:string,arg2:string):Promise<void>;
+
+export function LibraryWorkspaceWriteFile(arg1:string,arg2:string):Promise<void>;
+
 export function ListConversation():Promise<Array<Record<string, any>>>;
+
+export function ListDocumentLibrary():Promise<Array<Record<string, any>>>;
+
+export function ListLibraryWorkspaceDir(arg1:string):Promise<Record<string, any>>;
+
+export function ReadDocumentForViewer(arg1:string):Promise<Record<string, any>>;
+
+export function RevealDocumentInExplorer(arg1:string):Promise<void>;
 
 export function SaveLLMConfigText(arg1:string):Promise<string>;
 

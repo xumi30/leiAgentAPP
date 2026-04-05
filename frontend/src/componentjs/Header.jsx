@@ -11,6 +11,7 @@ function shortConnectionLabel(loading, status) {
 
 export default function Header({
   onOpenMemo,
+  onOpenDocLibrary,
   connectionLoading,
   connectionStatus,
   onRefreshConnection,
@@ -52,6 +53,20 @@ export default function Header({
               ⚙
             </span>
             <span className="header-settings-btn__text">设置</span>
+          </button>
+        ) : null}
+
+        {typeof onOpenDocLibrary === 'function' ? (
+          <button
+            type="button"
+            className="header-library-btn clay-card"
+            onClick={onOpenDocLibrary}
+            title="查看助手写入与对话中出现的文档"
+          >
+            <span className="header-library-btn__icon" aria-hidden>
+              📚
+            </span>
+            <span className="header-library-btn__text">文库</span>
           </button>
         ) : null}
 

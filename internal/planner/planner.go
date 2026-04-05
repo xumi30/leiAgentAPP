@@ -80,6 +80,7 @@ AVAILABLE TOOLS:
 OUTPUT REQUIREMENTS:
 
 - Output MUST be valid json
+- Inside any string value, never use real line breaks; use \n (backslash + letter n) in the JSON text instead
 - Do NOT include markdown
 - Do NOT include comments
 - Do NOT include extra text
@@ -174,7 +175,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 
 	logging.Info("Agent 处理消息完成，返回结果: %s", response.Content)
 
-	rawJSON := utils.ExtractJSON(response.Content)
+	rawJSON := utils.PrepareLLMJSON(response.Content)
 
 	var probe struct {
 		Error string `json:"error"`

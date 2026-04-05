@@ -30,7 +30,10 @@ func Read() (string, error) {
 		}
 		return "", err
 	}
-	return string(b), nil
+	s := string(b)
+	// Strip UTF-8 BOM so the first line parses as Markdown and Chinese displays correctly.
+	s = strings.TrimPrefix(s, "\ufeff")
+	return s, nil
 }
 
 // WriteAll replaces the entire memo file.

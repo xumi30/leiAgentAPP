@@ -1,15 +1,7 @@
 import { useMemo, useState, useCallback, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-
-function tryParseJson(s) {
-  try {
-    JSON.parse(s);
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { tryParseJsonRepaired, formatJsonPretty } from '../utils/llmJson.js';
 
 /** @param {string} source @param {number} fromIdx @param {string} open @param {string} close */
 function extractBalanced(source, fromIdx, open, close) {
@@ -36,9 +28,10 @@ function extractBalanced(source, fromIdx, open, close) {
       }
       continue;
     }
-    if (c === '"' || c === "'") {
+    // JSON 仅使用双引号字符串；把单引号当作定界符会破坏 "don't" 等合法内容
+    if (c === '"') {
       inStr = true;
-      q = c;
+      q = '"';
       continue;
     }
     if (c === open) depth++;
@@ -53,10 +46,30 @@ function extractBalanced(source, fromIdx, open, close) {
   return null;
 }
 
+/**
+ * 从 start 起找第一个「像 JSON 数组」的 [...] 块，且排除 Markdown 链接的 [标签](url)（标签在第一个 ] 就闭合，后面紧跟 (）。
+ * 否则会把 [D:\a.md](doc:...) 拆成 [D:\a.md] 与 (doc:...) 两段，链接失效。
+ */
+function extractFirstJsonArraySlice(text, start) {
+  let search = start;
+  while (search < text.length) {
+    const i = text.indexOf('[', search);
+    if (i < 0) return null;
+    const bal = extractBalanced(text, i, '[', ']');
+    if (!bal) return null;
+    if (text[bal.end] === '(') {
+      search = i + 1;
+      continue;
+    }
+    return bal;
+  }
+  return null;
+}
+
 /** @param {string} text @param {number} start */
 function nextJsonSlice(text, start) {
   const obj = extractBalanced(text, start, '{', '}');
-  const arr = extractBalanced(text, start, '[', ']');
+  const arr = extractFirstJsonArraySlice(text, start);
   if (!obj && !arr) return null;
   if (!obj) return arr;
   if (!arr) return obj;
@@ -77,8 +90,9 @@ function splitMarkdownSegmentForJson(text) {
     if (n.start > pos) {
       parts.push({ type: 'md', value: text.slice(pos, n.start) });
     }
-    if (tryParseJson(n.raw) && n.raw.trim().length > 1) {
-      parts.push({ type: 'json', value: n.raw });
+    const pr = tryParseJsonRepaired(n.raw);
+    if (pr.ok && n.raw.trim().length > 1) {
+      parts.push({ type: 'json', value: pr.text });
     } else {
       parts.push({ type: 'md', value: n.raw });
     }
@@ -101,16 +115,12 @@ function splitByCodeFences(text) {
     const lang = (m[1] || '').trim().toLowerCase();
     const inner = m[2];
     const trimmed = inner.trim();
-    let isJson = lang === 'json';
-    if (!isJson && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
-      try {
-        JSON.parse(trimmed);
-        isJson = true;
-      } catch {
-        /* not json */
-      }
+    const pr = tryParseJsonRepaired(trimmed);
+    let isJson = lang === 'json' && pr.ok;
+    if (!isJson && (trimmed.startsWith('{') || trimmed.startsWith('[')) && pr.ok) {
+      isJson = true;
     }
-    parts.push({ kind: isJson ? 'json' : 'code', lang, raw: inner });
+    parts.push({ kind: isJson ? 'json' : 'code', lang, raw: isJson && pr.ok ? pr.text : inner });
     last = m.index + m[0].length;
   }
   if (last < text.length) {
@@ -145,17 +155,111 @@ function buildRenderableParts(fullText) {
   return out;
 }
 
-function prettyJson(raw) {
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
-  } catch {
-    return raw;
+/**
+ * Windows 绝对路径，且必须以常见文档扩展名结尾，避免把「report.md 现已…」整句链进超链接。
+ * 扩展名集合与后端 doclib 一致。
+ */
+const WIN_DOC_FILE_EXT =
+  '\\.(?:markdown|md|txt|json|csv|html?|log|yml|yaml|xml|css|scss|less|tsx?|jsx?|ts|js|go|py|rs|sql|sh|bat|ps1|env|toml|ini|cfg)\\b';
+const WIN_FILE_PATH_RE = new RegExp(
+  `([A-Za-z]:[\\\\/](?:[^\\\\/:*?"<>|\\r\\n]+[\\\\/])*[^\\\\/:*?"<>|\\r\\n]+${WIN_DOC_FILE_EXT})`,
+  'gi'
+);
+
+/**
+ * 将消息里的绝对路径转为 Markdown 链接，点击后在文库中打开。
+ * @param {string} text
+ */
+function linkifyLocalDocumentPaths(text) {
+  if (!text) return text;
+  return text.replace(WIN_FILE_PATH_RE, (full) => {
+    if (full.includes('](')) return full;
+    try {
+      const enc = encodeURIComponent(full);
+      return `[${full}](doc:${enc})`;
+    } catch {
+      return full;
+    }
+  });
+}
+
+/**
+ * 从原文中抽出 `[标签](doc:目标)`，单独渲染为按钮。
+ * 原因：CommonMark 会把链接文字里的 Windows 反斜杠当转义，整段无法被识别为链接，只能当纯文本显示。
+ * @param {string} text
+ * @returns {{ kind: 'md' | 'doc', text?: string, label?: string, target?: string }[]}
+ */
+function splitDocMarkdownLinks(text) {
+  /** @type {{ kind: 'md' | 'doc', text?: string, label?: string, target?: string }[]} */
+  const out = [];
+  const re = /\[([^\]]*)]\(\s*doc:([^)]+)\)/gi;
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) {
+      out.push({ kind: 'md', text: text.slice(last, m.index) });
+    }
+    out.push({ kind: 'doc', label: m[1], target: (m[2] || '').trim() });
+    last = m.index + m[0].length;
   }
+  if (last < text.length) {
+    out.push({ kind: 'md', text: text.slice(last) });
+  }
+  return out.length ? out : [{ kind: 'md', text }];
+}
+
+/** @param {string} raw */
+function decodeDocLinkTarget(raw) {
+  const s = String(raw || '').trim();
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+/** @param {{ label: string, target: string }} props */
+function DocLinkChip({ label, target }) {
+  const path = decodeDocLinkTarget(target);
+  const show = (label && label.trim()) || path;
+  return (
+    <button
+      type="button"
+      className="msg-doc-path-link msg-doc-path-link--chip"
+      title={path}
+      onClick={() => {
+        window.dispatchEvent(new CustomEvent('leiagent-open-document', { detail: { path } }));
+      }}
+    >
+      {show}
+    </button>
+  );
+}
+
+/** @param {{ text: string }} props */
+function MarkdownSlicesWithDocLinks({ text }) {
+  const linked = linkifyLocalDocumentPaths(text);
+  const segs = splitDocMarkdownLinks(linked);
+  return (
+    <>
+      {segs.map((seg, i) => {
+        if (seg.kind === 'doc') {
+          return <DocLinkChip key={`doc-${i}-${seg.target}`} label={seg.label || ''} target={seg.target || ''} />;
+        }
+        if (!seg.text || !String(seg.text).trim()) return null;
+        return (
+          <span className="msg-md-slice" key={`md-${i}`}>
+            <ReactMarkdown components={mdComponents}>{seg.text}</ReactMarkdown>
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 /** @param {{ raw: string, onOpen: (s: string) => void }} props */
 function JsonSnippetCard({ raw, onOpen }) {
-  const pretty = useMemo(() => prettyJson(raw), [raw]);
+  const pretty = useMemo(() => formatJsonPretty(raw), [raw]);
   const short = pretty.length > 400 ? `${pretty.slice(0, 400)}…` : pretty;
   return (
     <div
@@ -201,13 +305,38 @@ function JsonFullModal({ text, onClose }) {
   );
 }
 
-const mdComponents = {
-  /** @param {any} props */
-  a: ({ href, children, ...rest }) => (
+/** @param {any} props */
+function MarkdownAnchor({ href, children, ...rest }) {
+  if (typeof href === 'string' && href.startsWith('doc:')) {
+    const raw = href.slice(4);
+    let path = raw;
+    try {
+      path = decodeURIComponent(raw);
+    } catch {
+      path = raw;
+    }
+    return (
+      <button
+        type="button"
+        className="msg-doc-path-link"
+        title="在文库中打开"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent('leiagent-open-document', { detail: { path } }));
+        }}
+      >
+        {children}
+      </button>
+    );
+  }
+  return (
     <a href={href} {...rest} target="_blank" rel="noreferrer">
       {children}
     </a>
-  ),
+  );
+}
+
+const mdComponents = {
+  a: MarkdownAnchor,
 };
 
 /**
@@ -241,10 +370,10 @@ export default function MessageContent({ content, variant = 'assistant', isStrea
           );
         }
         const md = p.value.trim() ? (
-          <ReactMarkdown components={mdComponents}>{p.value}</ReactMarkdown>
+          <MarkdownSlicesWithDocLinks text={p.value} />
         ) : null;
         return md ? (
-          <div key={`m-${idx}`} className="message-markdown">
+          <div key={`m-${idx}`} className="message-markdown message-markdown--with-doc-chips">
             {md}
           </div>
         ) : null;

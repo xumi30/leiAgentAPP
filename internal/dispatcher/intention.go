@@ -102,7 +102,7 @@ You MUST return a JSON object with the following structure:
 		return nil, err
 	}
 
-	result, err := parseIntention(utils.ExtractJSON(response.Content))
+	result, err := parseIntention(utils.PrepareLLMJSON(response.Content))
 	if err != nil {
 		logging.Error("Failed to parse intention: %v", err)
 		return nil, err

@@ -33,6 +33,20 @@ func GetDialogsByMessageID(messageID string) map[string]interface{} {
 	return message
 }
 
+// GetAllMessageContentsForDocHarvest loads all non-reasoning message bodies to discover file paths mentioned in history.
+func GetAllMessageContentsForDocHarvest() []string {
+	sql := GetSqlInstance()
+	if sql == nil {
+		return nil
+	}
+	contents, err := sql.SelectAllMessageContents()
+	if err != nil {
+		logging.Error("SelectAllMessageContents: %v", err)
+		return nil
+	}
+	return contents
+}
+
 func SendMessage(chatID, messageID, message, role string) error {
 
 	sql := GetSqlInstance()

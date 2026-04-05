@@ -14,6 +14,8 @@ type ModelAPIInfo struct {
 	token       string
 	modelName   string
 	isStream    int // 0 : false, 1: true 3:both
+	// maxOutputTokens > 0 时覆盖默认 max_tokens；0 表示使用代理内建默认与规划加成逻辑
+	maxOutputTokens int
 
 	//状态
 	status string

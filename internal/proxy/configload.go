@@ -15,12 +15,13 @@ type fileRoot struct {
 }
 
 type llmYAML struct {
-	Name       string `yaml:"name"`
-	APIKey     string `yaml:"api_key"`
-	BaseURL    string `yaml:"base_url"`
-	Model      string `yaml:"model"`
-	Provider   string `yaml:"provider"`
-	StreamMode string `yaml:"stream_mode"`
+	Name             string `yaml:"name"`
+	APIKey           string `yaml:"api_key"`
+	BaseURL          string `yaml:"base_url"`
+	Model            string `yaml:"model"`
+	Provider         string `yaml:"provider"`
+	StreamMode       string `yaml:"stream_mode"`
+	MaxOutputTokens  int    `yaml:"max_output_tokens"` // 可选，>0 时作为该后端的 max_tokens 上限基准
 }
 
 func resolveConfigPath() (path string, ok bool) {
@@ -181,12 +182,13 @@ func mergeLLMYAML(row llmYAML, globalEnv bool, cfgPath string) (*ModelAPIInfo, e
 	}
 
 	return &ModelAPIInfo{
-		backendName: strings.TrimSpace(row.Name),
-		provider:    provider,
-		token:       token,
-		url:         baseURL,
-		modelName:   modelName,
-		isStream:    isStream,
+		backendName:     strings.TrimSpace(row.Name),
+		provider:        provider,
+		token:           token,
+		url:             baseURL,
+		modelName:       modelName,
+		isStream:        isStream,
+		maxOutputTokens: row.MaxOutputTokens,
 	}, nil
 }
 

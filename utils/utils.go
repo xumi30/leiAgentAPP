@@ -146,6 +146,56 @@ func ExtractJSON(raw string) string {
 	return raw
 }
 
+// EscapeRawNewlinesInJSONStrings replaces literal control characters inside JSON string
+// values with escape sequences. LLMs often emit real newlines inside "content" fields,
+// which makes the payload invalid for encoding/json.
+func EscapeRawNewlinesInJSONStrings(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	inString := false
+	escaped := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if escaped {
+			b.WriteByte(c)
+			escaped = false
+			continue
+		}
+		if inString && c == '\\' {
+			b.WriteByte(c)
+			escaped = true
+			continue
+		}
+		if c == '"' {
+			inString = !inString
+			b.WriteByte(c)
+			continue
+		}
+		if inString {
+			switch c {
+			case '\n':
+				b.WriteString(`\n`)
+			case '\r':
+				b.WriteString(`\r`)
+			case '\t':
+				b.WriteString(`\t`)
+			default:
+				b.WriteByte(c)
+			}
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// PrepareLLMJSON extracts a JSON object region from model output (see ExtractJSON)
+// and escapes literal newlines/tabs inside string values. Use before encoding/json.Unmarshal
+// for any LLM-produced JSON payload.
+func PrepareLLMJSON(raw string) string {
+	return EscapeRawNewlinesInJSONStrings(ExtractJSON(raw))
+}
+
 func GenerateChatID() string {
 	chatID := fmt.Sprintf("%d%03d", time.Now().UnixMilli(), rand.Intn(1000))
 	return chatID

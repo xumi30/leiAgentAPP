@@ -7256,3 +7256,962 @@ INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1
 INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 
 INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381400917016600
 INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:124) ChatID is empty, adding new conversation
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:51) Adding conversation with ID: 1775381495707588 and Title: 看看现在招聘市场情况，整理一份文档给我
+INFO [default] (D:/codes/projects/leiAgentAPP/dataoperation/conversationop.go:83) Adding with ID: 1775381495707588 and Title: 看看现在招聘市场情况，整理一份文档给我
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:64) Getting conversation with ID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:59) Conversation with ID: 1775381495707588 added successfully
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:126) New conversation added with ID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:123) RegisterChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:236) RegisterGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:123) RegisterChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:123) RegisterChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:217) Starting dispatcher for conversation with ChatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0xb0620800f90 0x7ff694786400 0xb0620801200 <nil> 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:52) Dispatcher 开始运行...
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381495717085723
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381495717035972
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0xb0620800f90 0x7ff694786400 0xb0620801200 <nil> 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381495717081350
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:135) Sending message to conversation successfully
+INFO [default] (D:/codes/projects/leiAgentAPP/dataoperation/dialogop.go:28) GetDialogsByMessageID: map[chatID:1775381495707588 content:看看现在招聘市场情况，整理一份文档给我 messageID:1775381495717035972 role:user timestamp:2026-04-05 09:31:35 +0000 UTC]
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:109) Getting message for conversation with messageID: 1775381495717035972 map[chatID:1775381495707588 content:看看现在招聘市场情况，整理一份文档给我 messageID:1775381495717035972 role:user timestamp:2026-04-05 09:31:35 +0000 UTC]
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:143) Sending message to conversation successfully
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:60) Dispatcher 收到消息: 看看现在招聘市场情况，整理一份文档给我
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:77) Dispatcher 处理消息: 看看现在招聘市场情况，整理一份文档给我
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:80) context 中没有 Intent,重新确认意图...
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/register.go:93) Converted tools to JSON format [map[description:Tool for executing local bash (Linux/Mac) or cmd (Windows) commands. Use this tool when user needs to run system commands, check system status, or perform local operations. Returns command output, error messages, and exit code. 当用户需要执行系统命令、根据软件运行的系统类型，选择对应的系统命令。使用这个工具时，务必确保输入的命令是安全的，并且不会对系统造成破坏。系统的类型是:windows name:execute_command parameters:map[properties:map[command:map[description:The command to execute type:string]] required:[command] type:object] results:map[description:Execution results of the command including output, error messages, and exit code properties:map[command:map[description:The command that was executed example:ls -la type:string] error:map[description:Error message if the command failed (only present if there was an error) example:exit status 127 type:string] exit_code:map[description:Exit code of the command (only present if the command failed) example:%!s(int=127) type:integer] output:map[description:Standard output and error from the command example:total 24
+drwxr-xr-x 5 user group 4096 Jan 15 10:30 . type:string] success:map[description:Whether the command executed successfully example:%!s(bool=true) type:boolean]] type:object]] map[description:
+	Writes a chunk of content to a file at a specific offset.
+	
+	This tool is designed for writing large files that exceed the token limit.
+	You should break down large content into smaller chunks and call this tool
+	multiple times, each with a different offset.
+	
+	IMPORTANT: 
+	- The first call should have offset = 0
+	- Subsequent calls should have offset equal to total size of previously written content
+	- The last chunk should have is_last = true
+	- If is_last is true, file will be truncated at current offset + content length
+	- CRITICAL: Each chunk must not exceed 100 characters to ensure reliable processing
+	
+	To use this tool:
+	1. Provide the actual filename, content, offset, and is_last values
+	2. Do NOT provide the parameter schema/definition
+	3. Call this tool multiple times for large files, each time with the next offset
+	
+	Args (example values):
+	{
+	  "filename": "large_file.txt",
+	  "content": "First part of the content...",
+	  "offset": 0,
+	  "is_last": false
+	}
+	
+	Example usage for writing a large file:
+	1. First chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "First part of the content...",
+	     "offset": 0,
+	     "is_last": false
+	   })
+	   
+	2. Second chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "Second part of the content...",
+	     "offset": 1024,
+	     "is_last": false
+	   })
+	   
+	3. Last chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "Last part of the content...",
+	     "offset": 2048,
+	     "is_last": true
+	   })
+	   
+	Note: When writing large files, ensure each chunk is within the 100 character limit
+	for reliable processing. If a chunk exceeds this limit, it may be truncated or fail.
+	 name:write_file_chunk parameters:map[properties:map[content:map[description:The content chunk to write to the file. type:string] filename:map[description:The path to the file. Can be an absolute path or a relative path. type:string] is_last:map[description:True if this is the last chunk, false otherwise. type:boolean] offset:map[description:The byte offset in the file where this chunk should be written. type:integer]] required:[filename content offset is_last] type:object] results:map[description:Result of the file write operation properties:map[bytes_written:map[description:Number of bytes written in this chunk example:%!s(int=1024) type:integer] filename:map[description:The absolute path of the file that was written to example:/path/to/large_file.txt type:string] is_last:map[description:Indicates whether this was the last chunk to write example:%!s(bool=false) type:boolean] offset:map[description:The offset in the file where the chunk was written example:%!s(int=0) type:integer] success:map[description:Indicates whether the write operation was successful example:%!s(bool=true) type:boolean]] type:object]] map[description:Tool for getting the current real-time date and time from the server. MUST use this tool when user asks about current time, today's date, or any time-related questions requiring real-time information. Returns date, time, weekday, lunar date, and holiday information.只要对话里涉及时间的要应该先调用这个接口获取当前时间，再根据用户需求进行回复 name:get_current_time parameters:map[properties:map[] required:[] type:object] results:map[description:Current time information including date, weekday, lunar date, and holiday properties:map[current_time:map[description:Current date and time in format 'YYYY-MM-DD HH:MM:SS' example:2024-01-15 10:30:45 type:string] holiday:map[description:Holiday information (only present if it's a holiday) example:春节 type:string] lunar_date:map[description:Chinese lunar calendar date example:腊月初五 type:string] weekday:map[description:Day of the week in Chinese example:星期一 type:string]] type:object]] map[description:
+Query financial market data and generate structured analysis.
+
+Use this tool when:
+- The user asks about stock market, crypto, or financial markets
+- The query involves price, trend, or investment conditions
+- The user asks about "today market", "market situation", "price movement"
+
+You MUST use this tool instead of general search when the question is about financial markets.
+
+This tool provides structured insights including:
+- Trend analysis
+- Volatility
+- Risk level
+- Market sentiment
+
+Valid symbol examples:
+- Stocks: AAPL, MSFT, GOOGL, TSLA
+- Crypto: BTC-USD, ETH-USD
+- Indices: ^GSPC (S&P 500), ^DJI (Dow Jones)
+
+IMPORTANT: Always provide a valid market symbol in the 'symbol' parameter.
+If user doesn't specify a symbol, use a default like 'AAPL' or ask the user.
+
+Do NOT rely on search tools for market data if this tool is available.
+ name:query_market parameters:map[properties:map[symbol:map[description:Market symbol (e.g., AAPL, BTC-USD, ^GSPC) type:string]] required:[symbol] type:object] results:map[description:Structured market data analysis including price, trend, volatility, and insights properties:map[analysis:map[description:Market analysis and indicators properties:map[liquidity:map[description:Market liquidity (low, normal, high) example:normal type:string] market_sentiment:map[description:Overall market sentiment (bullish, bearish, neutral) example:bullish type:string] risk_level:map[description:Risk level (low, medium, high) example:low type:string]] type:object] insights:map[description:Key market insights and observations example:[Market is in uptrend phase Volatility is low] items:map[type:string] type:array] summary:map[description:Summary of market data properties:map[change:map[description:Price change from previous close example:%!s(float64=0.5) type:number] change_percent:map[description:Percentage change from previous close example:0.33% type:string] current_price:map[description:Current market price example:%!s(float64=150.25) type:number] open:map[description:Opening price for the current period example:%!s(float64=148.5) type:number] previous_close:map[description:Previous closing price example:%!s(float64=149.75) type:number] trend:map[description:Market trend (uptrend, downtrend, sideways) example:uptrend type:string] volatility:map[description:Volatility level (low, medium, high) example:low type:string] volume:map[description:Trading volume example:%!s(int=1000000) type:integer] volume_trend:map[description:Volume trend (stable, increasing, decreasing) example:stable type:string]] type:object] symbol:map[description:Market symbol (e.g., AAPL, BTC-USD) example:AAPL type:string] timestamp:map[description:Timestamp of the data in RFC3339 format example:2024-01-15T10:30:00Z type:string]] type:object]] map[description:Get weather and forecast information for a specific location. This tool provides comprehensive weather data including temperature, humidity, wind speed, precipitation probability, and weather conditions. Use this tool when user asks about weather, temperature, or forecast for any location. Requires latitude and longitude coordinates of the location. name:query_weather parameters:map[properties:map[days:map[description:Number of days to forecast (default: 7, max: 16) type:integer] latitude:map[description:The latitude coordinate of the location (e.g., 39.9042 for Beijing) type:string] longitude:map[description:The longitude coordinate of the location (e.g., 116.4074 for Beijing) type:string]] required:[latitude longitude] type:object] results:map[description:Weather forecast data with daily breakdown and insights properties:map[daily_forecast:map[description:Array of daily weather forecasts items:map[properties:map[date:map[description:Date in YYYY-MM-DD format example:2024-01-15 type:string] insights:map[description:Daily weather insights and recommendations example:[Temperature rising High chance of rain - consider carrying an umbrella] items:map[type:string] type:array] summary:map[properties:map[condition:map[description:Primary weather condition example:Partly cloudy type:string] max_precip_prob:map[description:Maximum precipitation probability (0-100) example:%!s(int=30) type:integer] max_wind_speed:map[description:Maximum wind speed in km/h example:%!s(float64=15.5) type:number] temperature_range:map[description:Temperature range in Celsius example:15.5°C ~ 22.3°C type:string] trend:map[description:Temperature trend (warming/cooling/stable) example:warming type:string]] type:object]] type:object] type:array] forecast_days:map[description:Number of days in the forecast (1-16) example:%!s(int=3) type:integer] overall_insights:map[description:Overall weather trends and patterns for the forecast period example:[Overall temperature trend: Warming up over the forecast period Rain expected on 2 day(s) during the forecast period] items:map[type:string] type:array]] type:object]] map[description:Write or update the user's in-app memo / diary file (Markdown). Same storage as the 备忘录 panel (data/memo.md).
+Use for travel plans, todos, notes the user asked to keep. Prefer structured Markdown (headings, lists).
+For the sidebar calendar "memo dot", include a date like YYYY-MM-DD in section_title or in the first lines of content (or use default append heading which includes the date).
+mode "append" adds a new dated section; "replace" overwrites the whole memo (use only when the user explicitly wants to clear or replace everything).
+Args JSON: {"content": "...", "mode": "append"|"replace", "section_title": "optional heading for append"} name:memo_write parameters:map[properties:map[content:map[description:Markdown text to save. type:string] mode:map[description:append (default): add a section; replace: overwrite entire memo. enum:[append replace] type:string] section_title:map[description:Optional section heading when mode is append; default is local date-time. type:string]] required:[content] type:object] results:map[description:Confirmation with memo file path. type:string]] map[description:Converts a location name (city, address, landmark) into latitude and longitude coordinates. Input should be a place name like 'Beijing', 'New York', or 'Eiffel Tower'. Returns the coordinates and additional location details. name:geocoding parameters:map[properties:map[location:map[description:The location name to geocode. Must use 'location' as the parameter name. Examples: 'Beijing', 'Times Square', 'Tokyo Tower' type:string]] required:[location] type:object] results:map[description:Geocoding tool to convert a location name into latitude and longitude coordinates properties:map[latitude:map[description:The latitude coordinate of the location example:39.9042 type:string] longitude:map[description:The longitude coordinate of the location example:116.4074 type:string]] type:object]] map[description:传入date获取date对应日期和时间的详细信息，只要问今天适合干什么，问今天的运势，只要关于运气，玄学等等关于气运的都要调用这个接口。
+	支持星座、儒略日、干支、生肖、节气、节日、彭祖百忌、吉神(喜神/福神/财神/阳贵神/阴贵神)方位、胎神方位、冲煞、纳音、星宿、八字、五行、十神、建除十二值星、青龙名堂等十二神、黄道日及吉凶、法定节假日及调休等,about almanac name:get_date_info_about_almanac parameters:map[properties:map[date:map[description:必要参数，指定查询的日期，格式为'YYYY-MM-DD'，如'2023-01-01'，或者不指定，则默认为当前时间 type:string]] required:[date] type:object] results:map[description:Comprehensive date information including solar and lunar calendar details, zodiac, festivals, and traditional almanac data properties:map[almanac:map[description:Traditional Chinese almanac information example:甲辰年 丁丑月 戊子日 (冲马 煞南) type:string] current_time:map[description:Current date and time in format 'YYYY-MM-DD HH:MM:SS' example:2024-01-15 10:30:45 type:string] day_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the day example:戊子 type:string] holiday:map[description:Holiday information (only present if it's a holiday) example:春节 type:string] lunar_date:map[description:Lunar calendar date in Chinese format example:甲辰年腊月初五 type:string] month_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the month example:丁丑 type:string] solar_term:map[description:Solar term information (if applicable) example:小寒 type:string] weekday:map[description:Day of the week in Chinese example:星期一 type:string] year_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the year example:甲辰 type:string] zodiac:map[description:Chinese zodiac animal for the year example:龙 type:string]] type:object]] map[description:Calculates time by adding or subtracting duration from current time. Args format: 'operation:duration' where operation is 'add' or 'subtract', and duration is like '1h30m' (hours and minutes) name:calculate_time parameters:map[properties:map[duration:map[description:The duration to add or subtract, e.g., '1h30m' for 1 hour and 30 minutes type:string] operation:map[description:The operation to perform: 'add' or 'subtract' type:string]] required:[operation duration] type:object] results:map[description:Calculated time result properties:map[calculated_time:map[description:The calculated time in RFC3339 format example:2024-01-15T10:30:00+08:00 type:string]] type:object]]]
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:60) SetSystemPrompt called
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:90) GetMessages called for chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:94) Messages found for chatID:%!(EXTRA string=1775381495707588)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:215) convertMessages
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:154) 发送请求成功
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:28) 开始处理流式响应: &{200 OK 200 HTTP/2.0 2 0 map[Content-Type:[text/event-stream;charset=UTF-8] Date:[Sun, 05 Apr 2026 09:31:33 GMT] Req-Arrive-Time:[1775381493162] Req-Cost-Time:[957] Resp-Start-Time:[1775381494120] Server:[istio-envoy] Vary:[Origin] X-Dashscope-Call-Gateway:[true] X-Envoy-Upstream-Service-Time:[924] X-Request-Id:[032ea745-331d-9395-ab5a-1ec4671e367d]] 0xb06205200e0 -1 [] false false map[] 0xb062067c000 0xb062097e0c0}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:128) 返回调用tools: []
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:133) 流式响应处理完成，返回结果
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:116) LLM 后端 qwen3.5-plus-2026-02-15 处理响应成功
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381498181080816
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:115) 切换到规划模式
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/register.go:93) Converted tools to JSON format [map[description:
+	Writes a chunk of content to a file at a specific offset.
+	
+	This tool is designed for writing large files that exceed the token limit.
+	You should break down large content into smaller chunks and call this tool
+	multiple times, each with a different offset.
+	
+	IMPORTANT: 
+	- The first call should have offset = 0
+	- Subsequent calls should have offset equal to total size of previously written content
+	- The last chunk should have is_last = true
+	- If is_last is true, file will be truncated at current offset + content length
+	- CRITICAL: Each chunk must not exceed 100 characters to ensure reliable processing
+	
+	To use this tool:
+	1. Provide the actual filename, content, offset, and is_last values
+	2. Do NOT provide the parameter schema/definition
+	3. Call this tool multiple times for large files, each time with the next offset
+	
+	Args (example values):
+	{
+	  "filename": "large_file.txt",
+	  "content": "First part of the content...",
+	  "offset": 0,
+	  "is_last": false
+	}
+	
+	Example usage for writing a large file:
+	1. First chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "First part of the content...",
+	     "offset": 0,
+	     "is_last": false
+	   })
+	   
+	2. Second chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "Second part of the content...",
+	     "offset": 1024,
+	     "is_last": false
+	   })
+	   
+	3. Last chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "Last part of the content...",
+	     "offset": 2048,
+	     "is_last": true
+	   })
+	   
+	Note: When writing large files, ensure each chunk is within the 100 character limit
+	for reliable processing. If a chunk exceeds this limit, it may be truncated or fail.
+	 name:write_file_chunk parameters:map[properties:map[content:map[description:The content chunk to write to the file. type:string] filename:map[description:The path to the file. Can be an absolute path or a relative path. type:string] is_last:map[description:True if this is the last chunk, false otherwise. type:boolean] offset:map[description:The byte offset in the file where this chunk should be written. type:integer]] required:[filename content offset is_last] type:object] results:map[description:Result of the file write operation properties:map[bytes_written:map[description:Number of bytes written in this chunk example:%!s(int=1024) type:integer] filename:map[description:The absolute path of the file that was written to example:/path/to/large_file.txt type:string] is_last:map[description:Indicates whether this was the last chunk to write example:%!s(bool=false) type:boolean] offset:map[description:The offset in the file where the chunk was written example:%!s(int=0) type:integer] success:map[description:Indicates whether the write operation was successful example:%!s(bool=true) type:boolean]] type:object]] map[description:Tool for getting the current real-time date and time from the server. MUST use this tool when user asks about current time, today's date, or any time-related questions requiring real-time information. Returns date, time, weekday, lunar date, and holiday information.只要对话里涉及时间的要应该先调用这个接口获取当前时间，再根据用户需求进行回复 name:get_current_time parameters:map[properties:map[] required:[] type:object] results:map[description:Current time information including date, weekday, lunar date, and holiday properties:map[current_time:map[description:Current date and time in format 'YYYY-MM-DD HH:MM:SS' example:2024-01-15 10:30:45 type:string] holiday:map[description:Holiday information (only present if it's a holiday) example:春节 type:string] lunar_date:map[description:Chinese lunar calendar date example:腊月初五 type:string] weekday:map[description:Day of the week in Chinese example:星期一 type:string]] type:object]] map[description:
+Query financial market data and generate structured analysis.
+
+Use this tool when:
+- The user asks about stock market, crypto, or financial markets
+- The query involves price, trend, or investment conditions
+- The user asks about "today market", "market situation", "price movement"
+
+You MUST use this tool instead of general search when the question is about financial markets.
+
+This tool provides structured insights including:
+- Trend analysis
+- Volatility
+- Risk level
+- Market sentiment
+
+Valid symbol examples:
+- Stocks: AAPL, MSFT, GOOGL, TSLA
+- Crypto: BTC-USD, ETH-USD
+- Indices: ^GSPC (S&P 500), ^DJI (Dow Jones)
+
+IMPORTANT: Always provide a valid market symbol in the 'symbol' parameter.
+If user doesn't specify a symbol, use a default like 'AAPL' or ask the user.
+
+Do NOT rely on search tools for market data if this tool is available.
+ name:query_market parameters:map[properties:map[symbol:map[description:Market symbol (e.g., AAPL, BTC-USD, ^GSPC) type:string]] required:[symbol] type:object] results:map[description:Structured market data analysis including price, trend, volatility, and insights properties:map[analysis:map[description:Market analysis and indicators properties:map[liquidity:map[description:Market liquidity (low, normal, high) example:normal type:string] market_sentiment:map[description:Overall market sentiment (bullish, bearish, neutral) example:bullish type:string] risk_level:map[description:Risk level (low, medium, high) example:low type:string]] type:object] insights:map[description:Key market insights and observations example:[Market is in uptrend phase Volatility is low] items:map[type:string] type:array] summary:map[description:Summary of market data properties:map[change:map[description:Price change from previous close example:%!s(float64=0.5) type:number] change_percent:map[description:Percentage change from previous close example:0.33% type:string] current_price:map[description:Current market price example:%!s(float64=150.25) type:number] open:map[description:Opening price for the current period example:%!s(float64=148.5) type:number] previous_close:map[description:Previous closing price example:%!s(float64=149.75) type:number] trend:map[description:Market trend (uptrend, downtrend, sideways) example:uptrend type:string] volatility:map[description:Volatility level (low, medium, high) example:low type:string] volume:map[description:Trading volume example:%!s(int=1000000) type:integer] volume_trend:map[description:Volume trend (stable, increasing, decreasing) example:stable type:string]] type:object] symbol:map[description:Market symbol (e.g., AAPL, BTC-USD) example:AAPL type:string] timestamp:map[description:Timestamp of the data in RFC3339 format example:2024-01-15T10:30:00Z type:string]] type:object]] map[description:Get weather and forecast information for a specific location. This tool provides comprehensive weather data including temperature, humidity, wind speed, precipitation probability, and weather conditions. Use this tool when user asks about weather, temperature, or forecast for any location. Requires latitude and longitude coordinates of the location. name:query_weather parameters:map[properties:map[days:map[description:Number of days to forecast (default: 7, max: 16) type:integer] latitude:map[description:The latitude coordinate of the location (e.g., 39.9042 for Beijing) type:string] longitude:map[description:The longitude coordinate of the location (e.g., 116.4074 for Beijing) type:string]] required:[latitude longitude] type:object] results:map[description:Weather forecast data with daily breakdown and insights properties:map[daily_forecast:map[description:Array of daily weather forecasts items:map[properties:map[date:map[description:Date in YYYY-MM-DD format example:2024-01-15 type:string] insights:map[description:Daily weather insights and recommendations example:[Temperature rising High chance of rain - consider carrying an umbrella] items:map[type:string] type:array] summary:map[properties:map[condition:map[description:Primary weather condition example:Partly cloudy type:string] max_precip_prob:map[description:Maximum precipitation probability (0-100) example:%!s(int=30) type:integer] max_wind_speed:map[description:Maximum wind speed in km/h example:%!s(float64=15.5) type:number] temperature_range:map[description:Temperature range in Celsius example:15.5°C ~ 22.3°C type:string] trend:map[description:Temperature trend (warming/cooling/stable) example:warming type:string]] type:object]] type:object] type:array] forecast_days:map[description:Number of days in the forecast (1-16) example:%!s(int=3) type:integer] overall_insights:map[description:Overall weather trends and patterns for the forecast period example:[Overall temperature trend: Warming up over the forecast period Rain expected on 2 day(s) during the forecast period] items:map[type:string] type:array]] type:object]] map[description:Write or update the user's in-app memo / diary file (Markdown). Same storage as the 备忘录 panel (data/memo.md).
+Use for travel plans, todos, notes the user asked to keep. Prefer structured Markdown (headings, lists).
+For the sidebar calendar "memo dot", include a date like YYYY-MM-DD in section_title or in the first lines of content (or use default append heading which includes the date).
+mode "append" adds a new dated section; "replace" overwrites the whole memo (use only when the user explicitly wants to clear or replace everything).
+Args JSON: {"content": "...", "mode": "append"|"replace", "section_title": "optional heading for append"} name:memo_write parameters:map[properties:map[content:map[description:Markdown text to save. type:string] mode:map[description:append (default): add a section; replace: overwrite entire memo. enum:[append replace] type:string] section_title:map[description:Optional section heading when mode is append; default is local date-time. type:string]] required:[content] type:object] results:map[description:Confirmation with memo file path. type:string]] map[description:Converts a location name (city, address, landmark) into latitude and longitude coordinates. Input should be a place name like 'Beijing', 'New York', or 'Eiffel Tower'. Returns the coordinates and additional location details. name:geocoding parameters:map[properties:map[location:map[description:The location name to geocode. Must use 'location' as the parameter name. Examples: 'Beijing', 'Times Square', 'Tokyo Tower' type:string]] required:[location] type:object] results:map[description:Geocoding tool to convert a location name into latitude and longitude coordinates properties:map[latitude:map[description:The latitude coordinate of the location example:39.9042 type:string] longitude:map[description:The longitude coordinate of the location example:116.4074 type:string]] type:object]] map[description:传入date获取date对应日期和时间的详细信息，只要问今天适合干什么，问今天的运势，只要关于运气，玄学等等关于气运的都要调用这个接口。
+	支持星座、儒略日、干支、生肖、节气、节日、彭祖百忌、吉神(喜神/福神/财神/阳贵神/阴贵神)方位、胎神方位、冲煞、纳音、星宿、八字、五行、十神、建除十二值星、青龙名堂等十二神、黄道日及吉凶、法定节假日及调休等,about almanac name:get_date_info_about_almanac parameters:map[properties:map[date:map[description:必要参数，指定查询的日期，格式为'YYYY-MM-DD'，如'2023-01-01'，或者不指定，则默认为当前时间 type:string]] required:[date] type:object] results:map[description:Comprehensive date information including solar and lunar calendar details, zodiac, festivals, and traditional almanac data properties:map[almanac:map[description:Traditional Chinese almanac information example:甲辰年 丁丑月 戊子日 (冲马 煞南) type:string] current_time:map[description:Current date and time in format 'YYYY-MM-DD HH:MM:SS' example:2024-01-15 10:30:45 type:string] day_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the day example:戊子 type:string] holiday:map[description:Holiday information (only present if it's a holiday) example:春节 type:string] lunar_date:map[description:Lunar calendar date in Chinese format example:甲辰年腊月初五 type:string] month_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the month example:丁丑 type:string] solar_term:map[description:Solar term information (if applicable) example:小寒 type:string] weekday:map[description:Day of the week in Chinese example:星期一 type:string] year_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the year example:甲辰 type:string] zodiac:map[description:Chinese zodiac animal for the year example:龙 type:string]] type:object]] map[description:Calculates time by adding or subtracting duration from current time. Args format: 'operation:duration' where operation is 'add' or 'subtract', and duration is like '1h30m' (hours and minutes) name:calculate_time parameters:map[properties:map[duration:map[description:The duration to add or subtract, e.g., '1h30m' for 1 hour and 30 minutes type:string] operation:map[description:The operation to perform: 'add' or 'subtract' type:string]] required:[operation duration] type:object] results:map[description:Calculated time result properties:map[calculated_time:map[description:The calculated time in RFC3339 format example:2024-01-15T10:30:00+08:00 type:string]] type:object]] map[description:Tool for executing local bash (Linux/Mac) or cmd (Windows) commands. Use this tool when user needs to run system commands, check system status, or perform local operations. Returns command output, error messages, and exit code. 当用户需要执行系统命令、根据软件运行的系统类型，选择对应的系统命令。使用这个工具时，务必确保输入的命令是安全的，并且不会对系统造成破坏。系统的类型是:windows name:execute_command parameters:map[properties:map[command:map[description:The command to execute type:string]] required:[command] type:object] results:map[description:Execution results of the command including output, error messages, and exit code properties:map[command:map[description:The command that was executed example:ls -la type:string] error:map[description:Error message if the command failed (only present if there was an error) example:exit status 127 type:string] exit_code:map[description:Exit code of the command (only present if the command failed) example:%!s(int=127) type:integer] output:map[description:Standard output and error from the command example:total 24
+drwxr-xr-x 5 user group 4096 Jan 15 10:30 . type:string] success:map[description:Whether the command executed successfully example:%!s(bool=true) type:boolean]] type:object]]]
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381498184084290
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:60) SetSystemPrompt called
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/planner.go:164) planning系统提示词已加载...
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:90) GetMessages called for chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:94) Messages found for chatID:%!(EXTRA string=1775381495707588)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:215) convertMessages
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381498187011667
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:154) 发送请求成功
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:28) 开始处理流式响应: &{200 OK 200 HTTP/2.0 2 0 map[Content-Type:[text/event-stream;charset=UTF-8] Date:[Sun, 05 Apr 2026 09:31:36 GMT] Req-Arrive-Time:[1775381495482] Req-Cost-Time:[1092] Resp-Start-Time:[1775381496574] Server:[istio-envoy] Vary:[Origin] X-Dashscope-Call-Gateway:[true] X-Envoy-Upstream-Service-Time:[1088] X-Request-Id:[1068508c-0f67-94cb-baed-f50d5f887944]] 0xb062069e180 -1 [] false false map[] 0xb062067c280 0xb062097e0c0}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:128) 返回调用tools: []
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:133) 流式响应处理完成，返回结果
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381503904074451
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:116) LLM 后端 qwen3.5-plus-2026-02-15 处理响应成功
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/planner.go:175) Agent 处理消息完成，返回结果: {
+  "goal": "看看现在招聘市场情况，整理一份文档给我",
+  "steps": [
+    {
+      "id": "step_1",
+      "tool": "query_market",
+      "depends_on": [],
+      "input": {
+        "symbol": "^GSPC"
+      }
+    },
+    {
+      "id": "step_2",
+      "tool": "write_file_chunk",
+      "depends_on": [
+        "step_1"
+      ],
+      "input": {
+        "filename": "recruitment_market_report.md",
+        "content": "# 招聘市场情况报告\n\n基于当前金融市场指标 (^GSPC) 的分析：\n\n",
+        "offset": 0,
+        "is_last": false
+      }
+    },
+    {
+      "id": "step_3",
+      "tool": "write_file_chunk",
+      "depends_on": [
+        "step_1",
+        "step_2"
+      ],
+      "input": {
+        "filename": "recruitment_market_report.md",
+        "content": "## 市场概况\n",
+        "offset": 67,
+        "is_last": false
+      }
+    },
+    {
+      "id": "step_4",
+      "tool": "write_file_chunk",
+      "depends_on": [
+        "step_1",
+        "step_3"
+      ],
+      "input": {
+        "filename": "recruitment_market_report.md",
+        "content": "趋势: ",
+        "offset": 84,
+        "is_last": false
+      }
+    }
+  ]
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/planner.go:206) 正在保存规划到数据库...
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381503913084251
+INFO [default] (D:/codes/projects/leiAgentAPP/dataoperation/planop.go:67) 计划保存成功 - 目标: 看看现在招聘市场情况，整理一份文档给我, 状态: pending
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/dotask.go:16) 开始执行规划...
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:86) 开始执行计划，共 4 个步骤
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:90) 初始化步骤入度完成
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:94) 构建反向依赖图完成
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:103) 找到 1 个无依赖的初始步骤
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_1 (工具: query_market)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_1 执行成功,结果: {
+  "analysis": {
+    "liquidity": "normal",
+    "market_sentiment": "neutral",
+    "risk_level": "low"
+  },
+  "insights": [
+    "Market is in sideways phase",
+    "Volatility is low"
+  ],
+  "summary": {
+    "change": 6582.69,
+    "change_percent": "0.00%",
+    "current_price": 6582.69,
+    "open": 0,
+    "previous_close": 0,
+    "trend": "sideways",
+    "volatility": "low",
+    "volume": 2716142000,
+    "volume_trend": "unknown"
+  },
+  "symbol": "^gspc",
+  "timestamp": "2026-04-05T17:31:45+08:00"
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_1 执行完成, 结果是: {
+  "analysis": {
+    "liquidity": "normal",
+    "market_sentiment": "neutral",
+    "risk_level": "low"
+  },
+  "insights": [
+    "Market is in sideways phase",
+    "Volatility is low"
+  ],
+  "summary": {
+    "change": 6582.69,
+    "change_percent": "0.00%",
+    "current_price": 6582.69,
+    "open": 0,
+    "previous_close": 0,
+    "trend": "sideways",
+    "volatility": "low",
+    "volume": 2716142000,
+    "volume_trend": "unknown"
+  },
+  "symbol": "^gspc",
+  "timestamp": "2026-04-05T17:31:45+08:00"
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:131) 步骤 step_2 所有依赖已完成，加入执行队列
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_2 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 81 bytes at offset 0 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: false)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_2 执行成功,结果: {
+  "bytes_written": 81,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 0,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_2 执行完成, 结果是: {
+  "bytes_written": 81,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 0,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:131) 步骤 step_3 所有依赖已完成，加入执行队列
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_3 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 16 bytes at offset 67 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: false)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_3 执行成功,结果: {
+  "bytes_written": 16,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 67,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_3 执行完成, 结果是: {
+  "bytes_written": 16,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 67,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:131) 步骤 step_4 所有依赖已完成，加入执行队列
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_4 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 8 bytes at offset 84 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: false)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_4 执行成功,结果: {
+  "bytes_written": 8,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 84,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_4 执行完成, 结果是: {
+  "bytes_written": 8,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 84,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:139) 检查所有步骤完成状态
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:150) 所有步骤尝试执行完成
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:49) Plan results: {
+  "goal": "看看现在招聘市场情况，整理一份文档给我",
+  "steps": [
+    {
+      "id": "step_1",
+      "tool": "query_market",
+      "input": {
+        "symbol": "^GSPC"
+      },
+      "depends_on": [],
+      "result": {
+        "analysis": {
+          "liquidity": "normal",
+          "market_sentiment": "neutral",
+          "risk_level": "low"
+        },
+        "insights": [
+          "Market is in sideways phase",
+          "Volatility is low"
+        ],
+        "summary": {
+          "change": 6582.69,
+          "change_percent": "0.00%",
+          "current_price": 6582.69,
+          "open": 0,
+          "previous_close": 0,
+          "trend": "sideways",
+          "volatility": "low",
+          "volume": 2716142000,
+          "volume_trend": "unknown"
+        },
+        "symbol": "^gspc",
+        "timestamp": "2026-04-05T17:31:45+08:00"
+      },
+      "status": "completed"
+    },
+    {
+      "id": "step_2",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "# 招聘市场情况报告\n\n基于当前金融市场指标 (^GSPC) 的分析：\n\n",
+        "filename": "recruitment_market_report.md",
+        "is_last": false,
+        "offset": 0
+      },
+      "depends_on": [
+        "step_1"
+      ],
+      "result": {
+        "bytes_written": 81,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 0,
+        "success": true
+      },
+      "status": "completed"
+    },
+    {
+      "id": "step_3",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "## 市场概况\n",
+        "filename": "recruitment_market_report.md",
+        "is_last": false,
+        "offset": 67
+      },
+      "depends_on": [
+        "step_1",
+        "step_2"
+      ],
+      "result": {
+        "bytes_written": 16,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 67,
+        "success": true
+      },
+      "status": "completed"
+    },
+    {
+      "id": "step_4",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "趋势: ",
+        "filename": "recruitment_market_report.md",
+        "is_last": false,
+        "offset": 84
+      },
+      "depends_on": [
+        "step_1",
+        "step_3"
+      ],
+      "result": {
+        "bytes_written": 8,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 84,
+        "success": true
+      },
+      "status": "completed"
+    }
+  ],
+  "status": "pending",
+  "retry_count": 0
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:60) SetSystemPrompt called
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:90) GetMessages called for chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:94) Messages found for chatID:%!(EXTRA string=1775381495707588)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:215) convertMessages
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381505597080948
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381505600064415
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:154) 发送请求成功
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:28) 开始处理流式响应: &{200 OK 200 HTTP/2.0 2 0 map[Content-Type:[text/event-stream;charset=UTF-8] Date:[Sun, 05 Apr 2026 09:31:43 GMT] Req-Arrive-Time:[1775381502888] Req-Cost-Time:[902] Resp-Start-Time:[1775381503790] Server:[istio-envoy] Vary:[Origin] X-Dashscope-Call-Gateway:[true] X-Envoy-Upstream-Service-Time:[900] X-Request-Id:[f2c21ce8-93d7-9e11-88a9-af7cc5b650c3]] 0xb062069e180 -1 [] false false map[] 0xb062067c3c0 0xb062097e0c0}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:128) 返回调用tools: []
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381515720090667
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:133) 流式响应处理完成，返回结果
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:116) LLM 后端 qwen3.5-plus-2026-02-15 处理响应成功
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381515730053899
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381524606037069
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:135) Sending message to conversation successfully
+INFO [default] (D:/codes/projects/leiAgentAPP/dataoperation/dialogop.go:28) GetDialogsByMessageID: map[chatID:1775381495707588 content:好呀 messageID:1775381524606037069 role:user timestamp:2026-04-05 09:32:04 +0000 UTC]
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:109) Getting message for conversation with messageID: 1775381524606037069 map[chatID:1775381495707588 content:好呀 messageID:1775381524606037069 role:user timestamp:2026-04-05 09:32:04 +0000 UTC]
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:143) Sending message to conversation successfully
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:60) Dispatcher 收到消息: 好呀
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:77) Dispatcher 处理消息: 好呀
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:115) 切换到规划模式
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/register.go:93) Converted tools to JSON format [map[description:Tool for executing local bash (Linux/Mac) or cmd (Windows) commands. Use this tool when user needs to run system commands, check system status, or perform local operations. Returns command output, error messages, and exit code. 当用户需要执行系统命令、根据软件运行的系统类型，选择对应的系统命令。使用这个工具时，务必确保输入的命令是安全的，并且不会对系统造成破坏。系统的类型是:windows name:execute_command parameters:map[properties:map[command:map[description:The command to execute type:string]] required:[command] type:object] results:map[description:Execution results of the command including output, error messages, and exit code properties:map[command:map[description:The command that was executed example:ls -la type:string] error:map[description:Error message if the command failed (only present if there was an error) example:exit status 127 type:string] exit_code:map[description:Exit code of the command (only present if the command failed) example:%!s(int=127) type:integer] output:map[description:Standard output and error from the command example:total 24
+drwxr-xr-x 5 user group 4096 Jan 15 10:30 . type:string] success:map[description:Whether the command executed successfully example:%!s(bool=true) type:boolean]] type:object]] map[description:
+	Writes a chunk of content to a file at a specific offset.
+	
+	This tool is designed for writing large files that exceed the token limit.
+	You should break down large content into smaller chunks and call this tool
+	multiple times, each with a different offset.
+	
+	IMPORTANT: 
+	- The first call should have offset = 0
+	- Subsequent calls should have offset equal to total size of previously written content
+	- The last chunk should have is_last = true
+	- If is_last is true, file will be truncated at current offset + content length
+	- CRITICAL: Each chunk must not exceed 100 characters to ensure reliable processing
+	
+	To use this tool:
+	1. Provide the actual filename, content, offset, and is_last values
+	2. Do NOT provide the parameter schema/definition
+	3. Call this tool multiple times for large files, each time with the next offset
+	
+	Args (example values):
+	{
+	  "filename": "large_file.txt",
+	  "content": "First part of the content...",
+	  "offset": 0,
+	  "is_last": false
+	}
+	
+	Example usage for writing a large file:
+	1. First chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "First part of the content...",
+	     "offset": 0,
+	     "is_last": false
+	   })
+	   
+	2. Second chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "Second part of the content...",
+	     "offset": 1024,
+	     "is_last": false
+	   })
+	   
+	3. Last chunk:
+	   write_file_chunk({
+	     "filename": "large_file.txt",
+	     "content": "Last part of the content...",
+	     "offset": 2048,
+	     "is_last": true
+	   })
+	   
+	Note: When writing large files, ensure each chunk is within the 100 character limit
+	for reliable processing. If a chunk exceeds this limit, it may be truncated or fail.
+	 name:write_file_chunk parameters:map[properties:map[content:map[description:The content chunk to write to the file. type:string] filename:map[description:The path to the file. Can be an absolute path or a relative path. type:string] is_last:map[description:True if this is the last chunk, false otherwise. type:boolean] offset:map[description:The byte offset in the file where this chunk should be written. type:integer]] required:[filename content offset is_last] type:object] results:map[description:Result of the file write operation properties:map[bytes_written:map[description:Number of bytes written in this chunk example:%!s(int=1024) type:integer] filename:map[description:The absolute path of the file that was written to example:/path/to/large_file.txt type:string] is_last:map[description:Indicates whether this was the last chunk to write example:%!s(bool=false) type:boolean] offset:map[description:The offset in the file where the chunk was written example:%!s(int=0) type:integer] success:map[description:Indicates whether the write operation was successful example:%!s(bool=true) type:boolean]] type:object]] map[description:Tool for getting the current real-time date and time from the server. MUST use this tool when user asks about current time, today's date, or any time-related questions requiring real-time information. Returns date, time, weekday, lunar date, and holiday information.只要对话里涉及时间的要应该先调用这个接口获取当前时间，再根据用户需求进行回复 name:get_current_time parameters:map[properties:map[] required:[] type:object] results:map[description:Current time information including date, weekday, lunar date, and holiday properties:map[current_time:map[description:Current date and time in format 'YYYY-MM-DD HH:MM:SS' example:2024-01-15 10:30:45 type:string] holiday:map[description:Holiday information (only present if it's a holiday) example:春节 type:string] lunar_date:map[description:Chinese lunar calendar date example:腊月初五 type:string] weekday:map[description:Day of the week in Chinese example:星期一 type:string]] type:object]] map[description:
+Query financial market data and generate structured analysis.
+
+Use this tool when:
+- The user asks about stock market, crypto, or financial markets
+- The query involves price, trend, or investment conditions
+- The user asks about "today market", "market situation", "price movement"
+
+You MUST use this tool instead of general search when the question is about financial markets.
+
+This tool provides structured insights including:
+- Trend analysis
+- Volatility
+- Risk level
+- Market sentiment
+
+Valid symbol examples:
+- Stocks: AAPL, MSFT, GOOGL, TSLA
+- Crypto: BTC-USD, ETH-USD
+- Indices: ^GSPC (S&P 500), ^DJI (Dow Jones)
+
+IMPORTANT: Always provide a valid market symbol in the 'symbol' parameter.
+If user doesn't specify a symbol, use a default like 'AAPL' or ask the user.
+
+Do NOT rely on search tools for market data if this tool is available.
+ name:query_market parameters:map[properties:map[symbol:map[description:Market symbol (e.g., AAPL, BTC-USD, ^GSPC) type:string]] required:[symbol] type:object] results:map[description:Structured market data analysis including price, trend, volatility, and insights properties:map[analysis:map[description:Market analysis and indicators properties:map[liquidity:map[description:Market liquidity (low, normal, high) example:normal type:string] market_sentiment:map[description:Overall market sentiment (bullish, bearish, neutral) example:bullish type:string] risk_level:map[description:Risk level (low, medium, high) example:low type:string]] type:object] insights:map[description:Key market insights and observations example:[Market is in uptrend phase Volatility is low] items:map[type:string] type:array] summary:map[description:Summary of market data properties:map[change:map[description:Price change from previous close example:%!s(float64=0.5) type:number] change_percent:map[description:Percentage change from previous close example:0.33% type:string] current_price:map[description:Current market price example:%!s(float64=150.25) type:number] open:map[description:Opening price for the current period example:%!s(float64=148.5) type:number] previous_close:map[description:Previous closing price example:%!s(float64=149.75) type:number] trend:map[description:Market trend (uptrend, downtrend, sideways) example:uptrend type:string] volatility:map[description:Volatility level (low, medium, high) example:low type:string] volume:map[description:Trading volume example:%!s(int=1000000) type:integer] volume_trend:map[description:Volume trend (stable, increasing, decreasing) example:stable type:string]] type:object] symbol:map[description:Market symbol (e.g., AAPL, BTC-USD) example:AAPL type:string] timestamp:map[description:Timestamp of the data in RFC3339 format example:2024-01-15T10:30:00Z type:string]] type:object]] map[description:Get weather and forecast information for a specific location. This tool provides comprehensive weather data including temperature, humidity, wind speed, precipitation probability, and weather conditions. Use this tool when user asks about weather, temperature, or forecast for any location. Requires latitude and longitude coordinates of the location. name:query_weather parameters:map[properties:map[days:map[description:Number of days to forecast (default: 7, max: 16) type:integer] latitude:map[description:The latitude coordinate of the location (e.g., 39.9042 for Beijing) type:string] longitude:map[description:The longitude coordinate of the location (e.g., 116.4074 for Beijing) type:string]] required:[latitude longitude] type:object] results:map[description:Weather forecast data with daily breakdown and insights properties:map[daily_forecast:map[description:Array of daily weather forecasts items:map[properties:map[date:map[description:Date in YYYY-MM-DD format example:2024-01-15 type:string] insights:map[description:Daily weather insights and recommendations example:[Temperature rising High chance of rain - consider carrying an umbrella] items:map[type:string] type:array] summary:map[properties:map[condition:map[description:Primary weather condition example:Partly cloudy type:string] max_precip_prob:map[description:Maximum precipitation probability (0-100) example:%!s(int=30) type:integer] max_wind_speed:map[description:Maximum wind speed in km/h example:%!s(float64=15.5) type:number] temperature_range:map[description:Temperature range in Celsius example:15.5°C ~ 22.3°C type:string] trend:map[description:Temperature trend (warming/cooling/stable) example:warming type:string]] type:object]] type:object] type:array] forecast_days:map[description:Number of days in the forecast (1-16) example:%!s(int=3) type:integer] overall_insights:map[description:Overall weather trends and patterns for the forecast period example:[Overall temperature trend: Warming up over the forecast period Rain expected on 2 day(s) during the forecast period] items:map[type:string] type:array]] type:object]] map[description:Write or update the user's in-app memo / diary file (Markdown). Same storage as the 备忘录 panel (data/memo.md).
+Use for travel plans, todos, notes the user asked to keep. Prefer structured Markdown (headings, lists).
+For the sidebar calendar "memo dot", include a date like YYYY-MM-DD in section_title or in the first lines of content (or use default append heading which includes the date).
+mode "append" adds a new dated section; "replace" overwrites the whole memo (use only when the user explicitly wants to clear or replace everything).
+Args JSON: {"content": "...", "mode": "append"|"replace", "section_title": "optional heading for append"} name:memo_write parameters:map[properties:map[content:map[description:Markdown text to save. type:string] mode:map[description:append (default): add a section; replace: overwrite entire memo. enum:[append replace] type:string] section_title:map[description:Optional section heading when mode is append; default is local date-time. type:string]] required:[content] type:object] results:map[description:Confirmation with memo file path. type:string]] map[description:Converts a location name (city, address, landmark) into latitude and longitude coordinates. Input should be a place name like 'Beijing', 'New York', or 'Eiffel Tower'. Returns the coordinates and additional location details. name:geocoding parameters:map[properties:map[location:map[description:The location name to geocode. Must use 'location' as the parameter name. Examples: 'Beijing', 'Times Square', 'Tokyo Tower' type:string]] required:[location] type:object] results:map[description:Geocoding tool to convert a location name into latitude and longitude coordinates properties:map[latitude:map[description:The latitude coordinate of the location example:39.9042 type:string] longitude:map[description:The longitude coordinate of the location example:116.4074 type:string]] type:object]] map[description:传入date获取date对应日期和时间的详细信息，只要问今天适合干什么，问今天的运势，只要关于运气，玄学等等关于气运的都要调用这个接口。
+	支持星座、儒略日、干支、生肖、节气、节日、彭祖百忌、吉神(喜神/福神/财神/阳贵神/阴贵神)方位、胎神方位、冲煞、纳音、星宿、八字、五行、十神、建除十二值星、青龙名堂等十二神、黄道日及吉凶、法定节假日及调休等,about almanac name:get_date_info_about_almanac parameters:map[properties:map[date:map[description:必要参数，指定查询的日期，格式为'YYYY-MM-DD'，如'2023-01-01'，或者不指定，则默认为当前时间 type:string]] required:[date] type:object] results:map[description:Comprehensive date information including solar and lunar calendar details, zodiac, festivals, and traditional almanac data properties:map[almanac:map[description:Traditional Chinese almanac information example:甲辰年 丁丑月 戊子日 (冲马 煞南) type:string] current_time:map[description:Current date and time in format 'YYYY-MM-DD HH:MM:SS' example:2024-01-15 10:30:45 type:string] day_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the day example:戊子 type:string] holiday:map[description:Holiday information (only present if it's a holiday) example:春节 type:string] lunar_date:map[description:Lunar calendar date in Chinese format example:甲辰年腊月初五 type:string] month_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the month example:丁丑 type:string] solar_term:map[description:Solar term information (if applicable) example:小寒 type:string] weekday:map[description:Day of the week in Chinese example:星期一 type:string] year_gan_zhi:map[description:Gan-Zhi (Stem-Branch) representation of the year example:甲辰 type:string] zodiac:map[description:Chinese zodiac animal for the year example:龙 type:string]] type:object]] map[description:Calculates time by adding or subtracting duration from current time. Args format: 'operation:duration' where operation is 'add' or 'subtract', and duration is like '1h30m' (hours and minutes) name:calculate_time parameters:map[properties:map[duration:map[description:The duration to add or subtract, e.g., '1h30m' for 1 hour and 30 minutes type:string] operation:map[description:The operation to perform: 'add' or 'subtract' type:string]] required:[operation duration] type:object] results:map[description:Calculated time result properties:map[calculated_time:map[description:The calculated time in RFC3339 format example:2024-01-15T10:30:00+08:00 type:string]] type:object]]]
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:60) SetSystemPrompt called
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/planner.go:164) planning系统提示词已加载...
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:90) GetMessages called for chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:94) Messages found for chatID:%!(EXTRA string=1775381495707588)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:215) convertMessages
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381524620078410
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:154) 发送请求成功
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:28) 开始处理流式响应: &{200 OK 200 HTTP/2.0 2 0 map[Content-Type:[text/event-stream;charset=UTF-8] Date:[Sun, 05 Apr 2026 09:32:02 GMT] Req-Arrive-Time:[1775381521916] Req-Cost-Time:[1287] Resp-Start-Time:[1775381523204] Server:[istio-envoy] Vary:[Origin] X-Dashscope-Call-Gateway:[true] X-Envoy-Upstream-Service-Time:[1281] X-Request-Id:[98243501-b94b-98f1-b0d8-f9a6d4b63f08]] 0xb062091a980 -1 [] false false map[] 0xb062067c280 0xb062097e0c0}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:128) 返回调用tools: []
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:133) 流式响应处理完成，返回结果
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:116) LLM 后端 qwen3.5-plus-2026-02-15 处理响应成功
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381530499067764
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/planner.go:175) Agent 处理消息完成，返回结果: {
+  "goal": "继续完成招聘市场情况报告文档的剩余部分",
+  "steps": [
+    {
+      "id": "step_1",
+      "tool": "write_file_chunk",
+      "depends_on": [],
+      "input": {
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "content": "横盘整理，波动性低。",
+        "offset": 92,
+        "is_last": false
+      }
+    },
+    {
+      "id": "step_2",
+      "tool": "write_file_chunk",
+      "depends_on": ["step_1"],
+      "input": {
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "content": "\n\n## 详细数据\n",
+        "offset": 105,
+        "is_last": false
+      }
+    },
+    {
+      "id": "step_3",
+      "tool": "write_file_chunk",
+      "depends_on": ["step_2"],
+      "input": {
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "content": "- 当前点位：6582.69\n",
+        "offset": 122,
+        "is_last": false
+      }
+    },
+    {
+      "id": "step_4",
+      "tool": "write_file_chunk",
+      "depends_on": ["step_3"],
+      "input": {
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "content": "- 市场情绪：中性\n",
+        "offset": 145,
+        "is_last": false
+      }
+    },
+    {
+      "id": "step_5",
+      "tool": "write_file_chunk",
+      "depends_on": ["step_4"],
+      "input": {
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "content": "- 风险等级：低\n",
+        "offset": 167,
+        "is_last": true
+      }
+    }
+  ]
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/planner.go:206) 正在保存规划到数据库...
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381530508046049
+INFO [default] (D:/codes/projects/leiAgentAPP/dataoperation/planop.go:67) 计划保存成功 - 目标: 继续完成招聘市场情况报告文档的剩余部分, 状态: pending
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/dotask.go:16) 开始执行规划...
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:86) 开始执行计划，共 5 个步骤
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:90) 初始化步骤入度完成
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:94) 构建反向依赖图完成
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:103) 找到 1 个无依赖的初始步骤
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_1 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 30 bytes at offset 92 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: false)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_1 执行成功,结果: {
+  "bytes_written": 30,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 92,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_1 执行完成, 结果是: {
+  "bytes_written": 30,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 92,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:131) 步骤 step_2 所有依赖已完成，加入执行队列
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_2 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 18 bytes at offset 105 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: false)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_2 执行成功,结果: {
+  "bytes_written": 18,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 105,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_2 执行完成, 结果是: {
+  "bytes_written": 18,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 105,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:131) 步骤 step_3 所有依赖已完成，加入执行队列
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_3 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 25 bytes at offset 122 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: false)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_3 执行成功,结果: {
+  "bytes_written": 25,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 122,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_3 执行完成, 结果是: {
+  "bytes_written": 25,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 122,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:131) 步骤 step_4 所有依赖已完成，加入执行队列
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_4 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 24 bytes at offset 145 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: false)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_4 执行成功,结果: {
+  "bytes_written": 24,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 145,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_4 执行完成, 结果是: {
+  "bytes_written": 24,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": false,
+  "offset": 145,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:131) 步骤 step_5 所有依赖已完成，加入执行队列
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:111) 开始执行步骤 step_5 (工具: write_file_chunk)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/tools/fileFunction/writeresponsetofile.go:210) Wrote chunk of 21 bytes at offset 167 to file D:\codes\projects\leiAgentAPP\recruitment_market_report.md (is_last: true)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:237) 步骤 step_5 执行成功,结果: {
+  "bytes_written": 21,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": true,
+  "offset": 167,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:121) 步骤 step_5 执行完成, 结果是: {
+  "bytes_written": 21,
+  "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+  "is_last": true,
+  "offset": 167,
+  "success": true
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:139) 检查所有步骤完成状态
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:150) 所有步骤尝试执行完成
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/planner/executor.go:49) Plan results: {
+  "goal": "继续完成招聘市场情况报告文档的剩余部分",
+  "steps": [
+    {
+      "id": "step_1",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "横盘整理，波动性低。",
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 92
+      },
+      "depends_on": [],
+      "result": {
+        "bytes_written": 30,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 92,
+        "success": true
+      },
+      "status": "completed"
+    },
+    {
+      "id": "step_2",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "\n\n## 详细数据\n",
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 105
+      },
+      "depends_on": [
+        "step_1"
+      ],
+      "result": {
+        "bytes_written": 18,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 105,
+        "success": true
+      },
+      "status": "completed"
+    },
+    {
+      "id": "step_3",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "- 当前点位：6582.69\n",
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 122
+      },
+      "depends_on": [
+        "step_2"
+      ],
+      "result": {
+        "bytes_written": 25,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 122,
+        "success": true
+      },
+      "status": "completed"
+    },
+    {
+      "id": "step_4",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "- 市场情绪：中性\n",
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 145
+      },
+      "depends_on": [
+        "step_3"
+      ],
+      "result": {
+        "bytes_written": 24,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": false,
+        "offset": 145,
+        "success": true
+      },
+      "status": "completed"
+    },
+    {
+      "id": "step_5",
+      "tool": "write_file_chunk",
+      "input": {
+        "content": "- 风险等级：低\n",
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": true,
+        "offset": 167
+      },
+      "depends_on": [
+        "step_4"
+      ],
+      "result": {
+        "bytes_written": 21,
+        "filename": "D:\\codes\\projects\\leiAgentAPP\\recruitment_market_report.md",
+        "is_last": true,
+        "offset": 167,
+        "success": true
+      },
+      "status": "completed"
+    }
+  ],
+  "status": "pending",
+  "retry_count": 0
+}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:60) SetSystemPrompt called
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:90) GetMessages called for chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/memory/localMemory.go:94) Messages found for chatID:%!(EXTRA string=1775381495707588)
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:215) convertMessages
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381530519014515
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381530523041108
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:154) 发送请求成功
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:28) 开始处理流式响应: &{200 OK 200 HTTP/2.0 2 0 map[Content-Type:[text/event-stream;charset=UTF-8] Date:[Sun, 05 Apr 2026 09:32:09 GMT] Req-Arrive-Time:[1775381527813] Req-Cost-Time:[1670] Resp-Start-Time:[1775381529483] Server:[istio-envoy] Vary:[Origin] X-Dashscope-Call-Gateway:[true] X-Envoy-Upstream-Service-Time:[1629] X-Request-Id:[e16ddb25-461b-96c2-8ec5-4f5c9fcb2e33]] 0xb062091a520 -1 [] false false map[] 0xb062067c280 0xb062097e0c0}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:128) 返回调用tools: []
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/responeScanner.go:133) 流式响应处理完成，返回结果
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/proxy/proxy.go:116) LLM 后端 qwen3.5-plus-2026-02-15 处理响应成功
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381537602063561
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775381537611072305
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0xb0620800f90 0x7ff694786400 0xb0620801200 0xb0620728a00 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0xb0620800f90 0x7ff694786400 0xb0620801200 0xb0620728a00 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0xb0620800f90 0x7ff694786400 0xb0620801200 0xb0620728a00 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:123) RegisterChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:236) RegisterGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:123) RegisterChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:123) RegisterChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:217) Starting dispatcher for conversation with ChatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0x115e8b32a420 0x7ff77db16400 0x115e8b2466f0 <nil> 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/dispatcher/dispatcher.go:52) Dispatcher 开始运行...
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 DialogOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 ReasonOut
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0x115e8b32a420 0x7ff77db16400 0x115e8b2466f0 <nil> 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775382382540017114
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:154) Generated messageID: 1775382382540000074
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:89) GetChannel: 1775381495707588 inputchannel
+INFO [default] (D:/codes/projects/leiAgentAPP/internal/globalchannel.go:252) GetGlobalInputChannel: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0x115e8b32a420 0x7ff77db16400 0x115e8b2466f0 <nil> 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0x115e8b32a420 0x7ff77db16400 0x115e8b2466f0 <nil> 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:315) Switching to chatID: 1775381495707588
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0x115e8b32a420 0x7ff77db16400 0x115e8b2466f0 <nil> 1775381495707588}
+INFO [default] (D:/codes/projects/leiAgentAPP/app.go:223) Getting dispatcher for conversation with ChatID: 1775381495707588 &{0x115e8b32a420 0x7ff77db16400 0x115e8b2466f0 <nil> 1775381495707588}

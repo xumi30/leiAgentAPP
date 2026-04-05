@@ -13,6 +13,8 @@ import (
 	"leiAgent/logging"
 	"leiAgent/utils"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +24,11 @@ const (
 	streamModeNonStream = 0 // 仅非流式
 	streamModeStream    = 1 // 仅流式
 	streamModeBoth      = 3 // 由请求/上下文决定
+
+	// 默认补全上限（原 3000 易导致长 JSON / 多段正文在流式下被 length 截断）
+	defaultMaxOutputTokens = 8192
+	// 任务规划阶段模型常输出大块 JSON（含多步、长 content），单独抬高下限
+	planningMinOutputTokens = 16384
 )
 
 type Proxy struct {
@@ -155,6 +162,25 @@ func (p *Proxy) doRequest(requestinfo *http.Request, info *ModelAPIInfo) (*http.
 	return resp, nil
 }
 
+// resolveMaxOutputTokens 决定本次请求的 max_tokens：配置项、环境变量、规划模式下限。
+func resolveMaxOutputTokens(ctx context.Context, info *ModelAPIInfo) int {
+	maxTok := defaultMaxOutputTokens
+	if info.maxOutputTokens > 0 {
+		maxTok = info.maxOutputTokens
+	}
+	if v := strings.TrimSpace(os.Getenv("LEIAGENT_LLM_MAX_OUTPUT_TOKENS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxTok = n
+		}
+	}
+	if v, ok := ctx.Value(utils.IsPlanningString).(bool); ok && v {
+		if maxTok < planningMinOutputTokens {
+			maxTok = planningMinOutputTokens
+		}
+	}
+	return maxTok
+}
+
 func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte, error) {
 	chatIDVal := ctx.Value(utils.ChatIDString)
 	chatID, ok := chatIDVal.(string)
@@ -179,10 +205,13 @@ func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte
 
 	chatMessages := convertMessages(memory.GetLocalMemory().GetMessages(chatID))
 
+	maxTok := resolveMaxOutputTokens(ctx, info)
+	logging.Info("LLM 请求 max_tokens=%d", maxTok)
+
 	opts := []openaistyle.Option{
 		openaistyle.WithModel(info.modelName),
 		openaistyle.WithMessages(chatMessages),
-		openaistyle.WithMaxTokens(3000),
+		openaistyle.WithMaxTokens(maxTok),
 		openaistyle.WithStream(isStream),
 		openaistyle.WithTools(tls),
 	}

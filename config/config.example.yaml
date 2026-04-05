@@ -5,7 +5,9 @@
 # 多后端故障转移：配置 llm_backends（非空时忽略 llm）；按数组顺序尝试，失败则换下一个。
 #
 # 单后端时可用环境变量覆盖：LEIAGENT_LLM_API_KEY、LEIAGENT_LLM_BASE_URL、LEIAGENT_LLM_MODEL、
-# LEIAGENT_LLM_PROVIDER、LEIAGENT_LLM_STREAM_MODE。
+# LEIAGENT_LLM_PROVIDER、LEIAGENT_LLM_STREAM_MODE、LEIAGENT_LLM_MAX_OUTPUT_TOKENS（补全 token 上限）。
+#
+# 可选 max_output_tokens：对应 API 的 max_tokens；不填时默认 8192，任务规划阶段会自动不低于 16384。
 # 多后端时每行须写全 base_url、model、api_key（api_key 可留空则回退到环境变量中的 Key）。
 #
 # 可选：provider 留空为 Bearer；Google Gemini 填 gemini（使用 x-goog-api-key）。
@@ -17,6 +19,7 @@ llm:
   model: "qwen3.5-plus-2026-02-15"
   provider: ""
   stream_mode: both
+  # max_output_tokens: 32768
 
 # 与上方 llm 二选一示例：
 # llm_backends:

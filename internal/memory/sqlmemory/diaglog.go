@@ -237,6 +237,31 @@ func (m *SQLMemory) GetLastMessage(chatid string) (map[string]interface{}, error
 	}, nil
 }
 
+// SelectAllMessageContents returns every stored message body (for doc path harvest). Excludes reasoning role.
+func (m *SQLMemory) SelectAllMessageContents() ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	rows, err := m.db.Query(`SELECT content FROM messages WHERE role != 'reasoning' ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query message contents: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var content string
+		if err := rows.Scan(&content); err != nil {
+			return nil, fmt.Errorf("failed to scan message content: %w", err)
+		}
+		out = append(out, content)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating message contents: %w", err)
+	}
+	return out, nil
+}
+
 func (m *SQLMemory) DelateMessage(chatID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

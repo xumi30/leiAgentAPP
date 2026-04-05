@@ -400,6 +400,35 @@
     margin-bottom: 0;
 }
 
+/* doc: 链接拆成按钮后与前后 Markdown 并排为一段 */
+.message-markdown--with-doc-chips {
+    display: block;
+}
+
+.message-markdown--with-doc-chips .msg-md-slice {
+    display: inline;
+    vertical-align: baseline;
+}
+
+.message-markdown--with-doc-chips .msg-md-slice > p {
+    display: inline;
+    margin: 0;
+    vertical-align: baseline;
+}
+
+.message-markdown--with-doc-chips .msg-md-slice > p + p::before {
+    content: ' ';
+}
+
+.message-markdown--with-doc-chips .msg-doc-path-link--chip {
+    display: inline;
+    vertical-align: baseline;
+    margin: 0 0.12em;
+    max-width: 100%;
+    word-break: break-all;
+    text-align: left;
+}
+
 .message-markdown p {
     margin: 0.35em 0;
 }
@@ -441,6 +470,25 @@
     color: var(--apple-blue);
     text-decoration: underline;
     text-underline-offset: 2px;
+}
+
+.message-markdown .msg-doc-path-link {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: var(--apple-blue);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    text-align: inherit;
+    word-break: break-all;
+}
+
+.message-markdown .msg-doc-path-link:hover {
+    opacity: 0.88;
 }
 
 .message-markdown h1,

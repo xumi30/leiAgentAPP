@@ -34,6 +34,10 @@ export function GetLLMThinkingDisabled() {
   return window['go']['main']['App']['GetLLMThinkingDisabled']();
 }
 
+export function GetLibraryWorkspaceRoot() {
+  return window['go']['main']['App']['GetLibraryWorkspaceRoot']();
+}
+
 export function GetMemoCalendarDates() {
   return window['go']['main']['App']['GetMemoCalendarDates']();
 }
@@ -62,8 +66,40 @@ export function GetReasoningMessage(arg1) {
   return window['go']['main']['App']['GetReasoningMessage'](arg1);
 }
 
+export function LibraryWorkspaceDelete(arg1, arg2) {
+  return window['go']['main']['App']['LibraryWorkspaceDelete'](arg1, arg2);
+}
+
+export function LibraryWorkspaceMkdir(arg1) {
+  return window['go']['main']['App']['LibraryWorkspaceMkdir'](arg1);
+}
+
+export function LibraryWorkspaceRename(arg1, arg2) {
+  return window['go']['main']['App']['LibraryWorkspaceRename'](arg1, arg2);
+}
+
+export function LibraryWorkspaceWriteFile(arg1, arg2) {
+  return window['go']['main']['App']['LibraryWorkspaceWriteFile'](arg1, arg2);
+}
+
 export function ListConversation() {
   return window['go']['main']['App']['ListConversation']();
+}
+
+export function ListDocumentLibrary() {
+  return window['go']['main']['App']['ListDocumentLibrary']();
+}
+
+export function ListLibraryWorkspaceDir(arg1) {
+  return window['go']['main']['App']['ListLibraryWorkspaceDir'](arg1);
+}
+
+export function ReadDocumentForViewer(arg1) {
+  return window['go']['main']['App']['ReadDocumentForViewer'](arg1);
+}
+
+export function RevealDocumentInExplorer(arg1) {
+  return window['go']['main']['App']['RevealDocumentInExplorer'](arg1);
 }
 
 export function SaveLLMConfigText(arg1) {

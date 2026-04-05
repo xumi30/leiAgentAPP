@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"leiAgent/dataoperation"
 	globalchannel "leiAgent/internal"
 	"leiAgent/internal/dispatcher"
+	"leiAgent/internal/doclib"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
@@ -366,4 +369,72 @@ func (a *App) GetMemoCalendarDates() ([]string, error) {
 		return nil, err
 	}
 	return memo.CalendarDates(s), nil
+}
+
+// ListDocumentLibrary 返回文库中文档列表（file_write / write_file_chunk 登记 + 历史消息里出现过的现存文件路径）。
+func (a *App) ListDocumentLibrary() ([]map[string]interface{}, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	bodies := dataoperation.GetAllMessageContentsForDocHarvest()
+	return doclib.List(cwd, bodies)
+}
+
+// ReadDocumentForViewer 读取本地文本文件供文库/消息内链接预览（有大小上限）。
+func (a *App) ReadDocumentForViewer(path string) (map[string]interface{}, error) {
+	text, err := doclib.ReadText(path)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"path":    filepath.Clean(path),
+		"content": text,
+	}, nil
+}
+
+// RevealDocumentInExplorer 在系统文件管理器中定位到该文件。
+func (a *App) RevealDocumentInExplorer(path string) error {
+	return doclib.RevealInFileManager(path)
+}
+
+// GetLibraryWorkspaceRoot 返回文库根目录（工作目录下 workspace/）的绝对路径。
+func (a *App) GetLibraryWorkspaceRoot() (string, error) {
+	return doclib.LibraryRootAbs()
+}
+
+// ListLibraryWorkspaceDir 列出文库内相对路径 rel 下的文件与文件夹（rel 为空表示根目录）。
+func (a *App) ListLibraryWorkspaceDir(rel string) (map[string]interface{}, error) {
+	root, listed, parent, entries, err := doclib.ListWorkspaceDir(rel)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"rootAbs":    root,
+		"currentRel": listed,
+		"parentRel":  parent,
+		"entries":    entries,
+	}, nil
+}
+
+// LibraryWorkspaceMkdir 在文库内创建目录（可多级）。
+func (a *App) LibraryWorkspaceMkdir(rel string) error {
+	_, err := doclib.WorkspaceMkdir(rel)
+	return err
+}
+
+// LibraryWorkspaceWriteFile 在文库内覆盖写入文本文件。
+func (a *App) LibraryWorkspaceWriteFile(rel string, content string) error {
+	_, err := doclib.WorkspaceWriteFile(rel, content)
+	return err
+}
+
+// LibraryWorkspaceDelete 删除文库内的文件或目录；recursive 为 true 时删除非空目录树。
+func (a *App) LibraryWorkspaceDelete(rel string, recursive bool) error {
+	return doclib.WorkspaceDelete(rel, recursive)
+}
+
+// LibraryWorkspaceRename 在文库根内移动或重命名。
+func (a *App) LibraryWorkspaceRename(oldRel string, newRel string) error {
+	return doclib.WorkspaceRename(oldRel, newRel)
 }

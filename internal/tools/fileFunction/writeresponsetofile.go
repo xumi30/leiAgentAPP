@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"leiAgent/internal/doclib"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
 
@@ -205,6 +206,7 @@ func (t *WriteFileChunk) Execute(ctx context.Context, args string) (string, erro
 		if err := file.Truncate(int64(offset + len(content))); err != nil {
 			return "", fmt.Errorf("failed to truncate file: %v", err)
 		}
+		doclib.Register(filename)
 	}
 
 	logging.Info("Wrote chunk of %d bytes at offset %d to file %s (is_last: %v)", len(content), offset, filename, isLast)

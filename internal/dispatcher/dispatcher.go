@@ -11,6 +11,7 @@ import (
 	"leiAgent/internal/tools"
 	"leiAgent/internal/tools/bashfunction"
 	fileFunctions "leiAgent/internal/tools/fileFunction"
+	"leiAgent/internal/tools/libraryfs"
 	"leiAgent/internal/tools/memotool"
 	searchFunctions "leiAgent/internal/tools/searchFuctions"
 	"leiAgent/internal/tools/timeFunctions"
@@ -195,6 +196,8 @@ func toolsInfo() []byte {
 	toolRegistry.Register(bashfunction)
 
 	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
+	toolRegistry.Register(fileFunctions.GetFileWriteTool())
+	toolRegistry.Register(libraryfs.New())
 	toolRegistry.Register(memotool.NewMemoWriteTool())
 	toolRegistry.Register(getcurrenttime)
 	toolRegistry.Register(financeMarket)

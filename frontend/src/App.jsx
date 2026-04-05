@@ -7,6 +7,7 @@ import Dialog from './componentjs/Dialog.jsx';
 import Header from './componentjs/Header.jsx';
 import Reasoning from './componentjs/Reasonging.jsx';
 import MemoModal from './componentjs/MemoModal.jsx';
+import DocLibraryModal from './componentjs/DocLibraryModal.jsx';
 import SettingsModal from './componentjs/SettingsModal.jsx';
 import {
   GetMemoCalendarDates,
@@ -31,6 +32,8 @@ function App() {
   const [isDragging, setIsDragging] = useState(null);
 
   const [memoOpen, setMemoOpen] = useState(false);
+  const [docLibOpen, setDocLibOpen] = useState(false);
+  const [docLibFocusPath, setDocLibFocusPath] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState('');
   const [activeChatTitle, setActiveChatTitle] = useState('');
@@ -129,6 +132,20 @@ function App() {
     return () => window.removeEventListener('conversationChanged', onConv);
   }, []);
 
+  useEffect(() => {
+    /** @param {Event} e */
+    const onOpenDoc = (e) => {
+      const ce = /** @type {CustomEvent<{ path?: string }>} */ (e);
+      const p = ce.detail?.path;
+      if (typeof p === 'string' && p.trim()) {
+        setDocLibFocusPath(p.trim());
+        setDocLibOpen(true);
+      }
+    };
+    window.addEventListener('leiagent-open-document', onOpenDoc);
+    return () => window.removeEventListener('leiagent-open-document', onOpenDoc);
+  }, []);
+
   const handleMouseDown = (e, border) => {
     e.preventDefault();
     setIsDragging(border);
@@ -177,6 +194,10 @@ function App() {
     <div id="App" className="board-column">
       <Header
         onOpenMemo={() => setMemoOpen(true)}
+        onOpenDocLibrary={() => {
+          setDocLibFocusPath(null);
+          setDocLibOpen(true);
+        }}
         connectionLoading={connectionLoading}
         connectionStatus={connectionStatus}
         onRefreshConnection={refreshConnection}
@@ -195,6 +216,14 @@ function App() {
         activeChatId={activeChatId}
         activeChatTitle={activeChatTitle}
         onMemoSaved={refreshMemoDates}
+      />
+      <DocLibraryModal
+        open={docLibOpen}
+        focusPath={docLibFocusPath}
+        onClose={() => {
+          setDocLibOpen(false);
+          setDocLibFocusPath(null);
+        }}
       />
       <div className="main-content">
         <div

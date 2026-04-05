@@ -1,0 +1,435 @@
+.doclib-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+  background: rgba(20, 24, 32, 0.38);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: doclib-fade-in 0.22s ease-out;
+}
+
+@keyframes doclib-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes doclib-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 文库面板略宽 */
+.doclib-sheet {
+  width: min(1180px, 100%);
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 16px;
+  border-radius: 16px 16px 22px 22px;
+  background: rgba(252, 252, 254, 0.94);
+  box-shadow:
+    0 24px 80px rgba(15, 23, 42, 0.18),
+    0 0 0 0.5px rgba(255, 255, 255, 0.9) inset;
+  animation: doclib-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.doclib-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6e6e73;
+}
+
+.doclib-hint strong {
+  color: #3a3a3c;
+  font-weight: 600;
+}
+
+.doclib-hint code {
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #3a3a3c;
+}
+
+.doclib-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.doclib-sheet__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #1d1d1f;
+}
+
+.doclib-sheet__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.doclib-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.doclib-btn--secondary {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1d1d1f;
+}
+
+.doclib-btn--secondary:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.09);
+}
+
+.doclib-btn--ghost {
+  background: transparent;
+  color: #007aff;
+}
+
+.doclib-btn--ghost:hover:not(:disabled) {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.doclib-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.doclib-body {
+  display: flex;
+  gap: 14px;
+  min-height: 0;
+  flex: 1;
+}
+
+.doclib-list-wrap {
+  flex: 0 0 min(320px, 38%);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+  overflow: hidden;
+}
+
+.doclib-list__head {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #636366;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.doclib-list {
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.doclib-list__item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 10px;
+  margin-bottom: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.doclib-list__item:hover {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.doclib-list__item.is-active {
+  background: rgba(0, 122, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.22);
+}
+
+.doclib-list__name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1f;
+  word-break: break-all;
+}
+
+.doclib-list__meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #8e8e93;
+  word-break: break-all;
+}
+
+.doclib-list__empty {
+  padding: 24px 14px;
+  font-size: 14px;
+  color: #8e8e93;
+  line-height: 1.5;
+}
+
+.doclib-preview-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  overflow: hidden;
+}
+
+.doclib-preview__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.doclib-preview__path {
+  margin: 0;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #3a3a3c;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.doclib-preview__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #1d1d1f;
+}
+
+.doclib-preview__body pre.doclib-raw {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.doclib-preview__placeholder {
+  margin: 0;
+  color: #8e8e93;
+  font-size: 14px;
+}
+
+.doclib-sheet__error {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 59, 48, 0.08);
+  color: #c62828;
+  font-size: 14px;
+}
+
+.doclib-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 0;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.doclib-tab {
+  border: none;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6e6e73;
+  background: transparent;
+  cursor: pointer;
+}
+
+.doclib-tab.is-active {
+  background: #fff;
+  color: #007aff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.doclib-list__head--toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.doclib-mini-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.doclib-mini-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: #007aff;
+}
+
+.doclib-mini-btn:hover:not(:disabled) {
+  background: rgba(0, 122, 255, 0.12);
+}
+
+.doclib-mini-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.doclib-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(248, 250, 252, 0.65);
+}
+
+.doclib-crumb {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  margin: 0;
+  font: inherit;
+  color: #007aff;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.doclib-crumb:hover {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.doclib-breadcrumb__sep {
+  color: #aeaeb2;
+}
+
+.doclib-fs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.doclib-fs-btn {
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  cursor: pointer;
+}
+
+.doclib-fs-btn:hover:not(:disabled) {
+  background: rgba(0, 122, 255, 0.16);
+}
+
+.doclib-fs-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.doclib-fs-btn--danger {
+  background: rgba(255, 59, 48, 0.1);
+  color: #c62828;
+}
+
+.doclib-fs-btn--danger:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.16);
+}
+
+.doclib-list__icon {
+  margin-right: 6px;
+}
+
+.doclib-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.doclib-btn--primary {
+  background: linear-gradient(180deg, #0a84ff 0%, #007aff 100%);
+  color: #fff;
+}
+
+.doclib-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+.doclib-editor {
+  width: 100%;
+  min-height: min(60vh, 520px);
+  flex: 1;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.98);
+  color: #1d1d1f;
+}

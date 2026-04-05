@@ -3,15 +3,36 @@ import ReactMarkdown from 'react-markdown';
 import { GetMemoContent, GetMemoFilePath, SaveMemoContent } from '../../wailsjs/go/main/App';
 import '../componentcss/MemoModal.css';
 
-/** @param {string} md */
-function extractH2Sections(md) {
-  const re = /^## (.+)$/gm;
+/** ATX headings (# … ######), line start only; strips optional closing hashes. */
+/** @param {string} md @returns {{ level: number, title: string, charIndex: number }[]} */
+function extractMarkdownHeadings(md) {
+  const re = /^(#{1,6})\s+(.+?)\s*(?:#+\s*)?$/gm;
   const items = [];
-  let m;
-  while ((m = re.exec(md)) !== null) {
-    items.push({ title: m[1].trim(), charIndex: m.index });
+  for (const m of md.matchAll(re)) {
+    const level = m[1].length;
+    const title = m[2].trim().replace(/\s+#+\s*$/, '').trim();
+    items.push({ level, title, charIndex: m.index });
   }
   return items;
+}
+
+/**
+ * 大纲式编号（1、1.1、2.3…）。按文中出现的最低标题层级当作「顶层」，避免全是 ## 时出现 0.1。
+ * @param {{ level: number }[]} headings
+ * @returns {string[]}
+ */
+function outlineLabelsForHeadings(headings) {
+  if (headings.length === 0) return [];
+  const minLevel = Math.min(...headings.map((h) => h.level));
+  const count = new Array(8).fill(0);
+  const out = [];
+  for (const h of headings) {
+    const rel = h.level - minLevel + 1;
+    count[rel] += 1;
+    for (let j = rel + 1; j <= 7; j++) count[j] = 0;
+    out.push(count.slice(1, rel + 1).join('.'));
+  }
+  return out;
 }
 
 /** @param {HTMLTextAreaElement | null} textarea @param {number} charIndex */
@@ -37,16 +58,28 @@ export default function MemoModal({ open, onClose, activeChatId, activeChatTitle
   const [activeTocIndex, setActiveTocIndex] = useState(null);
   const textareaRef = useRef(null);
 
-  const headings = useMemo(() => extractH2Sections(text), [text]);
+  const headings = useMemo(() => extractMarkdownHeadings(text), [text]);
+  const headingOutlineLabels = useMemo(() => outlineLabelsForHeadings(headings), [headings]);
 
   const markdownComponents = useMemo(() => {
     let i = 0;
+    /** @param {'h1'|'h2'|'h3'|'h4'|'h5'|'h6'} Tag */
+    const withHeadingId = (Tag) =>
+      function MemoMdHeading({ children, ...rest }) {
+        const id = `memo-heading-${i++}`;
+        return (
+          <Tag id={id} {...rest}>
+            {children}
+          </Tag>
+        );
+      };
     return {
-      /** @param {{ children?: import('react').ReactNode }} props */
-      h2: ({ children }) => {
-        const id = `memo-h2-${i++}`;
-        return <h2 id={id}>{children}</h2>;
-      },
+      h1: withHeadingId('h1'),
+      h2: withHeadingId('h2'),
+      h3: withHeadingId('h3'),
+      h4: withHeadingId('h4'),
+      h5: withHeadingId('h5'),
+      h6: withHeadingId('h6'),
     };
   }, [text]);
 
@@ -104,7 +137,7 @@ export default function MemoModal({ open, onClose, activeChatId, activeChatTitle
       if (panelMode === 'edit') {
         scrollTextareaToChar(textareaRef.current, charIndex);
       } else {
-        const el = document.getElementById(`memo-h2-${index}`);
+        const el = document.getElementById(`memo-heading-${index}`);
         el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     },
@@ -145,8 +178,8 @@ export default function MemoModal({ open, onClose, activeChatId, activeChatTitle
         </div>
 
         <p className="memo-sheet__hint">
-          备忘录是<strong>全局一份</strong>（任意对话里调用 <code>memo_write</code> 都会写入同一文件）。下面左侧按{' '}
-          <code>## 小标题</code> 列出条目，通常对应一次追加的<strong>日期或主题</strong>；与「当前对话」无自动绑定，仅作对照参考。
+          备忘录是<strong>全局一份</strong>（任意对话里调用 <code>memo_write</code> 都会写入同一文件）。左侧按 Markdown 标题（<code>#</code>～<code>######</code>）列出条目并<strong>体现层级</strong>；工具追加默认一节为{' '}
+          <code>##</code>，正文里可用 <code>###</code> 等细分；与「当前对话」无自动绑定，仅作对照参考。
         </p>
 
         {filePath ? (
@@ -160,10 +193,12 @@ export default function MemoModal({ open, onClose, activeChatId, activeChatTitle
         {saveErr ? <div className="memo-sheet__error">{saveErr}</div> : null}
 
         <div className="memo-body">
-          <aside className="memo-toc" aria-label="按小标题跳转">
+          <aside className="memo-toc" aria-label="按 Markdown 标题层级跳转">
             <div className="memo-toc__title">条目</div>
             {headings.length === 0 ? (
-              <p className="memo-toc__empty">暂无 <code>##</code> 分段。可用工具追加或手动输入标题行。</p>
+              <p className="memo-toc__empty">
+                暂无 <code>#</code>～<code>######</code> 标题行。可用工具追加或手动输入分段标题。
+              </p>
             ) : (
               <ul className="memo-toc__list">
                 {headings.map((h, i) => (
@@ -171,10 +206,12 @@ export default function MemoModal({ open, onClose, activeChatId, activeChatTitle
                     <button
                       type="button"
                       className={`memo-toc__btn${activeTocIndex === i ? ' is-active' : ''}`}
+                      style={{ paddingLeft: `${8 + (h.level - 1) * 12}px` }}
                       onClick={() => jumpToSection(i, h.charIndex)}
+                      title={`H${h.level}`}
                     >
-                      <span className="memo-toc__idx">{i + 1}</span>
-                      <span className="memo-toc__text">{h.title}</span>
+                      <span className="memo-toc__idx">{headingOutlineLabels[i]}</span>
+                      <span className={`memo-toc__text${h.level >= 3 ? ' memo-toc__text--sub' : ''}`}>{h.title}</span>
                     </button>
                   </li>
                 ))}
@@ -205,7 +242,7 @@ export default function MemoModal({ open, onClose, activeChatId, activeChatTitle
                 </button>
               </div>
               <span className="memo-main__toolbar-hint">
-                {headings.length > 0 ? `${headings.length} 个分段` : '未分段'}
+                {headings.length > 0 ? `${headings.length} 个标题` : '无标题'}
               </span>
             </div>
 
@@ -218,7 +255,7 @@ export default function MemoModal({ open, onClose, activeChatId, activeChatTitle
                 spellCheck
                 autoComplete="off"
                 autoCorrect="off"
-                placeholder="在这里记录想法… 使用 ## 日期或主题 作为分段标题。"
+                placeholder="在这里记录想法… 用 #～###### 写标题以在左侧目录显示层级（工具追加默认为 ##）。"
               />
             ) : (
               <div className="memo-sheet__preview">

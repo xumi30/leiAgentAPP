@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"leiAgent/internal/doclib"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
 	"os"
@@ -184,6 +185,7 @@ func (t *FileWriteTool) Execute(ctx context.Context, args string) (string, error
 		return "failed to write to file", fmt.Errorf("failed to write to file: %v", err)
 	}
 
+	doclib.Register(path)
 	return fmt.Sprintf("Successfully wrote content to file: %s", path), nil
 }
 
