@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"leiAgent/dataoperation"
 	"leiAgent/internal/memory"
-	"leiAgent/internal/memory/sqlmemory"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -104,11 +104,11 @@ func (p *Planning) VerifyResult(ctx context.Context, result string) (string, err
 	if !ok {
 		return "", errors.New("chatID not found in context")
 	}
-	sql, err := sqlmemory.GetSqlInstance("")
-	if err != nil {
-		return "", err
+	sql := dataoperation.GetSqlInstance()
+	if sql == nil {
+		return "", errors.New("database not available")
 	}
-	subChatId, err := sql.GenerateSubChatIDWithChatId(chatID)
+	planRunID, err := sql.GeneratePlanRunIDWithChatID(chatID)
 	if err != nil {
 		return "", err
 	}
@@ -116,16 +116,18 @@ func (p *Planning) VerifyResult(ctx context.Context, result string) (string, err
 	subctx, subcancel := context.WithCancel(ctx)
 	defer subcancel()
 
-	subctx = context.WithValue(subctx, utils.ChatIDString, subChatId)
-	memory.GetLocalMemory().Clear(subChatId)
-	memory.SetSystemPrompt(subChatId, systemprompt)
-	memory.AddUserMessage(subChatId, result)
+	// memory/system prompt 使用 planRunID 隔离；UI 输出（如有）仍回到原 chatID，避免临时 id 未注册时落入全局 OutputChan。
+	subctx = context.WithValue(subctx, utils.ChatIDString, planRunID)
+	subctx = context.WithValue(subctx, utils.DialogOutChatIDString, chatID)
+	memory.GetLocalMemory().Clear(planRunID)
+	memory.SetSystemPrompt(planRunID, systemprompt)
+	memory.AddUserMessage(planRunID, result)
 
-	finalResult, err := p.verifyResultWithRetry(subctx, subChatId, result)
+	finalResult, err := p.verifyResultWithRetry(subctx, planRunID, result)
 	if err != nil {
 		return "", err
 	}
-	memory.GetLocalMemory().Clear(subChatId)
+	memory.GetLocalMemory().Clear(planRunID)
 	return finalResult, nil
 }
 

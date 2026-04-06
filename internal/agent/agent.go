@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	globalchannel "leiAgent/internal"
+	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
@@ -57,15 +57,22 @@ func (a *Agent) SetCtx(ctx context.Context) {
 	a.ctx = ctx
 }
 func (a *Agent) Run() (string, error) {
-	inputChan := utils.InputChan
+	chatId, ok := a.ctx.Value(utils.ChatIDString).(string)
+	if !ok || chatId == "" {
+		return "", fmt.Errorf("chatId is not found in context")
+	}
+	inputChan := globalchannel.GetGlobalInputChannel(chatId)
 
 	for {
 		select {
 		case <-a.ctx.Done():
 			return "", a.ctx.Err()
-		case message := <-inputChan:
-			logging.Debug("收到消息: %s", message)
-			rp, err := a.HandleChat(a.ctx, message)
+		case msg := <-inputChan:
+			if msg == nil || msg.Content == "" {
+				continue
+			}
+			logging.Debug("收到消息: %s", msg.Content)
+			rp, err := a.HandleChat(a.ctx, msg.Content)
 			if err != nil {
 				logging.Error("处理消息失败: %v", err)
 			}
@@ -161,7 +168,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		}
 
 		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, tool.Function.Arguments)
-		dialogOutChan <- outStr + "\n"
+		dialogOutChan <- &globalchannel.Message{Content: outStr + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
 		logging.Info("%s", outStr)
 
 		str, err := functl.Execute(ctx, tool.Function.Arguments)
@@ -169,7 +176,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			outStr = fmt.Sprintf("工具%s执行失败: %v", toolname, err)
 			logging.Error("%s", outStr)
 			memory.AddToolMessage(chatId, tool.ID, outStr)
-			dialogOutChan <- outStr + "\n"
+			dialogOutChan <- &globalchannel.Message{Content: outStr + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
 
 			continue
 		}
@@ -177,7 +184,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		outStr = fmt.Sprintf("工具%s执行成功: %s", toolname, str)
 		logging.Info("%s", outStr)
 		memory.AddToolMessage(chatId, tool.ID, outStr)
-		dialogOutChan <- outStr + "\n"
+		dialogOutChan <- &globalchannel.Message{Content: outStr + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
 	}
 
 	if a.taskLoopTimes >= 0 {

@@ -33,7 +33,6 @@ const subchattable = `CREATE TABLE IF NOT EXISTS chat_subchat (
 const chatIDindex = `CREATE INDEX IF NOT EXISTS idx_chat_subchat_chatID ON chat_subchat(chatID)`
 const subChatIDindex = `CREATE INDEX IF NOT EXISTS idx_chat_subchat_subChatID ON chat_subchat(subChatID)`
 
-
 func (m *SQLMemory) InsertChatSubChat(chatID, subChatID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -56,6 +55,18 @@ func (m *SQLMemory) GenerateSubChatIDWithChatId(ChatID string) (string, error) {
 	logging.Info("生成子对话ID: %s, 归属对话ID: %s", subchatId, ChatID)
 	return subchatId, nil
 
+}
+
+// GeneratePlanRunIDWithChatID 为一次「计划执行实例」生成隔离用 ID（用于 memory/system prompt 等临时上下文）。
+// 注意：该 ID 不会创建新的 conversation，只会记录归属关系，便于调试/追踪。
+func (m *SQLMemory) GeneratePlanRunIDWithChatID(chatID string) (string, error) {
+	planRunID := fmt.Sprintf("planrun-%s", utils.GenerateChatID())
+	if err := m.InsertChatSubChat(chatID, planRunID); err != nil {
+		logging.Error("插入 planRunID 失败: %v", err)
+		return "", err
+	}
+	logging.Info("生成 planRunID: %s, 归属对话ID: %s", planRunID, chatID)
+	return planRunID, nil
 }
 
 // GetChatSubChat 获取子对话的归属关系

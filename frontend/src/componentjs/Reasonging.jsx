@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { GetReasoningMessage } from '../../wailsjs/go/main/App';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
 
@@ -8,6 +8,15 @@ import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
 export default function Reasoning({ conversationId = '' }) {
   const [reasoningMessages, setReasoningMessages] = useState([]);
   const messagesRef = useRef(null);
+  const [pinnedToBottom, setPinnedToBottom] = useState(true);
+
+  const handleScroll = useCallback(() => {
+    const el = messagesRef.current;
+    if (!el) return;
+    const thresholdPx = 24;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setPinnedToBottom(distanceToBottom <= thresholdPx);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,18 +75,19 @@ export default function Reasoning({ conversationId = '' }) {
     const container = messagesRef.current;
     if (!container) return;
 
+    if (!pinnedToBottom) return;
     const scrollId = requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
     });
 
     return () => cancelAnimationFrame(scrollId);
-  }, [reasoningMessages]);
+  }, [reasoningMessages, pinnedToBottom]);
 
   return (
     <div id={`reasoning_${conversationId}`} className="reasonings">
       <div className="reason__header">推理过程</div>
       <div className="reasoning__body">
-        <div className="reasoning" ref={messagesRef}>
+        <div className="reasoning" ref={messagesRef} onScroll={handleScroll}>
           {reasoningMessages &&
             reasoningMessages.map((rsm) => (
               <div key={`reasoning_${rsm.messageID}`} className="reasoning__message">

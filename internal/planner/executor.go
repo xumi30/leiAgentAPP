@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	globalchannel "leiAgent/internal"
+	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
@@ -113,13 +113,13 @@ func (p *Planning) Execute(ctx context.Context) error {
 		// 执行当前任务
 		if err := p.ExecuteStep(ctx, current); err != nil {
 			logging.Error("步骤 %s 执行失败: %v", p.Steps[current].Id, err)
-			dialogOutChan <- fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err)
+			dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err), Role: utils.MessageRoleAssistant, IsFinished: false}
 			memory.AddUserMessage(chatID, fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err))
 			// return fmt.Errorf("step %s failed: %v", p.Steps[current].Id, err)
 		}
 
 		logging.Info("步骤 %s 执行完成, 结果是: %v", p.Steps[current].Id, p.Steps[current].Result)
-		dialogOutChan <- fmt.Sprintf("步骤 %s %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Tool, p.Steps[current].Result)
+		dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("步骤 %s %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Tool, p.Steps[current].Result), Role: utils.MessageRoleAssistant, IsFinished: false}
 		memory.AddUserMessage(chatID, fmt.Sprintf("步骤 %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Result))
 		// 使用反向依赖图更新依赖当前任务的其他任务的入度
 		if dependentSteps, exists := reverseMap[p.Steps[current].Id]; exists {
@@ -129,7 +129,7 @@ func (p *Planning) Execute(ctx context.Context) error {
 				if p.Steps[depIndex].InDegree == 0 {
 					queue = append(queue, depIndex)
 					logging.Info("步骤 %s 所有依赖已完成，加入执行队列", p.Steps[depIndex].Id)
-					dialogOutChan <- fmt.Sprintf("步骤 %s %s 所有依赖已完成，加入执行队列\n", p.Steps[depIndex].Id, p.Steps[depIndex].Tool)
+					dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("步骤 %s %s 所有依赖已完成，加入执行队列\n", p.Steps[depIndex].Id, p.Steps[depIndex].Tool), Role: utils.MessageRoleAssistant, IsFinished: false}
 				}
 			}
 		}
@@ -141,15 +141,15 @@ func (p *Planning) Execute(ctx context.Context) error {
 		if step.Status != "completed" {
 			p.Status = "failed"
 			logging.Error("步骤 %s 未完成，状态: %s", step.Id, step.Status)
-			dialogOutChan <- utils.FinishString
-			dialogOutChan <- fmt.Sprintf("执行阶段小结：步骤 %s %s 未完成，状态: %s", step.Id, step.Tool, step.Status)
+			dialogOutChan <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+			dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("执行阶段小结：步骤 %s %s 未完成，状态: %s", step.Id, step.Tool, step.Status), Role: utils.MessageRoleAssistant, IsFinished: false}
 			//return fmt.Errorf("some Steps are not completed, possibly due to circular dependencies")
 		}
 	}
 
 	logging.Info("所有步骤尝试执行完成")
 	//logging.Info("计划执行成功,plan: %v", p)
-	dialogOutChan <- utils.FinishString
+	dialogOutChan <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
 	return nil
 }
 

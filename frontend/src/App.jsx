@@ -15,6 +15,7 @@ import {
   GetLLMThinkingDisabled,
   SetLLMThinkingDisabled,
 } from '../wailsjs/go/main/App';
+import { EventsOff, EventsOn } from '../wailsjs/runtime/runtime';
 
 const THINKING_LS_KEY = 'leiAgent.llmThinkingDisabled';
 const CONNECTION_POLL_MS = 45000;
@@ -37,6 +38,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState('');
   const [activeChatTitle, setActiveChatTitle] = useState('');
+  /** 助手流式输出进行中（按 chatID），用于侧栏列表显示加载态 */
+  const [streamingChatIds, setStreamingChatIds] = useState(() => new Set());
   const [memoDates, setMemoDates] = useState(() => new Set());
 
   const [thinkingDisabled, setThinkingDisabled] = useState(() => {
@@ -133,6 +136,35 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const onAppend = (message) => {
+      const cid = String(message?.chatID ?? '');
+      if (!cid) return;
+      setStreamingChatIds((prev) => {
+        if (prev.has(cid)) return prev;
+        const next = new Set(prev);
+        next.add(cid);
+        return next;
+      });
+    };
+    const onStreamEnd = (payload) => {
+      const cid = String(payload?.chatID ?? '');
+      if (!cid) return;
+      setStreamingChatIds((prev) => {
+        if (!prev.has(cid)) return prev;
+        const next = new Set(prev);
+        next.delete(cid);
+        return next;
+      });
+    };
+    EventsOn('dialogAppend', onAppend);
+    EventsOn('dialogStreamEnd', onStreamEnd);
+    return () => {
+      EventsOff('dialogAppend');
+      EventsOff('dialogStreamEnd');
+    };
+  }, []);
+
+  useEffect(() => {
     const onMemoSaved = () => {
       refreshMemoDates();
       setMemoOpen(true);
@@ -223,6 +255,7 @@ function App() {
       <DocLibraryModal
         open={docLibOpen}
         focusPath={docLibFocusPath}
+        activeChatId={activeChatId}
         onClose={() => {
           setDocLibOpen(false);
           setDocLibFocusPath(null);
@@ -233,7 +266,11 @@ function App() {
           className="main-content__sidebar-slot"
           style={{ width: `${leftWidth}px`, minWidth: '200px', maxWidth: '400px' }}
         >
-          <ConversationList memoDates={memoDates} refreshMemoDates={refreshMemoDates} />
+          <ConversationList
+            memoDates={memoDates}
+            refreshMemoDates={refreshMemoDates}
+            streamingChatIds={streamingChatIds}
+          />
         </div>
         <div className="resizer left-resizer" onMouseDown={(e) => handleMouseDown(e, 'left')} />
         <div className="main-content__dialog-slot">

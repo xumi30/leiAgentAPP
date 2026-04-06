@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	globalchannel "leiAgent/internal"
+	"leiAgent/internal/globalchannel"
 	gemini "leiAgent/internal/provider/Gemin"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/logging"
@@ -67,11 +67,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		skipDialog = true
 	}
 
-	skipPersist := false
-	if v, ok := ctx.Value(utils.SkipPersistAssistantRoundString).(bool); ok && v {
-		skipPersist = true
-	}
-
+	streamID := scanner.requestID
 	for scanner.Scan() {
 
 		var response openaistyle.ChatCompletionResponse
@@ -136,7 +132,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		if ok && content != "" {
 			fullContent.WriteString(content)
 			if !skipDialog {
-				dialogOutChan <- content
+				dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: content, Role: utils.MessageRoleAssistant, IsFinished: false}
 			}
 		}
 
@@ -145,7 +141,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		if reasoningContent != "" {
 			fullReasoningContent.WriteString(reasoningContent)
 			if !skipDialog {
-				reasoningOutChan <- reasoningContent
+				reasoningOutChan <- &globalchannel.Message{MessageID: streamID, Content: reasoningContent, Role: utils.MessageRoleReasoning, IsFinished: false}
 			}
 		}
 	}
@@ -168,12 +164,9 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		logging.Info("返回调用tools: %s", string(tlsJSON))
 	}
 	if !skipDialog {
-		if skipPersist {
-			dialogOutChan <- utils.FinishStringEphemeral
-		} else {
-			dialogOutChan <- utils.FinishString
-		}
-		reasoningOutChan <- utils.FinishString
+		// 回合收口统一靠 IsFinished，不再发送 FinishStringEphemeral
+		dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+		reasoningOutChan <- &globalchannel.Message{MessageID: streamID, Content: utils.FinishString, Role: utils.MessageRoleReasoning, IsFinished: true}
 	}
 	if lastUsage != nil {
 		logging.Info("流式响应结束 finish_reason=%q completion_tokens=%d prompt_tokens=%d total=%d 正文长度=%d 字符",
@@ -217,10 +210,8 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 		skipDialog = true
 	}
 
-	skipPersist := false
-	if v, ok := ctx.Value(utils.SkipPersistAssistantRoundString).(bool); ok && v {
-		skipPersist = true
-	}
+	// 非流式也用一个稳定的 streamID，便于 UI 聚合/收口
+	streamID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 
 	openaiResp, err := p.convertResponse(resp, info)
 	if err != nil {
@@ -255,13 +246,10 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	}
 	if !skipDialog {
 		if strings.TrimSpace(content) != "" {
-			dialogOutChan <- content + "\n"
+			dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: content + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
 		}
-		if skipPersist {
-			dialogOutChan <- utils.FinishStringEphemeral
-		} else {
-			dialogOutChan <- utils.FinishString
-		}
+		// 回合收口统一靠 IsFinished，不再发送 FinishStringEphemeral
+		dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
 	}
 
 	if len(tools) > 0 {

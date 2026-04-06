@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -11,11 +12,13 @@ import (
 	"time"
 
 	"leiAgent/dataoperation"
-	globalchannel "leiAgent/internal"
+
 	"leiAgent/internal/dispatcher"
 	"leiAgent/internal/doclib"
+	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/proxy"
+	"leiAgent/internal/tools/noveltool"
 	"leiAgent/logging"
 	"leiAgent/utils"
 
@@ -26,8 +29,9 @@ import (
 type App struct {
 	ctx context.Context
 
-	agentPool map[string]*dispatcher.Dispatcher
-	poolMutex sync.RWMutex
+	agentPool    map[string]*dispatcher.Dispatcher
+	poolLastUsed map[string]time.Time // 与 poolMutex 共用：最近一次 SwitchChat/dispatcher 命中时间，用于满池时 LRU 驱逐
+	poolMutex    sync.RWMutex
 }
 
 // NewApp creates a new App application struct
@@ -39,7 +43,12 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.agentPool = make(map[string]*dispatcher.Dispatcher)
+	a.poolLastUsed = make(map[string]time.Time)
 	a.ctx = ctx
+	// 必须先于其它包调用 sqlmemory.GetSqlInstance，否则 sync.Once 会锁在错误的默认库路径上
+	if dataoperation.GetSqlInstance() == nil {
+		logging.Error("启动时未能打开对话数据库 data/memory.db")
+	}
 }
 func (a *App) ListConversation() []map[string]interface{} {
 	// 模拟对话数据
@@ -73,16 +82,17 @@ func (a *App) GetConversation(chatID string) {
 	runtime.EventsEmit(a.ctx, "getConversation", conversation)
 }
 
-func (a *App) DeleteConversation(chatID string) {
+func (a *App) DeleteConversation(chatID string) error {
 	logging.Info("Deleting conversation	 with ID: %s", chatID)
 
 	err := dataoperation.DeleteConversation(chatID)
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "deleteConversationError", err.Error())
-		return
+		return err
 	}
 	logging.Info("Conversation with ID: %s deleted successfully", chatID)
 	runtime.EventsEmit(a.ctx, "deleteConversationSuccess", chatID)
+	return nil
 }
 
 func (a *App) UpdateConversationTitle(chatID, newTitle string) {
@@ -149,7 +159,14 @@ func (a *App) SendMessage(chatID, message, role string) {
 
 	// 仅用户消息进入 Dispatcher，避免助手/推理等内容若误走 SendMessage 时再次触发意图识别与死循环。
 	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
-		inputChan <- message
+		msg := &globalchannel.Message{
+			MessageID:  utils.GenerateMessageID(),
+			Content:    message,
+			Role:       utils.MessageRoleUser,
+			IsFinished: true,
+		}
+
+		inputChan <- msg
 	}
 	logging.Info("Sending message to conversation successfully")
 
@@ -210,6 +227,33 @@ func (a *App) GetReasoningMessage(chatID string) []map[string]interface{} {
 	return reasonings
 }
 
+// evictLRUDispatcherLocked 在 poolMutex 已持有时调用：驱逐最久未访问的会话 dispatcher（避免 map 随机迭代误杀正在跑的对话）。
+func (a *App) evictLRUDispatcherLocked() {
+	if len(a.agentPool) == 0 {
+		return
+	}
+	victim := ""
+	for k := range a.agentPool {
+		if victim == "" {
+			victim = k
+			continue
+		}
+		tk, tv := a.poolLastUsed[k], a.poolLastUsed[victim]
+		if tk.Before(tv) || (tk.Equal(tv) && k < victim) {
+			victim = k
+		}
+	}
+	if victim == "" {
+		return
+	}
+	logging.Info("agentPool is full, evicting LRU dispatcher chatID=%s", victim)
+	if oldDp, exists := a.agentPool[victim]; exists {
+		oldDp.Shutdown()
+		delete(a.agentPool, victim)
+		delete(a.poolLastUsed, victim)
+	}
+}
+
 func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 	a.poolMutex.Lock()
 	defer a.poolMutex.Unlock()
@@ -217,22 +261,14 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 	if a.agentPool == nil {
 		a.agentPool = make(map[string]*dispatcher.Dispatcher)
 	}
+	if a.poolLastUsed == nil {
+		a.poolLastUsed = make(map[string]time.Time)
+	}
 
 	dp, ok := a.agentPool[chatID]
 	if !ok {
 		if len(a.agentPool) >= 5 {
-			logging.Info("agentPool is full, cleaning up oldest agent...")
-			var oldestKey string
-			for k := range a.agentPool {
-				oldestKey = k
-				break
-			}
-			if oldestKey != "" {
-				if oldDp, exists := a.agentPool[oldestKey]; exists {
-					oldDp.Shutdown()
-					delete(a.agentPool, oldestKey)
-				}
-			}
+			a.evictLRUDispatcherLocked()
 		}
 
 		// 使用可取消的 context
@@ -255,6 +291,7 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
 	}
 
+	a.poolLastUsed[chatID] = time.Now()
 	logging.Info("Getting dispatcher for conversation with ChatID: %s %v", chatID, dp)
 	return dp
 }
@@ -283,11 +320,12 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 		outputChan = reasonningOutputChan
 	}
 
-	messageID := ""
-	content := ""
-	shouldGenerateNewID := true
-	// 流式首段到达时刻，作为入库 timestamp，避免仅用回合结束写入时间导致多条助手消息排序错乱
-	var streamStartTime time.Time
+	type streamBuf struct {
+		content   strings.Builder
+		startTime time.Time
+	}
+	// key: 发送方提供的 msg.MessageID（允许并发交错）
+	streams := make(map[string]*streamBuf)
 
 	emitDialogStreamEnd := func(mid string) {
 		if eventname != "dialogAppend" || mid == "" {
@@ -300,60 +338,65 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 	}
 
 	for {
-		if shouldGenerateNewID {
-			messageID = GenerateMessageID()
-			content = ""
-			streamStartTime = time.Time{}
-			shouldGenerateNewID = false
-		}
-
 		select {
-		case message, ok := <-outputChan:
+		case msg, ok := <-outputChan:
 			if !ok {
-				logging.Info("Output channel closed for messageid: %s", messageID)
-				emitDialogStreamEnd(messageID)
+				// channel 关闭时，尽力对未收口的流做收尾（不强制入库，避免半截内容污染）
+				for mid := range streams {
+					emitDialogStreamEnd(mid)
+				}
 				return
 			}
-			if message == "" {
-				logging.Info("Received empty message for chatID: %s, skipping...", chatID)
+			if msg == nil {
 				continue
 			}
 
-			if message == utils.FinishString || message == utils.FinishStringEphemeral {
-				// 流式回合可能只有 tool_calls、无可见文本；仍会收到 FinishString。
-				// FinishStringEphemeral：仅展示（如小说工具内部多轮），不写入对话 DB，也不进入后续 LLM 记忆。
-				ephemeral := message == utils.FinishStringEphemeral
-				if strings.TrimSpace(content) != "" && !ephemeral {
-					ts := streamStartTime
-					if ts.IsZero() {
-						ts = time.Now()
-					}
-					if err := dataoperation.SendMessageWithCreateTime(chatID, messageID, content, role, ts); err != nil {
-						logging.Error("Failed to save message: %v", err)
-					}
+			mid := strings.TrimSpace(msg.MessageID)
+			if mid == "" {
+				logging.Warn("Output message missing MessageID, skipping (role=%s chatID=%s)", role, chatID)
+				continue
+			}
+
+			buf, exists := streams[mid]
+			if !exists {
+				buf = &streamBuf{}
+				streams[mid] = buf
+			}
+			if buf.startTime.IsZero() {
+				buf.startTime = time.Now()
+			}
+			// 非结束分片：展示 + 累积
+			if !msg.IsFinished {
+				if strings.TrimSpace(msg.Content) == "" {
+					continue
 				}
-				emitDialogStreamEnd(messageID)
-				shouldGenerateNewID = true
+				buf.content.WriteString(msg.Content)
+				appendMessage := map[string]interface{}{
+					"chatID":    chatID,
+					"messageID": mid,
+					"content":   msg.Content,
+					"role":      role,
+					// 与入库 startTime 一致，便于前端在重载前列顺序/展示时间
+					"timestamp": buf.startTime.UTC().Format(time.RFC3339Nano),
+				}
+				runtime.EventsEmit(a.ctx, eventname, appendMessage)
 				continue
 			}
 
-			if streamStartTime.IsZero() {
-				streamStartTime = time.Now()
+			// 结束包：以 IsFinished 为准收口；不再依赖固定词
+			final := buf.content.String()
+			if strings.TrimSpace(final) != "" {
+				if err := dataoperation.SendMessageWithCreateTime(chatID, mid, final, role, buf.startTime); err != nil {
+					logging.Error("Failed to save message: %v", err)
+				}
 			}
-			content = fmt.Sprintf("%s%s", content, message)
-			appendMessage := map[string]interface{}{
-				"chatID":    chatID,
-				"messageID": messageID,
-				"content":   message,
-				"role":      role,
-				// 与入库 streamStartTime 一致，便于前端在重载前列顺序/展示时间
-				"timestamp": streamStartTime.UTC().Format(time.RFC3339Nano),
-			}
-
-			runtime.EventsEmit(a.ctx, eventname, appendMessage)
+			emitDialogStreamEnd(mid)
+			delete(streams, mid)
 
 		case <-ctx.Done():
-			emitDialogStreamEnd(messageID)
+			for mid := range streams {
+				emitDialogStreamEnd(mid)
+			}
 			logging.Info("App context cancelled for chat: %s", chatID)
 			return
 		}
@@ -511,4 +554,66 @@ func (a *App) LibraryWorkspaceDelete(rel string, recursive bool) error {
 // LibraryWorkspaceRename 在文库根内移动或重命名。
 func (a *App) LibraryWorkspaceRename(oldRel string, newRel string) error {
 	return doclib.WorkspaceRename(oldRel, newRel)
+}
+
+// GetNovelResumeOutputDir 根据文库中选中的相对路径，若对应长篇小说工程（含 chapter_*.md）则返回用于 novel_longform 的 output_dir（相对 workspace），否则返回空字符串。
+func (a *App) GetNovelResumeOutputDir(entryRel string, isDir bool) (string, error) {
+	root, err := doclib.LibraryRootAbs()
+	if err != nil {
+		return "", err
+	}
+	return noveltool.ResumeOutputDirForLibraryEntry(root, entryRel, isDir)
+}
+
+// ResumeNovelLongform 从文库触发长篇小说续写：在后台以 resume=true 调用 novel_longform，模型流式输出写入当前会话。chapterCount<=0 时使用工具默认批次数。
+func (a *App) ResumeNovelLongform(chatID, outputDirRel, premise, authorNotes string, chapterCount int) error {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return fmt.Errorf("请先选择或新建一个对话，续写将关联到当前会话")
+	}
+	root, err := doclib.LibraryRootAbs()
+	if err != nil {
+		return err
+	}
+	outRel := filepath.ToSlash(strings.TrimSpace(outputDirRel))
+	if outRel == "" || !noveltool.CanResumeAtWorkspaceRel(root, outRel) {
+		return fmt.Errorf("当前路径不是可续写的长篇目录（需含 chapter_*.md）")
+	}
+	premise = strings.TrimSpace(premise)
+	if premise == "" {
+		premise = "请根据已有章节、大纲与小说圣经续写后续内容，保持人物与伏笔一致。"
+	}
+	args := map[string]interface{}{
+		"premise":    premise,
+		"output_dir": outRel,
+		"resume":     true,
+	}
+	if chapterCount > 0 {
+		args["chapter_count"] = chapterCount
+	}
+	if notes := strings.TrimSpace(authorNotes); notes != "" {
+		args["author_notes"] = notes
+	}
+	payload, err := json.Marshal(args)
+	if err != nil {
+		return err
+	}
+
+	a.dispatcher(chatID)
+	tool := noveltool.New()
+	go func() {
+		ctx := context.WithValue(context.Background(), utils.ChatIDString, chatID)
+		ch := globalchannel.GetGlobalDialogOutChannel(chatID)
+		ch <- &globalchannel.Message{Content: fmt.Sprintf("[文库] 已启动长篇小说续写（%s），请稍候…\n", outRel), Role: utils.MessageRoleAssistant, IsFinished: false}
+		ch <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+		result, runErr := tool.Execute(ctx, string(payload))
+		if runErr != nil {
+			ch <- &globalchannel.Message{Content: fmt.Sprintf("[文库] 续写失败：%v\n", runErr), Role: utils.MessageRoleAssistant, IsFinished: false}
+			ch <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+			return
+		}
+		ch <- &globalchannel.Message{Content: fmt.Sprintf("[文库] 续写完成：%s\n", strings.TrimSpace(result)), Role: utils.MessageRoleAssistant, IsFinished: false}
+		ch <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+	}()
+	return nil
 }

@@ -125,6 +125,7 @@ export default function Dialog() {
     const [memoPresetDraftLabel, setMemoPresetDraftLabel] = useState('');
     const [memoPresetDraftText, setMemoPresetDraftText] = useState('');
     const messagesRef = useRef(null);
+    const [pinnedToBottom, setPinnedToBottom] = useState(true);
     const inputRef = useRef(null);
     const hintTimerRef = useRef(null);
 
@@ -279,6 +280,7 @@ export default function Dialog() {
             const { conversationId } = event.detail;
             setChatId(conversationId);
             setStreamPulse(null);
+            setPinnedToBottom(true);
             setSheets([{ id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 }]);
             setActiveSheetId(MAIN_SHEET_ID);
             setClassifyHint('');
@@ -299,12 +301,21 @@ export default function Dialog() {
         };
     }, []);
 
-    // 消息变化或流式输出时，将列表滚到底部（layout 后执行，减少闪动）
+    const handleMessagesScroll = useCallback(() => {
+        const el = messagesRef.current;
+        if (!el) return;
+        const thresholdPx = 24;
+        const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        setPinnedToBottom(distanceToBottom <= thresholdPx);
+    }, []);
+
+    // 消息变化或流式输出时：仅当用户停留在底部时才自动滚到底部（layout 后执行，减少闪动）
     useLayoutEffect(() => {
         const container = messagesRef.current;
         if (!container) return;
+        if (!pinnedToBottom) return;
         container.scrollTop = container.scrollHeight;
-    }, [messages, streamPulse, visibleMessages]);
+    }, [messages, streamPulse, visibleMessages, pinnedToBottom]);
 
     useEffect(() => {
         const handleMessage = (message) => {
@@ -550,6 +561,7 @@ export default function Dialog() {
             <div
                 className="dialog__messages"
                 ref={messagesRef}
+                onScroll={handleMessagesScroll}
                 onMouseDown={onMessagesMemoDismissMouseDown}
             >
                 {memoListMessages.map((msg) => {

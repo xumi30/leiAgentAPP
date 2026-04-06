@@ -1,8 +1,19 @@
-/* 对话列表容器 */
-.conversation-list {
+/* 占满侧栏在 main-content 内的高度，避免用 100vh 估算导致底部被 main-content overflow 裁切 */
+.conversation-list-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.conversation-list-panel > .conv-cal,
+.conversation-list-panel > .new-conversation-btn {
+  flex-shrink: 0;
+}
+
+/* 对话列表容器：在面板内占剩余高度并在此滚动 */
+.conversation-list {
   padding: 8px 10px;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(20px) saturate(180%);
@@ -10,7 +21,8 @@
   border-radius: 14px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   border: 1px solid var(--apple-separator);
-  max-height: calc(100vh - 320px);
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -35,13 +47,45 @@
   filter: brightness(0.98);
 }
 
+/* 菜单绝对定位在本项内，需整项叠在下方列表项之上，否则后续兄弟会盖住菜单 */
+.conversation_item--menu-open {
+  z-index: 20;
+}
+
+/* 标题区：可选加载圈 + 标题 */
+.conversation_item__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* 流式生成中：浅色转圈（仅在有输出流时显示） */
+.conversation-item__busy {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: rgba(0, 0, 0, 0.38);
+  border-radius: 50%;
+  animation: conversation-busy-spin 0.75s linear infinite;
+}
+
+@keyframes conversation-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* 对话名称 */
 .conversation_name {
   font-weight: 500;
   font-size: 15px;
   letter-spacing: 0.3px;
-  flex-grow: 1;
-  margin-right: 8px;
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -85,7 +129,7 @@
   min-width: 140px;
   overflow: visible;
   border: 1px solid var(--apple-separator);
-  z-index: 1000; /* 添加这行，确保菜单显示在其他元素之上 */
+  z-index: 15;
 }
 
 
@@ -166,4 +210,116 @@
   border-radius: 12px;
   background: rgba(242, 242, 247, 0.9);
   border: 1px dashed var(--apple-separator-opaque);
+}
+
+/* 应用内弹层（替代 window.confirm / window.prompt，Wails WebView 常不显示原生框） */
+.conversation-delete-overlay,
+.conversation-rename-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.conversation-delete-dialog,
+.conversation-rename-dialog {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px 22px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--apple-separator);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+  color: var(--apple-label);
+}
+
+.conversation-rename-dialog__label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--apple-secondary);
+}
+
+.conversation-rename-dialog__input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  font-size: 15px;
+  border-radius: 10px;
+  border: 1px solid var(--apple-separator);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--apple-label);
+}
+
+.conversation-rename-dialog__input:focus {
+  outline: none;
+  border-color: rgba(0, 122, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.conversation-rename-dialog__btn-primary {
+  background: linear-gradient(180deg, #0a84ff 0%, #007aff 100%);
+  border-color: rgba(0, 122, 255, 0.45);
+  color: #fff;
+}
+
+.conversation-rename-dialog__btn-primary:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.conversation-rename-dialog__btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.conversation-delete-dialog__title {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.conversation-delete-dialog__desc {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--apple-secondary);
+}
+
+.conversation-delete-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.conversation-delete-dialog__btn {
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 10px;
+  border: 1px solid var(--apple-separator);
+  background: rgba(242, 242, 247, 0.9);
+  color: var(--apple-label);
+  cursor: pointer;
+}
+
+.conversation-delete-dialog__btn:hover {
+  filter: brightness(0.97);
+}
+
+.conversation-delete-dialog__btn--danger {
+  background: #ff3b30;
+  border-color: rgba(255, 59, 48, 0.35);
+  color: #fff;
+}
+
+.conversation-delete-dialog__btn--danger:hover {
+  filter: brightness(1.05);
 }

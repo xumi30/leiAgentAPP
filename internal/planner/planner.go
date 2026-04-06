@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"leiAgent/dataoperation"
-	globalchannel "leiAgent/internal"
+	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
@@ -43,7 +43,13 @@ PLAN FORMAT:
 
 ----------------------------------------
 RULES:
-Fist of all: MUST output json following the exact schema above, or it will be rejected。Start with the { and end with the } and nothing else.
+First of all: you MUST output a single JSON object following the exact schema above, or it will be rejected. Start with "{" and end with "}" and nothing else.
+JSON STRICTNESS (hard requirements):
+- Use double quotes for ALL keys and ALL string values
+- No trailing commas
+- "depends_on" MUST be an array (use [] when empty)
+- Do not output markdown code fences (triple backticks), e.g. code blocks
+- Do not output any text before/after the JSON
 1. Each step must have a unique "id"
 2. "depends_on" must reference existing step ids
 3. If a step has no dependencies, use []
@@ -166,40 +172,62 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 
 	memory.AddUserMessage(chatId, string(planjson))
 
-	response, err := plannerProxy.Communicate(ctx)
-	if err != nil {
-		logging.Error("规划请求失败: %v", err)
-		dialogOutChan <- "规划失败: " + err.Error()
-		return nil, err
+	const maxPlanParseAttempts = 3
+	var lastParseErr error
+	for attempt := 1; attempt <= maxPlanParseAttempts; attempt++ {
+		response, err := plannerProxy.Communicate(ctx)
+		if err != nil {
+			logging.Error("规划请求失败: %v", err)
+			dialogOutChan <- &globalchannel.Message{Content: "规划失败: " + err.Error(), Role: utils.MessageRoleAssistant, IsFinished: false}
+			return nil, err
+		}
+
+		logging.Info("Agent 处理消息完成（plan attempt=%d），返回结果: %s", attempt, response.Content)
+
+		rawJSON := utils.PrepareLLMJSON(response.Content)
+
+		var probe struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(rawJSON), &probe); err == nil && strings.TrimSpace(probe.Error) != "" {
+			return nil, fmt.Errorf("需要先确认：%s", probe.Error)
+		}
+
+		var planner Planning
+		if err := json.Unmarshal([]byte(rawJSON), &planner); err != nil {
+			lastParseErr = err
+			logging.Error("解析规划结果失败（plan attempt=%d）: %v", attempt, err)
+
+			if attempt < maxPlanParseAttempts {
+				// 把错误原因带回给模型，让它修正 JSON 后“只输出 JSON”重试一次。
+				preview := rawJSON
+				if len(preview) > 2000 {
+					preview = preview[:2000] + "...(truncated)"
+				}
+				memory.AddUserMessage(chatId, fmt.Sprintf(
+					"你上一次输出不是合法 JSON，解析错误：%v。\n请严格按系统提示的 schema 重新输出，注意：所有 key 必须有双引号、不要尾逗号、depends_on 必须是数组（空用 []）、不要输出 ```json 等任何额外文本。\n上一版输出（节选）：\n%s",
+					err, preview,
+				))
+				continue
+			}
+			break
+		}
+
+		if len(planner.Steps) == 0 {
+			return nil, fmt.Errorf("模型未生成任何执行步骤；若你只是在讨论或补充信息，可用较短说法触发模式重判，或把任务写得更具体后再发")
+		}
+		planner.Status = "pending"
+		if err := planner.saveTodb(chatId); err != nil {
+			logging.Error("保存规划到数据库失败: %v", err)
+			return nil, err
+		}
+		return &planner, nil
 	}
 
-	logging.Info("Agent 处理消息完成，返回结果: %s", response.Content)
-
-	rawJSON := utils.PrepareLLMJSON(response.Content)
-
-	var probe struct {
-		Error string `json:"error"`
+	if lastParseErr != nil {
+		return nil, fmt.Errorf("规划结果不是合法 JSON（已自动重试 %d 次）：%v", maxPlanParseAttempts, lastParseErr)
 	}
-	if err := json.Unmarshal([]byte(rawJSON), &probe); err == nil && strings.TrimSpace(probe.Error) != "" {
-		return nil, fmt.Errorf("需要先确认：%s", probe.Error)
-	}
-
-	var planner Planning
-	err = json.Unmarshal([]byte(rawJSON), &planner)
-	if err != nil {
-		logging.Error("解析规划结果失败: %v", err)
-		return nil, fmt.Errorf("规划结果不是合法 JSON，请重试或换一种描述方式：%v", err)
-	}
-	if len(planner.Steps) == 0 {
-		return nil, fmt.Errorf("模型未生成任何执行步骤；若你只是在讨论或补充信息，可用较短说法触发模式重判，或把任务写得更具体后再发")
-	}
-	planner.Status = "pending"
-	err = planner.saveTodb(chatId)
-	if err != nil {
-		logging.Error("保存规划到数据库失败: %v", err)
-		return nil, err
-	}
-	return &planner, nil
+	return nil, fmt.Errorf("生成计划失败：未知错误")
 }
 
 func (p *Planning) saveTodb(chatId string) error {

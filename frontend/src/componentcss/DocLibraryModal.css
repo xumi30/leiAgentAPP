@@ -71,6 +71,10 @@
   color: #3a3a3c;
 }
 
+.doclib-hint__sub {
+  color: #8e8e93;
+}
+
 .doclib-sheet__header {
   display: flex;
   align-items: center;
@@ -397,6 +401,15 @@
   background: rgba(255, 59, 48, 0.16);
 }
 
+.doclib-fs-btn--novel {
+  background: rgba(88, 86, 214, 0.12);
+  color: #5856d6;
+}
+
+.doclib-fs-btn--novel:hover:not(:disabled) {
+  background: rgba(88, 86, 214, 0.2);
+}
+
 .doclib-list__icon {
   margin-right: 6px;
 }
@@ -432,4 +445,170 @@
   resize: vertical;
   background: rgba(255, 255, 255, 0.98);
   color: #1d1d1f;
+}
+
+/* 应用内弹层（替代 window.prompt / window.confirm，Wails WebView 常不显示原生框） */
+.doclib-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.doclib-modal-dialog {
+  width: 100%;
+  max-width: 400px;
+  padding: 20px 22px;
+  border-radius: 14px;
+  background: rgba(252, 252, 254, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.22);
+  color: #1d1d1f;
+}
+
+.doclib-modal-dialog--wide {
+  max-width: 480px;
+}
+
+.doclib-modal-dialog__title {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.doclib-modal-dialog__label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6e6e73;
+}
+
+.doclib-modal-dialog__input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  font-size: 15px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: #1d1d1f;
+}
+
+.doclib-modal-dialog__input:focus {
+  outline: none;
+  border-color: rgba(0, 122, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.doclib-modal-dialog__input--narrow {
+  max-width: 120px;
+  margin-bottom: 14px;
+}
+
+.doclib-modal-dialog__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: #1d1d1f;
+  resize: vertical;
+  min-height: 72px;
+  font-family: inherit;
+}
+
+.doclib-modal-dialog__textarea:focus {
+  outline: none;
+  border-color: rgba(0, 122, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.doclib-modal-dialog__textarea--short {
+  min-height: 52px;
+}
+
+.doclib-modal-dialog__desc {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #6e6e73;
+}
+
+.doclib-modal-dialog__desc--tight {
+  margin-bottom: 14px;
+}
+
+.doclib-modal-dialog__code {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  word-break: break-all;
+}
+
+.doclib-modal-dialog__desc-note {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #8e8e93;
+}
+
+.doclib-modal-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.doclib-modal-dialog__btn {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.04);
+  color: #007aff;
+  cursor: pointer;
+}
+
+.doclib-modal-dialog__btn:hover:not(:disabled) {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.doclib-modal-dialog__btn--primary {
+  background: linear-gradient(180deg, #0a84ff 0%, #007aff 100%);
+  border-color: rgba(0, 122, 255, 0.45);
+  color: #fff;
+}
+
+.doclib-modal-dialog__btn--primary:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.doclib-modal-dialog__btn--primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.doclib-modal-dialog__btn--danger {
+  background: rgba(255, 59, 48, 0.12);
+  border-color: rgba(255, 59, 48, 0.35);
+  color: #c62828;
+}
+
+.doclib-modal-dialog__btn--danger:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.2);
 }

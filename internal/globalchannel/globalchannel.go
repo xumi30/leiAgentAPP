@@ -2,7 +2,6 @@ package globalchannel
 
 import (
 	"leiAgent/logging"
-	"leiAgent/utils"
 	"sync"
 	"time"
 )
@@ -16,7 +15,7 @@ type ChannelConfig struct {
 
 // ChannelInfo channel 信息
 type ChannelInfo struct {
-	Channel    chan string
+	Channel    chan *Message
 	LastAccess time.Time
 	IsClosed   bool
 }
@@ -34,6 +33,13 @@ var defaultConfig = ChannelConfig{
 	BufferSize:      100,
 	CleanupInterval: 5 * time.Minute,
 	MaxIdleTime:     30 * time.Minute,
+}
+
+type Message struct {
+	MessageID  string
+	Content    string
+	Role       string
+	IsFinished bool
 }
 
 // 全局单例实例
@@ -55,12 +61,12 @@ func NewChannelManager(config ChannelConfig) *ChannelManager {
 }
 
 // GetChannel 获取指定chatID和topic的channel，不存在时返回默认channel
-func GetChannel(chatID, topic string) (chan string, error) {
+func GetChannel(chatID, topic string) (chan *Message, error) {
 	return globalManager.GetChannel(chatID, topic)
 }
 
 // RegisterChannel 注册或获取指定chatID和topic的channel
-func RegisterChannel(chatID, topic string) (chan string, error) {
+func RegisterChannel(chatID, topic string) (chan *Message, error) {
 	return globalManager.RegisterChannel(chatID, topic)
 }
 
@@ -75,9 +81,9 @@ func GetChannelSize() int {
 }
 
 // GetChannel 获取指定chatID和topic的channel
-func (m *ChannelManager) GetChannel(chatID, topic string) (chan string, error) {
+func (m *ChannelManager) GetChannel(chatID, topic string) (chan *Message, error) {
 	if chatID == "" || topic == "" {
-		return utils.OutputChan, nil
+		return nil, nil
 	}
 
 	m.mutex.RLock()
@@ -90,13 +96,13 @@ func (m *ChannelManager) GetChannel(chatID, topic string) (chan string, error) {
 			return info.Channel, nil
 		}
 	}
-	return utils.OutputChan, nil
+	return nil, nil
 }
 
 // RegisterChannel 注册或获取指定chatID和topic的channel
-func (m *ChannelManager) RegisterChannel(chatID, topic string) (chan string, error) {
+func (m *ChannelManager) RegisterChannel(chatID, topic string) (chan *Message, error) {
 	if chatID == "" || topic == "" {
-		return utils.OutputChan, nil
+		return nil, nil
 	}
 
 	m.mutex.Lock()
@@ -115,7 +121,7 @@ func (m *ChannelManager) RegisterChannel(chatID, topic string) (chan string, err
 
 	// 创建新的channel
 	info := &ChannelInfo{
-		Channel:    make(chan string, m.config.BufferSize),
+		Channel:    make(chan *Message, m.config.BufferSize),
 		LastAccess: time.Now(),
 		IsClosed:   false,
 	}
@@ -221,44 +227,44 @@ func Shutdown() {
 }
 
 // 向后兼容的旧接口（避免破坏现有代码）
-func GetGlobalChannel(chatID, topic string) chan string {
+func GetGlobalChannel(chatID, topic string) chan *Message {
 	ch, _ := GetChannel(chatID, topic)
 	return ch
 }
 
-func RegisterGlobalChannel(chatID, topic string) chan string {
+func RegisterGlobalChannel(chatID, topic string) chan *Message {
 	ch, _ := RegisterChannel(chatID, topic)
 	return ch
 }
 
-func RegisterGlobalInputChannel(chatID string) chan string {
+func RegisterGlobalInputChannel(chatID string) chan *Message {
 	ch, _ := RegisterChannel(chatID, "inputchannel")
 	logging.Info("RegisterGlobalInputChannel: %s", chatID)
 	return ch
 }
 
-func RegisterGlobalDialogOutChannel(chatID string) chan string {
+func RegisterGlobalDialogOutChannel(chatID string) chan *Message {
 	ch, _ := RegisterChannel(chatID, "DialogOut")
 	return ch
 }
 
-func RegisterGlobalReasonOutChannel(chatID string) chan string {
+func RegisterGlobalReasonOutChannel(chatID string) chan *Message {
 	ch, _ := RegisterChannel(chatID, "ReasonOut")
 	return ch
 }
 
-func GetGlobalInputChannel(chatID string) chan string {
+func GetGlobalInputChannel(chatID string) chan *Message {
 	ch, _ := GetChannel(chatID, "inputchannel")
 	logging.Info("GetGlobalInputChannel: %s", chatID)
 	return ch
 }
 
-func GetGlobalDialogOutChannel(chatID string) chan string {
+func GetGlobalDialogOutChannel(chatID string) chan *Message {
 	ch, _ := GetChannel(chatID, "DialogOut")
 	return ch
 }
 
-func GetGlobalReasonOutChannel(chatID string) chan string {
+func GetGlobalReasonOutChannel(chatID string) chan *Message {
 	ch, _ := GetChannel(chatID, "ReasonOut")
 	return ch
 }

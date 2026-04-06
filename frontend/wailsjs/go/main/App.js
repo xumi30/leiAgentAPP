@@ -74,6 +74,10 @@ export function GetMessagesEvent(arg1) {
   return window['go']['main']['App']['GetMessagesEvent'](arg1);
 }
 
+export function GetNovelResumeOutputDir(arg1, arg2) {
+  return window['go']['main']['App']['GetNovelResumeOutputDir'](arg1, arg2);
+}
+
 export function GetReasoningMessage(arg1) {
   return window['go']['main']['App']['GetReasoningMessage'](arg1);
 }
@@ -108,6 +112,10 @@ export function ListLibraryWorkspaceDir(arg1) {
 
 export function ReadDocumentForViewer(arg1) {
   return window['go']['main']['App']['ReadDocumentForViewer'](arg1);
+}
+
+export function ResumeNovelLongform(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['ResumeNovelLongform'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function RevealDocumentInExplorer(arg1) {

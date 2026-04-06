@@ -39,6 +39,8 @@ export function GetMessagesByMessageID(arg1:string):Promise<void>;
 
 export function GetMessagesEvent(arg1:string):Promise<void>;
 
+export function GetNovelResumeOutputDir(arg1:string,arg2:boolean):Promise<string>;
+
 export function GetReasoningMessage(arg1:string):Promise<Array<Record<string, any>>>;
 
 export function LibraryWorkspaceDelete(arg1:string,arg2:boolean):Promise<void>;
@@ -56,6 +58,8 @@ export function ListDocumentLibrary():Promise<Array<Record<string, any>>>;
 export function ListLibraryWorkspaceDir(arg1:string):Promise<Record<string, any>>;
 
 export function ReadDocumentForViewer(arg1:string):Promise<Record<string, any>>;
+
+export function ResumeNovelLongform(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number):Promise<void>;
 
 export function RevealDocumentInExplorer(arg1:string):Promise<void>;
 

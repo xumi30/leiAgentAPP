@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SwitchChat, ListConversation, DeleteConversation, UpdateConversationTitle } from '../../wailsjs/go/main/App';
 import { getRandomMacaronColor } from './Constant';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
@@ -18,9 +18,18 @@ function conversationMatchesCalendarDay(conv, ymd) {
     return false;
 }
 
-export default function ConversationList({ memoDates = new Set(), refreshMemoDates }) {
+export default function ConversationList({
+    memoDates = new Set(),
+    refreshMemoDates,
+    streamingChatIds = new Set(),
+}) {
     const [openMenuId, setOpenMenuId] = useState(null);
-    const menuRef = useRef(null);
+    /** Wails/WebView 常不显示 window.confirm，用应用内弹层代替 */
+    const [deletePending, setDeletePending] = useState(null);
+    /** 替代 window.prompt 的改名弹层 */
+    const [renameTarget, setRenameTarget] = useState(null);
+    const [renameTitle, setRenameTitle] = useState('');
+    const renameInputRef = useRef(null);
     const [cons, setCons] = useState([]);
     const [selectedDate, setSelectedDate] = useState(null);
 
@@ -29,19 +38,44 @@ export default function ConversationList({ memoDates = new Set(), refreshMemoDat
         return cons.filter((c) => conversationMatchesCalendarDay(c, selectedDate));
     }, [cons, selectedDate]);
 
-    // 点击外部关闭菜单
+    // 不在 document 上监听 click：Wails/WebView 里可能与 React 委托顺序冲突，先关闭菜单导致菜单项 onClick 永远不触发。
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (menuRef.current && !menuRef.current.contains(event.target)) {
-                setOpenMenuId(null);
-            }
+        if (renameTarget) {
+            const onKey = (e) => {
+                if (e.key === 'Escape') {
+                    setRenameTarget(null);
+                    setRenameTitle('');
+                }
+            };
+            window.addEventListener('keydown', onKey);
+            return () => window.removeEventListener('keydown', onKey);
+        }
+        if (deletePending) {
+            const onKey = (e) => {
+                if (e.key === 'Escape') setDeletePending(null);
+            };
+            window.addEventListener('keydown', onKey);
+            return () => window.removeEventListener('keydown', onKey);
+        }
+        if (openMenuId == null) return;
+        const onKey = (e) => {
+            if (e.key === 'Escape') setOpenMenuId(null);
         };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [openMenuId, deletePending, renameTarget]);
 
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
+    useEffect(() => {
+        if (!renameTarget) return;
+        const id = window.setTimeout(() => {
+            const el = renameInputRef.current;
+            if (el) {
+                el.focus();
+                el.select();
+            }
+        }, 0);
+        return () => window.clearTimeout(id);
+    }, [renameTarget]);
 
     //加载对话列表
     useEffect(() => {
@@ -80,17 +114,44 @@ export default function ConversationList({ memoDates = new Set(), refreshMemoDat
             alert("更新失败: " + error);
         };
 
-        const handleDeleteSuccess = () => {
-            window.location.reload();
+        const handleDeleteSuccess = async () => {
+            try {
+                const conversations = await ListConversation();
+                setCons(conversations);
+                if (conversations.length > 0) {
+                    const first = conversations[0];
+                    SwitchChat(String(first.id ?? ''));
+                    window.dispatchEvent(
+                        new CustomEvent('conversationChanged', {
+                            detail: { conversationId: String(first.id ?? ''), title: first.title ?? '' },
+                        }),
+                    );
+                } else {
+                    SwitchChat('');
+                    window.dispatchEvent(
+                        new CustomEvent('conversationChanged', {
+                            detail: { conversationId: '', title: '' },
+                        }),
+                    );
+                }
+            } catch (err) {
+                console.error('刷新对话列表失败:', err);
+            }
+        };
+
+        const handleDeleteError = (error) => {
+            alert("删除失败: " + error);
         };
 
         EventsOn("deleteConversationSuccess", handleDeleteSuccess);
+        EventsOn("deleteConversationError", handleDeleteError);
         EventsOn("getConversationError", handleConversationListError);
         EventsOn("getConversation", handleConversationListUpdated);
         EventsOn("updateConversationError", handleConversationListError);
 
         return () => {
             EventsOff("deleteConversationSuccess");
+            EventsOff("deleteConversationError");
             EventsOff("getConversationError");
             EventsOff("getConversation");
             EventsOff("updateConversationError");
@@ -100,23 +161,16 @@ export default function ConversationList({ memoDates = new Set(), refreshMemoDat
 
     const handleButtonClick = (e, conversationId) => {
         e.stopPropagation();
-        setOpenMenuId(openMenuId === conversationId ? null : conversationId);
+        const idKey = conversationId != null ? String(conversationId) : '';
+        setOpenMenuId(openMenuId === idKey ? null : idKey);
     };
 
-    const handleMenuAction = (action, conversation) => {
+    const handleMenuAction = async (action, conversation) => {
         if (action === 'edit') {
-            const newTitle = prompt("请输入新的对话名称:", conversation.title);
-            if (newTitle) {
-                UpdateConversationTitle(conversation.id, newTitle)
-
-                console.log(`修改对话 ${conversation.id} 的名称为:`, newTitle);
-            }
+            setRenameTarget(conversation);
+            setRenameTitle(String(conversation.title ?? ''));
         } else if (action === 'delete') {
-            if (window.confirm("确定要删除这个对话吗?")) {
-                DeleteConversation(conversation.id)
-                console.log(`删除对话:`, conversation);
-                setCons((prevCons) => prevCons.filter((con) => con.id !== conversation.id));
-            }
+            setDeletePending(conversation);
         } else if (action === 'share') {
             // 这里可以添加分享对话的逻辑
             console.log(`分享对话:`, conversation);
@@ -138,21 +192,53 @@ export default function ConversationList({ memoDates = new Set(), refreshMemoDat
         // AddConversation(newConversationName)
     };
 
+    const closeRenameModal = () => {
+        setRenameTarget(null);
+        setRenameTitle('');
+    };
+
+    const runRenameSave = () => {
+        if (!renameTarget) return;
+        const trimmed = renameTitle.trim();
+        if (!trimmed) return;
+        const chatID = renameTarget.id != null ? String(renameTarget.id) : '';
+        UpdateConversationTitle(chatID, trimmed);
+        setCons((prev) =>
+            prev.map((c) => (String(c.id ?? '') === chatID ? { ...c, title: trimmed } : c)),
+        );
+        console.log(`修改对话 ${chatID} 的名称为:`, trimmed);
+        closeRenameModal();
+    };
+
+    const runConfirmedDelete = async (conversation) => {
+        setDeletePending(null);
+        const chatID = conversation.id != null ? String(conversation.id) : '';
+        try {
+            await DeleteConversation(chatID);
+            setCons((prevCons) => prevCons.filter((con) => String(con.id ?? '') !== chatID));
+            console.log('删除对话:', conversation);
+        } catch (err) {
+            console.error('删除对话失败:', err);
+            alert('删除失败: ' + (err?.message || String(err)));
+        }
+    };
+
     const switchDialog = (conversationId, titleHint) => {
-        SwitchChat(conversationId);
+        const idStr = conversationId != null ? String(conversationId) : '';
+        SwitchChat(idStr);
         const title =
             titleHint !== undefined && titleHint !== null
                 ? titleHint
-                : cons.find((c) => c.id === conversationId)?.title ?? '';
+                : cons.find((c) => String(c.id ?? '') === idStr)?.title ?? '';
         window.dispatchEvent(
-            new CustomEvent('conversationChanged', { detail: { conversationId, title } }),
+            new CustomEvent('conversationChanged', { detail: { conversationId: idStr, title } }),
         );
     };
 
 
 
     return (
-        <div>
+        <div className="conversation-list-panel">
             <ConversationCalendar
                 memoDates={memoDates}
                 selectedDate={selectedDate}
@@ -164,32 +250,138 @@ export default function ConversationList({ memoDates = new Set(), refreshMemoDat
                 <span className="btn-text">新建对话</span>
             </button>
 
+            {renameTarget ? (
+                <div
+                    className="conversation-rename-overlay"
+                    role="presentation"
+                    onMouseDown={(e) => {
+                        if (e.target === e.currentTarget) closeRenameModal();
+                    }}
+                >
+                    <div
+                        className="conversation-rename-dialog"
+                        role="dialog"
+                        aria-labelledby="conversation-rename-title"
+                        aria-modal="true"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <p id="conversation-rename-title" className="conversation-delete-dialog__title">
+                            修改名称
+                        </p>
+                        <label className="conversation-rename-dialog__label" htmlFor="conversation-rename-input">
+                            对话名称
+                        </label>
+                        <input
+                            id="conversation-rename-input"
+                            ref={renameInputRef}
+                            className="conversation-rename-dialog__input"
+                            type="text"
+                            value={renameTitle}
+                            onChange={(e) => setRenameTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    runRenameSave();
+                                }
+                            }}
+                            autoComplete="off"
+                        />
+                        <div className="conversation-delete-dialog__actions">
+                            <button type="button" className="conversation-delete-dialog__btn" onClick={closeRenameModal}>
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                className="conversation-delete-dialog__btn conversation-rename-dialog__btn-primary"
+                                disabled={!renameTitle.trim()}
+                                onClick={runRenameSave}
+                            >
+                                保存
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {deletePending ? (
+                <div
+                    className="conversation-delete-overlay"
+                    role="presentation"
+                    onMouseDown={(e) => {
+                        if (e.target === e.currentTarget) setDeletePending(null);
+                    }}
+                >
+                    <div
+                        className="conversation-delete-dialog"
+                        role="alertdialog"
+                        aria-labelledby="conversation-delete-title"
+                        aria-describedby="conversation-delete-desc"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <p id="conversation-delete-title" className="conversation-delete-dialog__title">
+                            删除对话
+                        </p>
+                        <p id="conversation-delete-desc" className="conversation-delete-dialog__desc">
+                            确定要删除「{deletePending.title ?? '未命名对话'}」吗？此操作无法撤销。
+                        </p>
+                        <div className="conversation-delete-dialog__actions">
+                            <button type="button" className="conversation-delete-dialog__btn" onClick={() => setDeletePending(null)}>
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                className="conversation-delete-dialog__btn conversation-delete-dialog__btn--danger"
+                                onClick={() => void runConfirmedDelete(deletePending)}
+                            >
+                                删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
             <div className="conversation-list">
                 <div className="conversation">
                     {displayedCons && displayedCons.length > 0 &&
                         displayedCons.map((conversation) => {
-                        const colors = getRandomMacaronColor(conversation.id);
-                        const isMenuOpen = openMenuId === conversation.id;
+                        const rowId = conversation.id != null ? String(conversation.id) : '';
+                        const colors = getRandomMacaronColor(rowId);
+                        const isMenuOpen = openMenuId === rowId;
+                        const isStreaming = rowId && streamingChatIds.has(rowId);
 
                         return (
-                            <div key={conversation.id}
-                                className="conversation_item"
-                                id={conversation.id}
-                                onClick={() => switchDialog(conversation.id, conversation.title)}
+                            <div key={rowId}
+                                className={`conversation_item${isMenuOpen ? ' conversation_item--menu-open' : ''}`}
+                                id={rowId}
+                                onClick={(e) => {
+                                    if (e.target.closest?.('.conversation-menu')) return;
+                                    setOpenMenuId(null);
+                                    switchDialog(rowId, conversation.title);
+                                }}
                                 style={{
                                     backgroundColor: colors.bg,
                                     color: colors.text,
                                     position: 'relative'
                                 }}>
-                                <span className="conversation_name">
-                                    {conversation.title}
-                                </span>
+                                <div className="conversation_item__main">
+                                    {isStreaming ? (
+                                        <span
+                                            className="conversation-item__busy"
+                                            role="status"
+                                            aria-label="该对话仍有回复生成中"
+                                        />
+                                    ) : null}
+                                    <span className="conversation_name">
+                                        {conversation.title}
+                                    </span>
+                                </div>
                                 <div style={{ position: 'relative' }}>
                                     <button
+                                        type="button"
                                         className="conversation_button"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleButtonClick(e, conversation.id)
+                                            handleButtonClick(e, rowId)
                                         }}
                                     >
                                         ...
@@ -197,7 +389,11 @@ export default function ConversationList({ memoDates = new Set(), refreshMemoDat
 
                                 </div>
                                 {isMenuOpen && (
-                                    <div className="conversation-menu" ref={menuRef}>
+                                    <div
+                                        className="conversation-menu"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
                                         <div onClick={() => handleMenuAction('edit', conversation)}>✏️ 修改名称</div>
                                         <div onClick={() => handleMenuAction('delete', conversation)}>🗑️ 删除对话</div>
                                     </div>

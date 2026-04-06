@@ -24,11 +24,7 @@ const (
 	// 与 ChatIDString（用于 memory 取消息，常为临时 id）分离。
 	DialogOutChatIDString = "dialogOutChatID"
 
-	// SkipPersistAssistantRoundString 为 true 时，本轮助手输出只推 UI，结束符用 FinishStringEphemeral，不写 SQLite 对话表。
-	SkipPersistAssistantRoundString = "skipPersistAssistantRound"
-
 	FinishString          = "[DONE940720]"
-	FinishStringEphemeral = "[DONE940721]"
 	IntentKey        = "intentkey"
 	ChatModeString   = "CHAT"
 	PlanModeString   = "PLAN"

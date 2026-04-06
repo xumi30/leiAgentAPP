@@ -379,7 +379,6 @@ func (t *LongFormNovelTool) oneShotLLM(ctx context.Context, uiChatID, memSuffix,
 	sub := context.WithValue(ctx, utils.ChatIDString, memID)
 	sub = context.WithValue(sub, utils.DialogOutChatIDString, uiChatID)
 	sub = context.WithValue(sub, utils.IsStreamString, true)
-	sub = context.WithValue(sub, utils.SkipPersistAssistantRoundString, true)
 
 	p, err := proxy.NewProxy(nil)
 	if err != nil {
@@ -744,4 +743,41 @@ func truncateRunes(s string, max int) string {
 		return s
 	}
 	return string(r[:max]) + "…"
+}
+
+// ResumeOutputDirForLibraryEntry 若选中项落在长篇小说工程目录内（该目录含至少一章 chapter_*.md），返回相对 workspace 的 output_dir，供 novel_longform 的 resume；否则返回空字符串（非错误）。
+func ResumeOutputDirForLibraryEntry(libraryRootAbs, entryRel string, isDir bool) (string, error) {
+	entryRel = filepath.ToSlash(strings.TrimSpace(entryRel))
+	if entryRel == "" {
+		return "", nil
+	}
+	abs, err := doclib.SafeLibraryAbs(libraryRootAbs, entryRel)
+	if err != nil {
+		return "", err
+	}
+	dirAbs := abs
+	if !isDir {
+		dirAbs = filepath.Dir(abs)
+	}
+	if findLastChapterIndex(dirAbs) < 1 {
+		return "", nil
+	}
+	relOut, err := filepath.Rel(libraryRootAbs, dirAbs)
+	if err != nil {
+		return "", err
+	}
+	return filepath.ToSlash(relOut), nil
+}
+
+// CanResumeAtWorkspaceRel 判断 workspace 相对目录下是否已有 chapter_*.md，可供 novel_longform resume。
+func CanResumeAtWorkspaceRel(libraryRootAbs, outputDirRel string) bool {
+	outputDirRel = filepath.ToSlash(strings.TrimSpace(outputDirRel))
+	if outputDirRel == "" {
+		return false
+	}
+	abs, err := doclib.SafeLibraryAbs(libraryRootAbs, outputDirRel)
+	if err != nil {
+		return false
+	}
+	return findLastChapterIndex(abs) >= 1
 }

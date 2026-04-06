@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"leiAgent/logging"
 	"math/rand"
 	"os"
 	"strings"
@@ -199,4 +200,16 @@ func PrepareLLMJSON(raw string) string {
 func GenerateChatID() string {
 	chatID := fmt.Sprintf("%d%03d", time.Now().UnixMilli(), rand.Intn(1000))
 	return chatID
+}
+
+func GenerateMessageID() string {
+
+	messageID := fmt.Sprintf("%d%06d", time.Now().UnixMilli(), rand.Intn(100000))
+	logging.Info("Generated messageID: %s", messageID)
+	return messageID
+}
+
+type message struct {
+	messageID string
+	content   string
 }
