@@ -21,9 +21,10 @@ func (t *MemoWriteTool) Name() string {
 
 func (t *MemoWriteTool) Description() string {
 	return `Write or update the user's in-app memo / diary file (Markdown). Same storage as the 备忘录 panel (data/memo.md).
+Each note in the UI is one top-level "# Title" line; use ##/### inside content for subheadings (like Apple Notes body).
 Use for travel plans, todos, notes the user asked to keep. Prefer structured Markdown (headings, lists).
 For the sidebar calendar "memo dot", include a date like YYYY-MM-DD in section_title or in the first lines of content (or use default append heading which includes the date).
-mode "append" adds a new dated section; "replace" overwrites the whole memo (use only when the user explicitly wants to clear or replace everything).
+mode "append" adds a new note with "# section_title"; "replace" overwrites the whole memo (use only when the user explicitly wants to clear or replace everything).
 Args JSON: {"content": "...", "mode": "append"|"replace", "section_title": "optional heading for append"}`
 }
 

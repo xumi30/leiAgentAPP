@@ -10,6 +10,14 @@ export function AppenAgentMessageToFrontRole(arg1, arg2, arg3) {
   return window['go']['main']['App']['AppenAgentMessageToFrontRole'](arg1, arg2, arg3);
 }
 
+export function AppendMemoMarkdown(arg1) {
+  return window['go']['main']['App']['AppendMemoMarkdown'](arg1);
+}
+
+export function ComposeMemoWithLLM(arg1, arg2) {
+  return window['go']['main']['App']['ComposeMemoWithLLM'](arg1, arg2);
+}
+
 export function DeleteConversation(arg1) {
   return window['go']['main']['App']['DeleteConversation'](arg1);
 }
@@ -48,6 +56,10 @@ export function GetMemoContent() {
 
 export function GetMemoFilePath() {
   return window['go']['main']['App']['GetMemoFilePath']();
+}
+
+export function GetMemoReferencedMessageIDs() {
+  return window['go']['main']['App']['GetMemoReferencedMessageIDs']();
 }
 
 export function GetMessages(arg1) {

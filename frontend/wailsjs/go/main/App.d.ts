@@ -7,6 +7,10 @@ export function AddConversation(arg1:string):Promise<string>;
 
 export function AppenAgentMessageToFrontRole(arg1:context.Context,arg2:string,arg3:string):Promise<void>;
 
+export function AppendMemoMarkdown(arg1:string):Promise<void>;
+
+export function ComposeMemoWithLLM(arg1:string,arg2:string):Promise<string>;
+
 export function DeleteConversation(arg1:string):Promise<void>;
 
 export function GetConversation(arg1:string):Promise<void>;
@@ -26,6 +30,8 @@ export function GetMemoCalendarDates():Promise<Array<string>>;
 export function GetMemoContent():Promise<string>;
 
 export function GetMemoFilePath():Promise<string>;
+
+export function GetMemoReferencedMessageIDs():Promise<Array<string>>;
 
 export function GetMessages(arg1:string):Promise<Array<Record<string, any>>>;
 

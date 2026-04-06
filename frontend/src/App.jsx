@@ -133,6 +133,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const onMemoSaved = () => {
+      refreshMemoDates();
+      setMemoOpen(true);
+    };
+    window.addEventListener('memoSaved', onMemoSaved);
+    return () => window.removeEventListener('memoSaved', onMemoSaved);
+  }, [refreshMemoDates]);
+
+  useEffect(() => {
     /** @param {Event} e */
     const onOpenDoc = (e) => {
       const ce = /** @type {CustomEvent<{ path?: string }>} */ (e);
@@ -210,13 +219,7 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         onSaved={refreshConnection}
       />
-      <MemoModal
-        open={memoOpen}
-        onClose={() => setMemoOpen(false)}
-        activeChatId={activeChatId}
-        activeChatTitle={activeChatTitle}
-        onMemoSaved={refreshMemoDates}
-      />
+      <MemoModal open={memoOpen} onClose={() => setMemoOpen(false)} onMemoSaved={refreshMemoDates} />
       <DocLibraryModal
         open={docLibOpen}
         focusPath={docLibFocusPath}

@@ -406,14 +406,29 @@ func (a *App) SaveLLMConfigText(content string) (string, error) {
 	return proxy.SaveLLMConfigText(content)
 }
 
-// GetMemoContent 读取备忘录全文（与 memo_write 工具共用 data/memo.md）。
+// GetMemoContent 读取备忘录全文（主存 SQLite；与 memo_write 工具共用同一存储）。
 func (a *App) GetMemoContent() (string, error) {
 	return memo.Read()
 }
 
-// GetMemoFilePath 返回备忘录文件绝对路径。
+// GetMemoFilePath 返回备忘录 SQLite 库路径（主存储）；旧版 data/memo.md 会在首次打开时自动导入。
 func (a *App) GetMemoFilePath() string {
-	return memo.Path()
+	return memo.StoreDBPath()
+}
+
+// GetMemoReferencedMessageIDs 返回已在备忘录中标记过的对话 messageID（<!--leiAgent-memo-src:...-->）。
+func (a *App) GetMemoReferencedMessageIDs() ([]string, error) {
+	return memo.ReferencedMessageIDs()
+}
+
+// ComposeMemoWithLLM 根据对话摘录与用户提示调用 LLM 生成一条完整 Markdown 备忘。
+func (a *App) ComposeMemoWithLLM(draftMarkdown, userHint string) (string, error) {
+	return proxy.GenerateMemoFromDraft(context.Background(), draftMarkdown, userHint)
+}
+
+// AppendMemoMarkdown 在末尾追加一条或多条 # 分节（由 LLM 或界面生成）。
+func (a *App) AppendMemoMarkdown(block string) error {
+	return memo.AppendMarkdownRaw(block)
 }
 
 // SaveMemoContent 保存备忘录全文（覆盖写入）。

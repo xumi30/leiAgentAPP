@@ -134,6 +134,13 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
     scroll-behavior: smooth;  /* 添加这行以实现平滑滚动 */
+    transition: padding 0.24s ease;
+}
+
+/* 生成备忘展开：消息区略微内收（避免过大位移） */
+.dialog--memo-strip-open .dialog__messages {
+    padding-left: 24px;
+    padding-right: 24px;
 }
 
 
@@ -154,6 +161,404 @@
     align-items: flex-end;
     gap: 10px;
     max-width: 100%;
+}
+
+/* 紧贴在输入框下方：左侧工具栏（可扩展多按钮）+ 备忘确认 */
+.dialog__memo-strip {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-top: 4px;
+    padding-top: 2px;
+}
+
+.dialog__memo-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+.dialog__memo-pill {
+    flex-shrink: 0;
+    border: none;
+    padding: 5px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--apple-blue);
+    background: var(--apple-tint);
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.dialog__memo-pill:hover {
+    background: rgba(0, 122, 255, 0.16);
+}
+
+.dialog__memo-pill:active {
+    transform: scale(0.98);
+}
+
+.dialog__memo-pill:disabled {
+    opacity: 0.5;
+    cursor: default;
+    transform: none;
+}
+
+/* 消息左侧标记、底部操作共用：浅色底可见的复选框 */
+.dialog__memo-checkbox-native {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin: 0;
+    box-sizing: border-box;
+    border: 2px solid rgba(60, 60, 67, 0.38);
+    border-radius: 4px;
+    background: var(--apple-surface-solid);
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background 0.15s ease;
+}
+
+.dialog__memo-checkbox-native:hover:not(:disabled) {
+    border-color: var(--apple-blue);
+}
+
+.dialog__memo-checkbox-native:checked {
+    border-color: var(--apple-blue);
+    background-color: var(--apple-blue);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10' fill='none'%3E%3Cpath d='M0.75 5.25 4.5 9 11.25 1.5' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 11px 9px;
+}
+
+.dialog__memo-checkbox-native:focus-visible {
+    outline: 2px solid var(--apple-blue);
+    outline-offset: 2px;
+}
+
+.dialog__memo-checkbox-native:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.dialog__memo-compose {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0 0;
+}
+
+.dialog__memo-compose--busy {
+    opacity: 0.65;
+    pointer-events: none;
+}
+
+.dialog__memo-compose-lead {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--apple-secondary);
+}
+
+/* 在提示词输入框上方展开的一排快捷标签 */
+.dialog__memo-preset-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding-bottom: 2px;
+    animation: dialog-memo-preset-rise 0.22s ease-out;
+}
+
+@keyframes dialog-memo-preset-rise {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dialog__memo-preset-bar__label {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--apple-tertiary);
+    text-transform: uppercase;
+}
+
+.dialog__memo-preset-chip {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 4px 10px;
+    font-size: 11px;
+    line-height: 1.3;
+    font-family: inherit;
+    color: var(--apple-secondary);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid var(--apple-separator);
+    border-radius: 999px;
+    cursor: pointer;
+    transition:
+        background 0.12s ease,
+        border-color 0.12s ease,
+        color 0.12s ease;
+}
+
+.dialog__memo-preset-chip:hover:not(:disabled) {
+    color: var(--apple-label);
+    border-color: rgba(0, 122, 255, 0.28);
+    background: rgba(0, 122, 255, 0.08);
+}
+
+.dialog__memo-preset-chip:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.dialog__memo-preset-chip-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    vertical-align: middle;
+    max-width: 100%;
+}
+
+.dialog__memo-preset-chip-del {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    font-family: inherit;
+    color: var(--apple-tertiary);
+    background: rgba(120, 120, 128, 0.1);
+    cursor: pointer;
+    opacity: 0.55;
+    transition:
+        opacity 0.12s ease,
+        color 0.12s ease,
+        background 0.12s ease;
+}
+
+.dialog__memo-preset-chip-wrap:hover .dialog__memo-preset-chip-del {
+    opacity: 1;
+    color: #b71c1c;
+    background: rgba(198, 40, 40, 0.12);
+}
+
+.dialog__memo-preset-chip-del:hover:not(:disabled) {
+    opacity: 1 !important;
+    color: #b71c1c;
+    background: rgba(198, 40, 40, 0.18);
+}
+
+.dialog__memo-preset-chip-del:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.dialog__memo-preset-add {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: 1px dashed rgba(120, 120, 128, 0.32);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.5);
+    color: var(--apple-tertiary);
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1;
+    font-family: inherit;
+    cursor: pointer;
+    transition:
+        border-color 0.12s ease,
+        color 0.12s ease,
+        background 0.12s ease;
+}
+
+.dialog__memo-preset-add:hover:not(:disabled) {
+    border-color: rgba(0, 122, 255, 0.35);
+    color: var(--apple-blue);
+    background: rgba(0, 122, 255, 0.07);
+}
+
+.dialog__memo-preset-add:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.dialog__memo-preset-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+    margin: 0 0 2px;
+    border-radius: 8px;
+    background: rgba(252, 252, 254, 0.96);
+    border: 1px solid var(--apple-separator);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    animation: dialog-memo-preset-rise 0.2s ease-out;
+}
+
+.dialog__memo-preset-editor__row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dialog__memo-preset-editor__label {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    color: var(--apple-label);
+    border: 1px solid var(--apple-separator);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.85);
+    outline: none;
+}
+
+.dialog__memo-preset-editor__label:focus {
+    border-color: rgba(0, 122, 255, 0.35);
+}
+
+.dialog__memo-preset-editor__text {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 44px;
+    max-height: 120px;
+    padding: 6px 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    font-family: inherit;
+    color: var(--apple-label);
+    border: 1px solid var(--apple-separator);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.85);
+    resize: vertical;
+    outline: none;
+}
+
+.dialog__memo-preset-editor__text:focus {
+    border-color: rgba(0, 122, 255, 0.35);
+}
+
+.dialog__memo-preset-editor__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.dialog__memo-preset-editor__btn {
+    margin: 0;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--apple-secondary);
+    background: var(--apple-fill);
+    border: 1px solid var(--apple-separator);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.dialog__memo-preset-editor__btn:hover {
+    background: rgba(120, 120, 128, 0.16);
+}
+
+.dialog__memo-preset-editor__btn--primary {
+    color: #fff;
+    background: var(--apple-blue);
+    border-color: transparent;
+}
+
+.dialog__memo-preset-editor__btn--primary:hover {
+    background: var(--apple-blue-hover);
+}
+
+.dialog__memo-compose-input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 40px;
+    max-height: 100px;
+    padding: 6px 10px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--apple-secondary);
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid var(--apple-separator);
+    border-radius: 8px;
+    resize: vertical;
+    font-family: inherit;
+    outline: none;
+}
+
+.dialog__memo-compose-input:focus {
+    border-color: rgba(0, 122, 255, 0.35);
+    color: var(--apple-label);
+}
+
+.dialog__memo-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.dialog__memo-write-btn {
+    flex-shrink: 0;
+    border: none;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--apple-blue);
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.dialog__memo-write-btn:hover:not(:disabled) {
+    background: var(--apple-blue-hover);
+}
+
+.dialog__memo-write-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.dialog__memo-write-btn--secondary {
+    background: var(--apple-fill);
+    color: var(--apple-label);
+}
+
+.dialog__memo-write-btn--secondary:hover:not(:disabled) {
+    background: rgba(120, 120, 128, 0.18);
 }
 
 /* 停止：默认不占位，出现后与发送同高对齐 */
@@ -278,6 +683,40 @@
     flex-direction: column;
     min-width: 0;
     max-width: 100%;
+}
+
+.dialogmessage--memo-pick {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.dialogmessage__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.dialogmessage__memo-pick {
+    flex-shrink: 0;
+    padding-top: 10px;
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+}
+
+.dialogmessage_user.dialogmessage--memo-pick {
+    /* 勾选框与用户头像同侧（右侧），与助手侧「头像旁」对称 */
+    flex-direction: row-reverse;
+}
+
+.dialogmessage_user.dialogmessage--memo-pick .dialogmessage__body {
+    align-items: flex-end;
+}
+
+.dialogmessage_assistant.dialogmessage--memo-pick .dialogmessage__body {
+    align-items: flex-start;
 }
 
 .dialogmessage_user {
