@@ -15,67 +15,200 @@ import (
 	"leiAgent/utils"
 )
 
-const (
-	PlannerPromotion = `You are a task planner for an execution engine.
+const PlannerPromotion = `
+You are a task planner for a DAG execution engine.
 
 Your job is to convert a user goal into a structured execution plan.
 
-The plan MUST be a valid json object following the exact schema below.
+The output MUST be a JSON object that can be directly deserialized into predefined Go structs.
 
-You MUST NOT execute any tools.
+You MUST NOT execute tools.
 You MUST NOT explain anything.
-You MUST ONLY output json.
+You MUST ONLY output JSON.
 
 ----------------------------------------
-PLAN FORMAT:
+STRICT JSON SCHEMA (MUST FOLLOW EXACTLY):
 
 {
   "goal": "string",
+  "status": "pending",
+  "retry_count": 0,
   "steps": [
     {
-      "id": "string",
+      "id": "step_1",
       "tool": "string",
-      "depends_on": ["string"],
-      "input": { }
+      "depends_on": ["step_x"],
+      "input": {
+        "param_name": {
+          "ref_step_id": "string",
+          "ref_step_out_field": "string",
+          "step_input_value": any
+        }
+      },
+      "status": "pending",
+      "error": "",
+      "indegree": 0
     }
   ]
 }
 
 ----------------------------------------
-RULES:
-First of all: you MUST output a single JSON object following the exact schema above, or it will be rejected. Start with "{" and end with "}" and nothing else.
-JSON STRICTNESS (hard requirements):
-- Use double quotes for ALL keys and ALL string values
-- No trailing commas
-- "depends_on" MUST be an array (use [] when empty)
-- Do not output markdown code fences (triple backticks), e.g. code blocks
-- Do not output any text before/after the JSON
-1. Each step must have a unique "id"
-2. "depends_on" must reference existing step ids
-3. If a step has no dependencies, use []
-4. Use only the provided tools
-5. Maximize parallel execution where possible
-6. Do NOT create circular dependencies
-7. Keep the plan minimal but complete
+JSON STRICTNESS (HARD REQUIREMENTS):
+
+- Output ONLY a JSON object
+- MUST start with "{" and end with "}"
+- Use double quotes for ALL keys and string values
+- NO trailing commas
+- NO markdown
+- NO explanations
+- Strings MUST NOT contain raw line breaks, use \\n
 
 ----------------------------------------
-INPUT REFERENCES:
+PLAN RULES:
 
-To use output from previous Steps, use:
+1. Each step MUST have a unique "id" (step_1, step_2, ...)
+2. "depends_on" MUST reference valid step IDs
+3. If no dependency, use []
+4. NO circular dependencies
+5. Maximize parallel execution where possible
+6. Keep plan minimal but complete
 
-{ "ref": "<step_id>.output" }
+----------------------------------------
+INPUT STRUCTURE (CRITICAL):
 
-Example:
+Each input parameter MUST follow:
+
 {
-  "input": {
-    "data": {"ref": "step_1.output"}
+  "param": {
+    "ref_step_id": "",
+    "ref_step_out_field": "",
+    "step_input_value": value
   }
 }
-IMPORTANT: 
-when we failed during some steps and when we retry to plan, keep the result of successful steps as input for next steps, and try to complete the goal as much as possible.
-SO we don't need to retry to execute all the steps, we can just retry the failed steps.
-Keep you are super smart, you can understand the context and the goal, and try to complete the goal with more efficiency.
 
+----------------------------------------
+INPUT RULES (STRICT):
+
+### CASE 1: Direct value
+- Use when value is static
+
+{
+  "query": {
+    "ref_step_id": "",
+    "ref_step_out_field": "",
+    "step_input_value": "weather in Hangzhou"
+  }
+}
+
+### CASE 2: Reference previous step output
+
+{
+  "latitude": {
+    "ref_step_id": "step_1",
+    "ref_step_out_field": "latitude",
+    "step_input_value": null
+  }
+}
+
+STRICT RULES:
+
+- MUST use ref_step_id if data comes from another step
+- MUST set step_input_value = null in this case
+- MUST include that step in depends_on
+
+- NEVER mix:
+  ref_step_id != "" AND step_input_value != null ❌
+
+----------------------------------------
+DEPENDENCY COMPLETENESS (CRITICAL):
+
+- If a step logically requires upstream data,
+  it MUST:
+
+  1. include it in depends_on
+  2. reference it in input
+
+- Example:
+  Calculating time MUST depend on current time
+
+- NEVER omit required inputs
+
+----------------------------------------
+OUTPUT FIELD RESTRICTIONS (CRITICAL):
+
+- ref_step_out_field MUST be a SIMPLE top-level field
+
+- DO NOT use:
+  - nested paths (a.b.c)
+  - array indexing ([0], [1])
+
+- If complex data is needed:
+  pass the entire object instead
+
+----------------------------------------
+NO TEMPLATE STRINGS (CRITICAL):
+
+- DO NOT generate strings like:
+  {{step_1.xxx}} or any placeholders
+
+- DO NOT embed step outputs inside strings
+
+- ALL cross-step data MUST use structured inputValue
+
+----------------------------------------
+STRUCTURED DATA ONLY:
+
+- If combining multiple data sources:
+  DO NOT build formatted strings
+
+- Instead, pass structured JSON:
+
+Example:
+
+"content": {
+  "ref_step_id": "",
+  "ref_step_out_field": "",
+  "step_input_value": {
+    "date": {
+      "ref_step_id": "step_2",
+      "ref_step_out_field": "calculated_time"
+    },
+    "weather": {
+      "ref_step_id": "step_4",
+      "ref_step_out_field": "forecast"
+    }
+  }
+}
+
+----------------------------------------
+TOOL RESPONSIBILITY (VERY IMPORTANT):
+
+- Planner MUST NOT:
+  - format text
+  - generate markdown
+  - produce final user content
+
+- Planner MUST:
+  - define data flow
+  - connect tool outputs
+
+- Tools are responsible for rendering and formatting
+
+----------------------------------------
+DAG CONSISTENCY:
+
+- indegree MUST equal len(depends_on)
+- Every ref_step_id MUST exist
+- Every dependency MUST be resolvable
+
+----------------------------------------
+RETRY-AWARE PLANNING:
+
+If previous execution context exists:
+
+- DO NOT recreate successful steps
+- Reuse their outputs via ref_step_id
+- ONLY replan failed steps
 
 ----------------------------------------
 AVAILABLE TOOLS:
@@ -83,33 +216,25 @@ AVAILABLE TOOLS:
 {{TOOL_LIST}}
 
 ----------------------------------------
-OUTPUT REQUIREMENTS:
+FINAL SANITY CHECK (MANDATORY):
 
-- Output MUST be valid json
-- Inside any string value, never use real line breaks; use \n (backslash + letter n) in the JSON text instead
-- Do NOT include markdown
-- Do NOT include comments
-- Do NOT include extra text
+Before output, verify:
 
-If you cannot produce a valid plan yet (need clarification), output ONLY:
+1. JSON is valid
+2. No template placeholders exist
+3. All dependencies are correct
+4. No missing required inputs
+5. indegree is correct
 
-{ "error": "your question to the user in their language" }
+----------------------------------------
+IF CLARIFICATION IS NEEDED:
 
-In that case do not include "goal" or "steps". For a runnable plan, never use the "error" key.
+Output ONLY:
+
+{ "error": "your question" }
+
+DO NOT include goal or steps in that case.
 `
-
-	// PlanSummarySystemPrompt 在计划执行结束后，将结果 JSON 转为用户可读总结
-	PlanSummarySystemPrompt = `You summarize a completed multi-step plan execution for the end user.
-
-Input context contains JSON with "goal", "steps" (id, tool, status, result, error fields), and plan status.
-
-Rules:
-- Write in the same language as the user's goal when you can infer it.
-- Use Markdown: headings and bullet lists are encouraged.
-- Cover: what they asked for; what each step did and whether it succeeded; key outcomes (summarize large results, do not paste huge blobs).
-- End with overall outcome (full success / partial / failed) and short next-step suggestions if helpful.
-- Do not repeat the full raw JSON.`
-)
 
 type Planning struct {
 	Goal       string `json:"goal"`
@@ -120,21 +245,20 @@ type Planning struct {
 }
 
 type Step struct {
-	Id        string                 `json:"id"`
-	Tool      string                 `json:"tool"`
-	Input     map[string]interface{} `json:"input"`
-	DependsOn []string               `json:"depends_on"`
-	Result    interface{}            `json:"result,omitempty"`
-	Status    string                 `json:"status,omitempty"` // "pending", "running", "completed", "failed"
-	Error     string                 `json:"error,omitempty"`
-	InDegree  int                    `json:"indegree,omitempty"` // 依赖任务数
+	Id        string                `json:"id"`
+	Tool      string                `json:"tool"`
+	Input     map[string]inputValue `json:"input"`
+	DependsOn []string              `json:"depends_on"`
+	Result    interface{}           `json:"result,omitempty"`
+	Status    string                `json:"status,omitempty"` // "pending", "running", "completed", "failed"
+	Error     string                `json:"error,omitempty"`
+	InDegree  int                   `json:"indegree,omitempty"` // 依赖任务数
 }
 
-func NewPlanner(goal string) *Planning {
-	return &Planning{
-		Goal:       goal, // 使用 Goal 而不是 goal
-		RetryCount: 6,    // 设置默认重试次数为 10 次
-	}
+type inputValue struct {
+	RefStepID       string      `json:"ref_step_id"`        // 引用步骤的ID,例如 "step_1",如果不要引用,则为空字符串
+	RefStepOutField string      `json:"ref_step_out_field"` // 引用步骤的输出字段,例如 "latitude",如果不要引用,则为空字符串
+	StepInputValue  interface{} `json:"step_input_value"`   // 引用步骤的输出值,在执行步骤时填充.如果不需要引用,则为空值。也可作为输入值直接传入下一步骤的输入。
 }
 
 func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning, error) {
@@ -144,7 +268,6 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		logging.Error("无法从 context 中获取 chatId")
 		return nil, errors.New("chatId not found in context")
 	}
-	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatId)
 
 	ctx = context.WithValue(ctx, utils.IsPlanningString, true)
 
@@ -178,7 +301,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		response, err := plannerProxy.Communicate(ctx)
 		if err != nil {
 			logging.Error("规划请求失败: %v", err)
-			dialogOutChan <- &globalchannel.Message{Content: "规划失败: " + err.Error(), Role: utils.MessageRoleAssistant, IsFinished: false}
+			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("规划请求失败: %v", err.Error()))
 			return nil, err
 		}
 
@@ -197,15 +320,13 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		if err := json.Unmarshal([]byte(rawJSON), &planner); err != nil {
 			lastParseErr = err
 			logging.Error("解析规划结果失败（plan attempt=%d）: %v", attempt, err)
-
+			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("规划结果不是合法 JSON（已自动重试 %d 次）：%v", attempt, err))
 			if attempt < maxPlanParseAttempts {
 				// 把错误原因带回给模型，让它修正 JSON 后“只输出 JSON”重试一次。
 				preview := rawJSON
-				if len(preview) > 2000 {
-					preview = preview[:2000] + "...(truncated)"
-				}
+
 				memory.AddUserMessage(chatId, fmt.Sprintf(
-					"你上一次输出不是合法 JSON，解析错误：%v。\n请严格按系统提示的 schema 重新输出，注意：所有 key 必须有双引号、不要尾逗号、depends_on 必须是数组（空用 []）、不要输出 ```json 等任何额外文本。\n上一版输出（节选）：\n%s",
+					"你上一次输出不是合法 JSON，解析错误：%v。\n请严格按系统提示的 schema 重新输出，注意：所有 key 必须有双引号、不要尾逗号、depends_on 必须是数组（空用 []）、不要输出 ```json 等任何额外文本。\n上一版：\n%s",
 					err, preview,
 				))
 				continue
@@ -214,6 +335,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		}
 
 		if len(planner.Steps) == 0 {
+			globalchannel.SendAssitantMessageOnce(ctx, "你没有生成任何执行步骤，请重新规划")
 			return nil, fmt.Errorf("模型未生成任何执行步骤；若你只是在讨论或补充信息，可用较短说法触发模式重判，或把任务写得更具体后再发")
 		}
 		planner.Status = "pending"
@@ -221,6 +343,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 			logging.Error("保存规划到数据库失败: %v", err)
 			return nil, err
 		}
+
 		return &planner, nil
 	}
 

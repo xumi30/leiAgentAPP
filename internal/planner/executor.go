@@ -5,11 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"leiAgent/internal/globalchannel"
-	"leiAgent/internal/memory"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
-	"leiAgent/utils"
-	"strings"
 )
 
 func (p *Planning) DoExe(ctx context.Context) (string, error) {
@@ -19,11 +16,9 @@ func (p *Planning) DoExe(ctx context.Context) (string, error) {
 	err := p.Execute(ctx)
 	if err != nil {
 		logging.Error("Execute failed: %v", err)
-		p.Status = "failed"
-		// 即使执行失败，也继续处理已成功步骤的结果
+		return "", err
 	}
 
-	// 预处理所有Result字段
 	for i := range p.Steps {
 		if p.Steps[i].Result != nil {
 			// 处理Result为字符串的情况
@@ -31,10 +26,13 @@ func (p *Planning) DoExe(ctx context.Context) (string, error) {
 				var parsedResult interface{}
 				if err := json.Unmarshal([]byte(resultStr), &parsedResult); err == nil {
 					p.Steps[i].Result = parsedResult
+					continue
 				}
-				// 如果解析失败，保留原字符串
+				logging.Error("解析结果为字符串失败，原字符串: %s", resultStr)
+
+				p.Steps[i].Error = fmt.Sprintf("Result parse failed: %v", err)
 			}
-			// 处理Result已经是map的情况，不需要转换
+
 		}
 	}
 
@@ -46,7 +44,7 @@ func (p *Planning) DoExe(ctx context.Context) (string, error) {
 	}
 	resultSteps = string(rst)
 
-	logging.Info("Plan results: %s", resultSteps)
+	//logging.Info("Plan results: %s", resultSteps)
 	return resultSteps, nil
 }
 
@@ -70,12 +68,6 @@ func (p *Planning) buildReverseDependencyMap() map[string][]int {
 
 func (p *Planning) Execute(ctx context.Context) error {
 
-	chatID, ok := ctx.Value(utils.ChatIDString).(string)
-	if !ok {
-		logging.Error("Failed to get chatID from context")
-		return fmt.Errorf("Failed to get chatID from context")
-	}
-	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatID)
 	//初始化所有步骤状态
 	for i := range p.Steps {
 		if p.Steps[i].Status != "completed" {
@@ -84,6 +76,7 @@ func (p *Planning) Execute(ctx context.Context) error {
 	}
 
 	logging.Info("开始执行计划，共 %d 个步骤", len(p.Steps))
+	globalchannel.SendAssitantMessageOnce(ctx, "开始执行计划，共 "+fmt.Sprint(len(p.Steps))+" 个步骤")
 
 	// 初始化入度
 	p.initializeInDegrees()
@@ -113,23 +106,23 @@ func (p *Planning) Execute(ctx context.Context) error {
 		// 执行当前任务
 		if err := p.ExecuteStep(ctx, current); err != nil {
 			logging.Error("步骤 %s 执行失败: %v", p.Steps[current].Id, err)
-			dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err), Role: utils.MessageRoleAssistant, IsFinished: false}
-			memory.AddUserMessage(chatID, fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err))
+			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err))
 			// return fmt.Errorf("step %s failed: %v", p.Steps[current].Id, err)
 		}
 
 		logging.Info("步骤 %s 执行完成, 结果是: %v", p.Steps[current].Id, p.Steps[current].Result)
-		dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("步骤 %s %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Tool, p.Steps[current].Result), Role: utils.MessageRoleAssistant, IsFinished: false}
-		memory.AddUserMessage(chatID, fmt.Sprintf("步骤 %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Result))
+		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("步骤 %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Result))
+
 		// 使用反向依赖图更新依赖当前任务的其他任务的入度
 		if dependentSteps, exists := reverseMap[p.Steps[current].Id]; exists {
 			for _, depIndex := range dependentSteps {
 				p.Steps[depIndex].InDegree--
 				logging.Debug("更新步骤 %s 的依赖，剩余入度: %d", p.Steps[depIndex].Id, p.Steps[depIndex].InDegree)
+
 				if p.Steps[depIndex].InDegree == 0 {
 					queue = append(queue, depIndex)
 					logging.Info("步骤 %s 所有依赖已完成，加入执行队列", p.Steps[depIndex].Id)
-					dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("步骤 %s %s 所有依赖已完成，加入执行队列\n", p.Steps[depIndex].Id, p.Steps[depIndex].Tool), Role: utils.MessageRoleAssistant, IsFinished: false}
+
 				}
 			}
 		}
@@ -141,15 +134,15 @@ func (p *Planning) Execute(ctx context.Context) error {
 		if step.Status != "completed" {
 			p.Status = "failed"
 			logging.Error("步骤 %s 未完成，状态: %s", step.Id, step.Status)
-			dialogOutChan <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
-			dialogOutChan <- &globalchannel.Message{Content: fmt.Sprintf("执行阶段小结：步骤 %s %s 未完成，状态: %s", step.Id, step.Tool, step.Status), Role: utils.MessageRoleAssistant, IsFinished: false}
-			//return fmt.Errorf("some Steps are not completed, possibly due to circular dependencies")
 		}
+	}
+	if p.Status == "failed" {
+		return fmt.Errorf("some steps failed")
 	}
 
 	logging.Info("所有步骤尝试执行完成")
 	//logging.Info("计划执行成功,plan: %v", p)
-	dialogOutChan <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+	globalchannel.SendAssitantMessageOnce(ctx, "执行阶段小结：所有步骤尝试执行完成\n")
 	return nil
 }
 
@@ -176,53 +169,86 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 		return fmt.Errorf("tool not found: %s", step.Tool)
 	}
 
-	// 处理输入引用
+	//处理输入引用
 	processedInput := make(map[string]interface{})
-	for key, value := range step.Input {
-		if refMap, ok := value.(map[string]interface{}); ok {
-			if ref, ok := refMap["ref"].(string); ok {
-				// 解析引用，如 "step_1.output.latitude"
-				parts := strings.Split(ref, ".")
-				if len(parts) >= 3 {
-					refStepID := parts[0]
-					refField := parts[2] // 提取字段名，如 "latitude" 或 "longitude"
-
-					// 查找依赖步骤
-					for i, s := range p.Steps {
-						if s.Id == refStepID && i < stepIndex {
-							// 从步骤输出中提取值
-							if s.Result != nil {
-								// 尝试解析结果为 JSON
-								var resultData map[string]interface{}
-								if resultStr, ok := s.Result.(string); ok {
-									if err := json.Unmarshal([]byte(resultStr), &resultData); err == nil {
-										// 从解析后的数据中提取字段值
-										if fieldValue, ok := resultData[refField]; ok {
-											processedInput[key] = fieldValue
-										}
-									}
-								} else if resultMap, ok := s.Result.(map[string]interface{}); ok {
-									// 如果已经是 map，直接提取字段值
-									if fieldValue, ok := resultMap[refField]; ok {
-										processedInput[key] = fieldValue
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		} else {
-			processedInput[key] = value
+	for key, iv := range step.Input {
+		// 检查是否有直接输入值
+		if iv.StepInputValue != nil && iv.StepInputValue != "" {
+			processedInput[key] = iv.StepInputValue
+			logging.Info("获取到直接输入值，key: %s, value: %v", key, iv.StepInputValue)
+			continue
 		}
+
+		// 如果引用输入也为空，则跳过
+		if iv.RefStepID == "" || iv.RefStepOutField == "" {
+			logging.Info("步骤 %s 的输入引用为空，key: %s", step.Id, key)
+			step.Status = "failed"
+			step.Error = fmt.Sprintf("步骤 %s 的输入引用为空，key: %s", step.Id, key)
+			continue
+		}
+
+		// 正确的写法：
+		var refStep *Step
+		for i := range p.Steps {
+			if p.Steps[i].Id == iv.RefStepID {
+				refStep = &p.Steps[i]
+				break
+			}
+		}
+
+		if refStep == nil {
+			step.Status = "failed"
+			step.Error = fmt.Sprintf("找不到引用的步骤 %s", iv.RefStepID)
+			logging.Error("步骤 %s 执行失败: 找不到引用的步骤 %s", step.Id, iv.RefStepID)
+			return fmt.Errorf("找不到引用的步骤 %s", iv.RefStepID)
+		}
+
+		// 检查依赖步骤是否已完成
+		if refStep.Status != "completed" {
+			step.Status = "failed"
+			step.Error = fmt.Sprintf("依赖的步骤 %s 未完成", iv.RefStepID)
+			logging.Error("步骤 %s 执行失败: 依赖的步骤 %s 未完成", step.Id, iv.RefStepID)
+		}
+
+		// 如果引用步骤的结果为空，则跳过处理
+		if refStep.Result == nil {
+			step.Status = "failed"
+			step.Error = fmt.Sprintf("依赖的步骤 %s 的结果为空", iv.RefStepID)
+			logging.Error("步骤 %s 执行失败: 依赖的步骤 %s 的结果为空", step.Id, iv.RefStepID)
+		}
+
+		// 解析引用步骤的结果
+		var resultData map[string]interface{}
+		// 将 string 转换为 []byte
+		resultBytes, ok := refStep.Result.(string)
+		if !ok {
+			step.Status = "failed"
+			step.Error = fmt.Sprintf("依赖的步骤 %s 的结果类型错误，期望 string", iv.RefStepID)
+			logging.Error("步骤 %s 执行失败: 依赖的步骤 %s 的结果类型错误", step.Id, iv.RefStepID)
+			return fmt.Errorf("依赖的步骤 %s 的结果类型错误", iv.RefStepID)
+		}
+		err := json.Unmarshal([]byte(resultBytes), &resultData)
+
+		if err != nil {
+			step.Status = "failed"
+			step.Error = fmt.Sprintf("解析依赖的步骤 %s 的结果失败: %v", iv.RefStepID, err)
+			logging.Error("步骤 %s 执行失败: 解析依赖的步骤 %s 的结果失败: %v", step.Id, iv.RefStepID, err)
+		}
+		// 取引用字段的值
+		processedInput[key] = resultData[iv.RefStepOutField]
+
+		// 更新步骤的输入值 下次重试时，可以直接使用processedInput作为输入值
+		currentInput := step.Input[key]                              // 1. 取
+		currentInput.StepInputValue = resultData[iv.RefStepOutField] // 2. 改
+		step.Input[key] = currentInput                               // 3. 存
 	}
 
-	// 将 processedInput 序列化为 JSON 字符串
+	//将 processedInput 序列化为 JSON 字符串
 	inputJSON, err := json.Marshal(processedInput)
 	if err != nil {
 		step.Status = "failed"
-		step.Error = fmt.Sprintf("failed to marshal input: %v", err)
-		return fmt.Errorf("failed to marshal input: %v", err)
+		step.Error = fmt.Sprintf("failed to marshal input: %v for step %s", err, step.Id)
+		return fmt.Errorf("failed to marshal input: %v for step %s", err, step.Id)
 	}
 
 	// 执行工具

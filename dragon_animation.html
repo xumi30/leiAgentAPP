@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国龙随机游动</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            border: 1px solid #333;
+            background: radial-gradient(circle, #2b2b2b 0%, #000000 100%);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="dragonCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('dragonCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Dragon properties
+        const dragon = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            size: 20,
+            color: '#FFD700',
+            segments: []
+        };
+
+        // Initialize segments
+        for (let i = 0; i < 20; i++) {
+            dragon.segments.push({ x: dragon.x, y: dragon.y });
+        }
+
+        function drawDragon() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update head position
+            dragon.x += dragon.vx;
+            dragon.y += dragon.vy;
+
+            // Bounce off walls
+            if (dragon.x < 0 || dragon.x > canvas.width) dragon.vx *= -1;
+            if (dragon.y < 0 || dragon.y > canvas.height) dragon.vy *= -1;
+
+            // Randomly change direction slightly
+            if (Math.random() < 0.05) {
+                dragon.vx += (Math.random() - 0.5) * 2;
+                dragon.vy += (Math.random() - 0.5) * 2;
+                // Limit speed
+                const speed = Math.sqrt(dragon.vx * dragon.vx + dragon.vy * dragon.vy);
+                if (speed > 5) {
+                    dragon.vx = (dragon.vx / speed) * 5;
+                    dragon.vy = (dragon.vy / speed) * 5;
+                }
+            }
+
+            // Update segments (inverse kinematics-ish)
+            dragon.segments[0].x = dragon.x;
+            dragon.segments[0].y = dragon.y;
+
+            for (let i = 1; i < dragon.segments.length; i++) {
+                const prev = dragon.segments[i - 1];
+                const curr = dragon.segments[i];
+                
+                const dx = prev.x - curr.x;
+                const dy = prev.y - curr.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const targetDist = dragon.size * 0.8;
+
+                if (dist > 0) {
+                    const t = (dist - targetDist) / dist;
+                    curr.x += dx * t * 0.5;
+                    curr.y += dy * t * 0.5;
+                }
+            }
+
+            // Draw segments
+            for (let i = dragon.segments.length - 1; i >= 0; i--) {
+                const seg = dragon.segments[i];
+                const radius = dragon.size * (1 - i / dragon.segments.length) + 5;
+                
+                ctx.beginPath();
+                ctx.arc(seg.x, seg.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = i === 0 ? '#FF4500' : `hsl(${40 + i * 2}, 100%, 50%)`;
+                ctx.fill();
+                ctx.strokeStyle = '#8B0000';
+                ctx.stroke();
+            }
+
+            // Draw eyes
+            const head = dragon.segments[0];
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(head.x - 5, head.y - 5, 3, 0, Math.PI * 2);
+            ctx.arc(head.x + 5, head.y - 5, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(head.x - 5, head.y - 5, 1, 0, Math.PI * 2);
+            ctx.arc(head.x + 5, head.y - 5, 1, 0, Math.PI * 2);
+            ctx.fill();
+
+            requestAnimationFrame(drawDragon);
+        }
+
+        drawDragon();
+    </script>
+</body>
+</html>

@@ -25,17 +25,6 @@ func (p *Proxy) handleResponse(ctx context.Context, resp *http.Response, isStrea
 }
 
 // effectiveDialogChatID 用于 UI 管道：可与 memory 用的 ChatIDString（临时子会话）不同。
-func effectiveDialogChatID(ctx context.Context) string {
-	if v, ok := ctx.Value(utils.DialogOutChatIDString).(string); ok {
-		if s := strings.TrimSpace(v); s != "" {
-			return s
-		}
-	}
-	if v, ok := ctx.Value(utils.ChatIDString).(string); ok {
-		return strings.TrimSpace(v)
-	}
-	return ""
-}
 
 func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
 	logging.Info("开始处理流式响应: %v", resp)
@@ -47,27 +36,8 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	var lastFinishReason string
 	var lastUsage *openaistyle.TokenUsage
 
-	memChatID, ok := ctx.Value(utils.ChatIDString).(string)
-	if !ok || strings.TrimSpace(memChatID) == "" {
-		logging.Error("无法从 context 中获取 chatId")
-		return nil, fmt.Errorf("无法从 context 中获取 chatId")
-	}
-
-	dialogChatID := effectiveDialogChatID(ctx)
-	if dialogChatID == "" {
-		dialogChatID = memChatID
-	}
-
-	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(dialogChatID)
-
-	reasoningOutChan := globalchannel.GetGlobalReasonOutChannel(dialogChatID)
-
-	skipDialog := false
-	if v, ok := ctx.Value(utils.SkipDialogToUIString).(bool); ok && v {
-		skipDialog = true
-	}
-
-	streamID := scanner.requestID
+	d_mesageid := utils.GenerateMessageID()
+	r_message := utils.GenerateMessageID()
 	for scanner.Scan() {
 
 		var response openaistyle.ChatCompletionResponse
@@ -131,18 +101,16 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		content, ok := delta.Content.(string)
 		if ok && content != "" {
 			fullContent.WriteString(content)
-			if !skipDialog {
-				dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: content, Role: utils.MessageRoleAssistant, IsFinished: false}
-			}
+
+			globalchannel.SendAssitantMessageStream(ctx, content, d_mesageid, false)
+
 		}
 
 		// 处理推理内容
 		reasoningContent := delta.ReasoningContent
 		if reasoningContent != "" {
 			fullReasoningContent.WriteString(reasoningContent)
-			if !skipDialog {
-				reasoningOutChan <- &globalchannel.Message{MessageID: streamID, Content: reasoningContent, Role: utils.MessageRoleReasoning, IsFinished: false}
-			}
+			globalchannel.SendAReasonningMessageStream(ctx, reasoningContent, r_message, false)
 		}
 	}
 
@@ -163,11 +131,11 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	} else {
 		logging.Info("返回调用tools: %s", string(tlsJSON))
 	}
-	if !skipDialog {
-		// 回合收口统一靠 IsFinished，不再发送 FinishStringEphemeral
-		dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
-		reasoningOutChan <- &globalchannel.Message{MessageID: streamID, Content: utils.FinishString, Role: utils.MessageRoleReasoning, IsFinished: true}
-	}
+	
+	// 回合收口统一靠 IsFinished，不再发送 FinishStringEphemeral
+	globalchannel.SendAssitantMessageStream(ctx, utils.FinishString, d_mesageid, true)
+	globalchannel.SendAReasonningMessageStream(ctx, utils.FinishString, r_message, true)
+
 	if lastUsage != nil {
 		logging.Info("流式响应结束 finish_reason=%q completion_tokens=%d prompt_tokens=%d total=%d 正文长度=%d 字符",
 			lastFinishReason,
@@ -198,20 +166,10 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 		return nil, fmt.Errorf("无法从 context 中获取 chatId")
 	}
 
-	dialogChatID := effectiveDialogChatID(ctx)
-	if dialogChatID == "" {
-		dialogChatID = memChatID
-	}
-
-	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(dialogChatID)
-
 	skipDialog := false
 	if v, ok := ctx.Value(utils.SkipDialogToUIString).(bool); ok && v {
 		skipDialog = true
 	}
-
-	// 非流式也用一个稳定的 streamID，便于 UI 聚合/收口
-	streamID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 
 	openaiResp, err := p.convertResponse(resp, info)
 	if err != nil {
@@ -246,10 +204,8 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	}
 	if !skipDialog {
 		if strings.TrimSpace(content) != "" {
-			dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: content + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
+			globalchannel.SendAssitantMessageOnce(ctx, content)
 		}
-		// 回合收口统一靠 IsFinished，不再发送 FinishStringEphemeral
-		dialogOutChan <- &globalchannel.Message{MessageID: streamID, Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
 	}
 
 	if len(tools) > 0 {

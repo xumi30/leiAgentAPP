@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"fmt"
+	"leiAgent/internal/tools"
 	"leiAgent/logging"
 	"leiAgent/utils"
 	"sync"
@@ -162,4 +164,14 @@ func SetSystemPrompt(chatId string, systemprompt string) {
 		Content: systemprompt,
 	}
 	memoryLocal.AddMessage(chatId, &systempromptMsg)
+}
+
+func SetToolsInfo(chatId string) {
+	toolRegistry := tools.Getregistry()
+	js, err := toolRegistry.ConvertToolsToJSON()
+	if err != nil {
+		logging.Error("ConvertToolsToJSON failed: %v", err)
+
+	}
+	AddUserMessage(chatId, fmt.Sprintf("这些是你能使用的工具消息：\n%s", js))
 }

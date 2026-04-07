@@ -353,7 +353,7 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 
 			mid := strings.TrimSpace(msg.MessageID)
 			if mid == "" {
-				logging.Warn("Output message missing MessageID, skipping (role=%s chatID=%s)", role, chatID)
+				logging.Error("Output message missing MessageID, skipping (role=%s chatID=%s)", role, chatID)
 				continue
 			}
 
@@ -365,25 +365,22 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 			if buf.startTime.IsZero() {
 				buf.startTime = time.Now()
 			}
-			// 非结束分片：展示 + 累积
+			buf.content.WriteString(msg.Content)
+
+			appendMessage := map[string]interface{}{
+				"chatID":    chatID,
+				"messageID": mid,
+				"content":   msg.Content,
+				"role":      role,
+				// 与入库 startTime 一致，便于前端在重载前列顺序/展示时间
+				"timestamp": buf.startTime.UTC().Format(time.RFC3339Nano),
+			}
+			runtime.EventsEmit(a.ctx, eventname, appendMessage)
+
 			if !msg.IsFinished {
-				if strings.TrimSpace(msg.Content) == "" {
-					continue
-				}
-				buf.content.WriteString(msg.Content)
-				appendMessage := map[string]interface{}{
-					"chatID":    chatID,
-					"messageID": mid,
-					"content":   msg.Content,
-					"role":      role,
-					// 与入库 startTime 一致，便于前端在重载前列顺序/展示时间
-					"timestamp": buf.startTime.UTC().Format(time.RFC3339Nano),
-				}
-				runtime.EventsEmit(a.ctx, eventname, appendMessage)
 				continue
 			}
 
-			// 结束包：以 IsFinished 为准收口；不再依赖固定词
 			final := buf.content.String()
 			if strings.TrimSpace(final) != "" {
 				if err := dataoperation.SendMessageWithCreateTime(chatID, mid, final, role, buf.startTime); err != nil {
@@ -603,17 +600,13 @@ func (a *App) ResumeNovelLongform(chatID, outputDirRel, premise, authorNotes str
 	tool := noveltool.New()
 	go func() {
 		ctx := context.WithValue(context.Background(), utils.ChatIDString, chatID)
-		ch := globalchannel.GetGlobalDialogOutChannel(chatID)
-		ch <- &globalchannel.Message{Content: fmt.Sprintf("[文库] 已启动长篇小说续写（%s），请稍候…\n", outRel), Role: utils.MessageRoleAssistant, IsFinished: false}
-		ch <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+		globalchannel.SendAssitantMessageOnce(ctx, "开始续写任务")
 		result, runErr := tool.Execute(ctx, string(payload))
 		if runErr != nil {
-			ch <- &globalchannel.Message{Content: fmt.Sprintf("[文库] 续写失败：%v\n", runErr), Role: utils.MessageRoleAssistant, IsFinished: false}
-			ch <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("续写失败：%s", runErr.Error()))
 			return
 		}
-		ch <- &globalchannel.Message{Content: fmt.Sprintf("[文库] 续写完成：%s\n", strings.TrimSpace(result)), Role: utils.MessageRoleAssistant, IsFinished: false}
-		ch <- &globalchannel.Message{Content: utils.FinishString, Role: utils.MessageRoleAssistant, IsFinished: true}
+		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("续写完成: %s", result))
 	}()
 	return nil
 }

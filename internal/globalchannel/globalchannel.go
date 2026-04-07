@@ -1,7 +1,9 @@
 package globalchannel
 
 import (
+	"context"
 	"leiAgent/logging"
+	"leiAgent/utils"
 	"sync"
 	"time"
 )
@@ -92,7 +94,6 @@ func (m *ChannelManager) GetChannel(chatID, topic string) (chan *Message, error)
 	if topicMap, exists := m.channels[chatID]; exists {
 		if info, ok := topicMap[topic]; ok && !info.IsClosed {
 			info.LastAccess = time.Now()
-			logging.Info("GetChannel: %s %s", chatID, topic)
 			return info.Channel, nil
 		}
 	}
@@ -271,4 +272,54 @@ func GetGlobalReasonOutChannel(chatID string) chan *Message {
 
 func CleanupGlobalChannel(chatID string) {
 	_ = Cleanup(chatID)
+}
+
+func SendAssitantMessageOnce(ctx context.Context, msg string) {
+	chatID := ctx.Value(utils.ChatIDString).(string)
+	dialogOutChan := GetGlobalDialogOutChannel(chatID)
+	messageid := utils.GenerateMessageID()
+	mg := Message{MessageID: messageid, Content: msg, Role: utils.MessageRoleAssistant, IsFinished: true}
+
+	dialogOutChan <- &mg
+
+}
+
+func SendUserMessageOnce(ctx context.Context, msg string) {
+	chatID := ctx.Value(utils.ChatIDString).(string)
+	dialogOutChan := GetGlobalDialogOutChannel(chatID)
+	messageid := utils.GenerateMessageID()
+
+	dialogOutChan <- &Message{
+		MessageID:  messageid,
+		Content:    msg,
+		Role:       utils.MessageRoleUser,
+		IsFinished: true,
+	}
+
+}
+
+func SendAssitantMessageStream(ctx context.Context, msg string, messageid string, isFinish bool) {
+	chatID := ctx.Value(utils.ChatIDString).(string)
+	dialogOutChan := GetGlobalDialogOutChannel(chatID)
+
+	dialogOutChan <- &Message{
+		MessageID:  messageid,
+		Content:    msg,
+		Role:       utils.MessageRoleAssistant,
+		IsFinished: isFinish,
+	}
+
+}
+
+func SendAReasonningMessageStream(ctx context.Context, msg string, messageid string, isFinish bool) {
+	chatID := ctx.Value(utils.ChatIDString).(string)
+	dialogOutChan := GetGlobalDialogOutChannel(chatID)
+
+	dialogOutChan <- &Message{
+		MessageID:  messageid,
+		Content:    msg,
+		Role:       utils.MessageRoleAssistant,
+		IsFinished: isFinish,
+	}
+
 }

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>变色 Hello World</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      transition: background-color 0.5s ease;
+    }
+    #hello {
+      font-size: 4em;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="hello">Hello World</div>
+
+  <script>
+    const colors = [
+      '#FF5733', '#33FF57', '#3357FF', '#F3FF33',
+      '#FF33F3', '#33FFF3', '#FF8C33', '#8C33FF'
+    ];
+    let index = 0;
+    const body = document.body;
+    
+    setInterval(() => {
+      body.style.backgroundColor = colors[index];
+      index = (index + 1) % colors.length;
+    }, 1000);
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>变色 Hello World</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      font-size: 3em;
+      font-weight: bold;
+      transition: background-color 0.5s, color 0.5s;
+    }
+  </style>
+</head>
+<body>
+  <div id="hello">Hello World</div>
+  <script>
+    const colors = [
+      '#FF5733', '#33FF57', '#3357FF', '#F3FF33',
+      '#FF33F3', '#33FFF3', '#FF8C33', '#8C33FF'
+    ];
+    const text = document.getElementById('hello');
+    let i = 0;
+    setInterval(() => {
+      const color = colors[i % colors.length];
+      document.body.style.backgroundColor = color;
+      text.style.color = getContrastColor(color);
+      i++;
+    }, 500);
+
+    function getContrastColor(hexColor) {
+      // 简单判断背景亮暗，返回对比色
+      const r = parseInt(hexColor.substr(1, 2), 16);
+      const g = parseInt(hexColor.substr(3, 2), 16);
+      const b = parseInt(hexColor.substr(5, 2), 16);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness > 128 ? '#000000' : '#FFFFFF';
+    }
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>变色 Hello World</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      font-size: 3em;
+      font-weight: bold;
+      transition: background-color 0.5s, color 0.5s;
+    }
+  </style>
+</head>
+<body id="container">
+  Hello World!
+  <script>
+    const container = document.getElementById('container');
+    function getRandomColor() {
+      const r = Math.floor(Math.random() * 256);
+      const g = Math.floor(Math.random() * 256);
+      const b = Math.floor(Math.random() * 256);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+    setInterval(() => {
+      const color = getRandomColor();
+      container.style.backgroundColor = color;
+      const brightness = (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? 'black' : 'white';
+      container.style.color = brightness;
+    }, 500);
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>变色 Hello World</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      font-size: 4em;
+      font-family: Arial, sans-serif;
+      transition: background-color 0.5s ease;
+    }
+    #hello {
+      animation: colorChange 3s infinite alternate;
+    }
+    @keyframes colorChange {
+      0% { color: red; }
+      20% { color: orange; }
+      40% { color: yellow; }
+      60% { color: green; }
+      80% { color: blue; }
+      100% { color: purple; }
+    }
+  </style>
+</head>
+<body>
+  <div id="hello">Hello World</div>
+</body>
+</html>

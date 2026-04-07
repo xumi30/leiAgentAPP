@@ -3,7 +3,6 @@ package tools
 import (
 	"encoding/json"
 	"leiAgent/internal/provider/openaistyle"
-	"leiAgent/logging"
 
 	"sync"
 )
@@ -90,6 +89,6 @@ func (r *registry) ConvertToolsToJSON() ([]byte, error) {
 		}
 		toolsList = append(toolsList, toolInfo)
 	}
-	logging.Info("Converted tools to JSON format %s", toolsList)
+	//logging.Info("Converted tools to JSON format %s", toolsList)
 	return json.MarshalIndent(toolsList, "", "  ")
 }

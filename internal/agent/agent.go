@@ -131,8 +131,6 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 
 	chatId := ctx.Value(utils.ChatIDString).(string)
 
-	dialogOutChan := globalchannel.GetGlobalDialogOutChannel(chatId)
-
 	toolCalls := make([]memory.ToolCall, 0, len(toolAndContent.ToolList))
 
 	for _, tool := range toolAndContent.ToolList {
@@ -168,7 +166,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		}
 
 		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, tool.Function.Arguments)
-		dialogOutChan <- &globalchannel.Message{Content: outStr + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
+		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 		logging.Info("%s", outStr)
 
 		str, err := functl.Execute(ctx, tool.Function.Arguments)
@@ -176,7 +174,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			outStr = fmt.Sprintf("工具%s执行失败: %v", toolname, err)
 			logging.Error("%s", outStr)
 			memory.AddToolMessage(chatId, tool.ID, outStr)
-			dialogOutChan <- &globalchannel.Message{Content: outStr + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
+			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 
 			continue
 		}
@@ -184,7 +182,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		outStr = fmt.Sprintf("工具%s执行成功: %s", toolname, str)
 		logging.Info("%s", outStr)
 		memory.AddToolMessage(chatId, tool.ID, outStr)
-		dialogOutChan <- &globalchannel.Message{Content: outStr + "\n", Role: utils.MessageRoleAssistant, IsFinished: false}
+		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 	}
 
 	if a.taskLoopTimes >= 0 {
