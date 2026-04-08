@@ -121,6 +121,10 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	result := fullContent.String()
 	reasoningResult := fullReasoningContent.String()
 
+	// 关键：发送一次“流结束”信号（IsFinished=true），让 AppenAgentMessageToFrontRole 做收口入库并 emit dialogStreamEnd。
+	// 否则前端虽然能看到流式拼接的内容，但刷新后因 DB 未落库而消失。
+	globalchannel.SendAssitantMessageStream(ctx, "", d_mesageid, true)
+	globalchannel.SendAReasonningMessageStream(ctx, "", r_message, true)
 	//fmt.Println("最终生成内容: ", result)
 	//fmt.Println("最终推理内容: ", reasoningResult)
 
@@ -131,10 +135,6 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	} else {
 		logging.Info("返回调用tools: %s", string(tlsJSON))
 	}
-	
-	// 回合收口统一靠 IsFinished，不再发送 FinishStringEphemeral
-	globalchannel.SendAssitantMessageStream(ctx, utils.FinishString, d_mesageid, true)
-	globalchannel.SendAReasonningMessageStream(ctx, utils.FinishString, r_message, true)
 
 	if lastUsage != nil {
 		logging.Info("流式响应结束 finish_reason=%q completion_tokens=%d prompt_tokens=%d total=%d 正文长度=%d 字符",

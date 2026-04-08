@@ -4,16 +4,20 @@ import { getRandomMacaronColor } from './Constant';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
 import ConversationCalendar from './ConversationCalendar.jsx';
 
+/** 从时间字段解析本地日历日 YYYY-MM-DD，无效则返回 null */
+function ymdFromConvField(v) {
+    if (v == null || v === '') return null;
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** 对话的创建/更新日期（本地日历日）是否与选中日期一致 */
 function conversationMatchesCalendarDay(conv, ymd) {
     if (!ymd) return true;
     for (const key of ['updated_at', 'created_at']) {
-        const v = conv[key];
-        if (v == null || v === '') continue;
-        const d = new Date(v);
-        if (Number.isNaN(d.getTime())) continue;
-        const s = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        if (s === ymd) return true;
+        const s = ymdFromConvField(conv[key]);
+        if (s != null && s === ymd) return true;
     }
     return false;
 }
@@ -37,6 +41,18 @@ export default function ConversationList({
         if (!selectedDate) return cons;
         return cons.filter((c) => conversationMatchesCalendarDay(c, selectedDate));
     }, [cons, selectedDate]);
+
+    /** 日历上标出「当天有对话」的日期（创建或更新落在该日） */
+    const conversationDates = useMemo(() => {
+        const s = new Set();
+        for (const c of cons) {
+            for (const key of ['updated_at', 'created_at']) {
+                const ymd = ymdFromConvField(c[key]);
+                if (ymd) s.add(ymd);
+            }
+        }
+        return s;
+    }, [cons]);
 
     // 不在 document 上监听 click：Wails/WebView 里可能与 React 委托顺序冲突，先关闭菜单导致菜单项 onClick 永远不触发。
     useEffect(() => {
@@ -241,6 +257,7 @@ export default function ConversationList({
         <div className="conversation-list-panel">
             <ConversationCalendar
                 memoDates={memoDates}
+                conversationDates={conversationDates}
                 selectedDate={selectedDate}
                 onSelectDate={setSelectedDate}
                 onVisibleMonthChange={typeof refreshMemoDates === 'function' ? refreshMemoDates : undefined}

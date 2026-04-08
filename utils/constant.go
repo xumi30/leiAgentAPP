@@ -15,6 +15,7 @@ const (
 	IsStreamString   = "IsStreamString"
 	ToolsString      = "tools"
 	IsPlanningString = "isPlanning"
+	ToolTopicToLoad  = "toolTopicToLoad"
 
 	// SkipDialogToUI 为 true 时，proxy 不把模型输出写入 DialogOut（避免临时 chatID 未注册时落入全局 OutputChan，
 	// 被 chatID 为空的 Dispatcher 误当成用户输入）。
@@ -24,7 +25,7 @@ const (
 	// 与 ChatIDString（用于 memory 取消息，常为临时 id）分离。
 	DialogOutChatIDString = "dialogOutChatID"
 
-	FinishString          = "[DONE940720]"
+	FinishString     = "[DONE940720]"
 	IntentKey        = "intentkey"
 	ChatModeString   = "CHAT"
 	PlanModeString   = "PLAN"
@@ -54,6 +55,13 @@ const (
 	ChatPromptTemplate = `You are an intelligent assistant capable of conducting natural conversations.`
 
 	SingleToolPromptTemplate = `You are an intelligent assistant capable of help me with useing single tool.`
+
+	ToolTopicTime    = "时间"
+	ToolTopicSearch  = "搜索"
+	ToolTopicBrowser = "浏览器"
+	ToolTopicFiles   = "文件"
+	ToolTopicSystem  = "系统"
+	ToolTopicWriting = "写作"
 )
 
 var (

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"leiAgent/internal/tools"
+	"leiAgent/utils"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -130,6 +131,7 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 				return string(jsonBytes), fmt.Errorf("command failed with exit code %d: %s", exitCode, strings.TrimSpace(string(output)))
 			}
 		}
+
 	}
 
 	// 将结果序列化为JSON
@@ -207,4 +209,8 @@ func (t *BashTool) Results() map[string]interface{} {
 			},
 		},
 	}
+}
+
+func (t *BashTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicSystem, "在本机执行经校验的安全 shell/cmd 命令并返回标准输出与退出码。")
 }

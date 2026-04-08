@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"leiAgent/internal/doclib"
 	"leiAgent/internal/tools"
+	"leiAgent/utils"
 	"strings"
 )
 
@@ -87,10 +88,14 @@ func (t *Tool) Execute(ctx context.Context, args string) (string, error) {
 			return "", err
 		}
 		b, _ := json.MarshalIndent(map[string]interface{}{
-			"library_root": root,
-			"listed_rel":   listed,
-			"parent_rel":   parent,
-			"entries":      entries,
+			"operation": "list_dir",
+			"message":   "",
+			"data": map[string]interface{}{
+				"library_root": root,
+				"listed_rel":   listed,
+				"parent_rel":   parent,
+				"entries":      entries,
+			},
 		}, "", "  ")
 		return string(b), nil
 	case "mkdir":
@@ -101,7 +106,15 @@ func (t *Tool) Execute(ctx context.Context, args string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Created directory: %s", abs), nil
+		b, _ := json.MarshalIndent(map[string]interface{}{
+			"operation": "mkdir",
+			"message":   fmt.Sprintf("Created directory: %s", abs),
+			"data": map[string]interface{}{
+				"path":     path,
+				"abs_path": abs,
+			},
+		}, "", "  ")
+		return string(b), nil
 	case "write_file":
 		if strings.TrimSpace(path) == "" {
 			return "", fmt.Errorf("path required for write_file")
@@ -110,7 +123,15 @@ func (t *Tool) Execute(ctx context.Context, args string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Wrote file: %s", abs), nil
+		b, _ := json.MarshalIndent(map[string]interface{}{
+			"operation": "write_file",
+			"message":   fmt.Sprintf("Wrote file: %s", abs),
+			"data": map[string]interface{}{
+				"path":     path,
+				"abs_path": abs,
+			},
+		}, "", "  ")
+		return string(b), nil
 	case "delete":
 		if strings.TrimSpace(path) == "" {
 			return "", fmt.Errorf("path required for delete")
@@ -118,7 +139,15 @@ func (t *Tool) Execute(ctx context.Context, args string) (string, error) {
 		if err := doclib.WorkspaceDelete(path, recursive); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Deleted: %s", path), nil
+		b, _ := json.MarshalIndent(map[string]interface{}{
+			"operation": "delete",
+			"message":   fmt.Sprintf("Deleted: %s", path),
+			"data": map[string]interface{}{
+				"path":             path,
+				"recursive_delete": recursive,
+			},
+		}, "", "  ")
+		return string(b), nil
 	case "rename":
 		if strings.TrimSpace(path) == "" || strings.TrimSpace(pathTo) == "" {
 			return "", fmt.Errorf("path and path_to required for rename")
@@ -126,7 +155,15 @@ func (t *Tool) Execute(ctx context.Context, args string) (string, error) {
 		if err := doclib.WorkspaceRename(path, pathTo); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Renamed %s -> %s", path, pathTo), nil
+		b, _ := json.MarshalIndent(map[string]interface{}{
+			"operation": "rename",
+			"message":   fmt.Sprintf("Renamed %s -> %s", path, pathTo),
+			"data": map[string]interface{}{
+				"path":    path,
+				"path_to": pathTo,
+			},
+		}, "", "  ")
+		return string(b), nil
 	default:
 		return "", fmt.Errorf("unknown operation: %s", op)
 	}
@@ -134,7 +171,25 @@ func (t *Tool) Execute(ctx context.Context, args string) (string, error) {
 
 func (t *Tool) Results() map[string]interface{} {
 	return map[string]interface{}{
-		"type":        "string",
-		"description": "Result message or JSON (list_dir).",
+		"type":        "object",
+		"description": "Result of library file system operation (may include structured JSON for list_dir).",
+		"properties": map[string]interface{}{
+			"message": map[string]interface{}{
+				"type":        "string",
+				"description": "Human-readable result message (non-list operations).",
+			},
+			"operation": map[string]interface{}{
+				"type":        "string",
+				"description": "Operation executed.",
+			},
+			"data": map[string]interface{}{
+				"type":        "object",
+				"description": "Structured data payload (e.g. list_dir results).",
+			},
+		},
 	}
+}
+
+func (t *Tool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicFiles, "在应用 workspace 文库根目录内安全地列出、创建、读写、删除或重命名文件与文件夹。")
 }

@@ -250,6 +250,7 @@ func (p *Planning) VerifyResult(ctx context.Context, result string) (string, err
 	memory.GetLocalMemory().Clear(chatID)
 	memory.SetSystemPrompt(chatID, VerifySystemPrompt)
 	memory.AddUserMessage(chatID, "this is the execution state of this plan:\n\n"+result)
+	fmt.Println("this is the execution state of this plan:\n\n" + result)
 	memory.AddUserMessage(chatID, "this is the prompt of the planner who produced this plan and he made miskakes(help him to fix them):\n"+PlannerPromotion)
 	memory.SetToolsInfo(chatID)
 

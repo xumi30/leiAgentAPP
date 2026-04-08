@@ -21,9 +21,15 @@ function daysInMonth(year, month) {
 }
 
 /**
- * @param {{ memoDates?: Set<string>, selectedDate: string | null, onSelectDate: (ymd: string | null) => void, onVisibleMonthChange?: () => void }} props
+ * @param {{ memoDates?: Set<string>, conversationDates?: Set<string>, selectedDate: string | null, onSelectDate: (ymd: string | null) => void, onVisibleMonthChange?: () => void }} props
  */
-export default function ConversationCalendar({ memoDates = new Set(), selectedDate, onSelectDate, onVisibleMonthChange }) {
+export default function ConversationCalendar({
+  memoDates = new Set(),
+  conversationDates = new Set(),
+  selectedDate,
+  onSelectDate,
+  onVisibleMonthChange,
+}) {
   const now = new Date();
   const [cursor, setCursor] = useState(() => ({ y: now.getFullYear(), m: now.getMonth() + 1 }));
 
@@ -95,13 +101,14 @@ export default function ConversationCalendar({ memoDates = new Set(), selectedDa
             return <div key={cell.key} className="conv-cal__cell conv-cal__cell--empty" />;
           }
           const hasMemo = memoDates.has(cell.ymd);
+          const hasConversation = conversationDates.has(cell.ymd);
           const isToday = cell.ymd === todayYMD;
           const isSel = selectedDate === cell.ymd;
           return (
             <button
               key={cell.key}
               type="button"
-              className={`conv-cal__cell${isToday ? ' is-today' : ''}${isSel ? ' is-selected' : ''}`}
+              className={`conv-cal__cell${hasConversation ? ' has-conversation' : ''}${isToday ? ' is-today' : ''}${isSel ? ' is-selected' : ''}`}
               onClick={() => {
                 if (selectedDate === cell.ymd) {
                   onSelectDate(null);

@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { tryParseJsonRepaired, formatJsonPretty } from '../utils/llmJson.js';
+import { highlightKeywordChildren } from '../utils/keywordHighlight.jsx';
 
 /** @param {string} source @param {number} fromIdx @param {string} open @param {string} close */
 function extractBalanced(source, fromIdx, open, close) {
@@ -260,12 +261,12 @@ function MarkdownSlicesWithDocLinks({ text }) {
 /** @param {{ raw: string, onOpen: (s: string) => void }} props */
 function JsonSnippetCard({ raw, onOpen }) {
   const pretty = useMemo(() => formatJsonPretty(raw), [raw]);
-  const short = pretty.length > 400 ? `${pretty.slice(0, 400)}…` : pretty;
   return (
     <div
-      className="msg-json-snippet"
+      className="msg-json-snippet msg-json-snippet--collapsed"
       role="button"
       tabIndex={0}
+      aria-label="JSON 已折叠，点击展开"
       onClick={() => onOpen(pretty)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -276,9 +277,8 @@ function JsonSnippetCard({ raw, onOpen }) {
     >
       <div className="msg-json-snippet__bar">
         <span className="msg-json-snippet__badge">JSON</span>
-        <span className="msg-json-snippet__action">点击查看全文 ✨</span>
+       
       </div>
-      <pre className="msg-json-snippet__pre">{short}</pre>
     </div>
   );
 }
@@ -306,7 +306,8 @@ function JsonFullModal({ text, onClose }) {
 }
 
 /** @param {any} props */
-function MarkdownAnchor({ href, children, ...rest }) {
+function MarkdownAnchor({ href, children, node: _n, inline: _i, ...rest }) {
+  const inner = highlightKeywordChildren(children);
   if (typeof href === 'string' && href.startsWith('doc:')) {
     const raw = href.slice(4);
     let path = raw;
@@ -324,19 +325,38 @@ function MarkdownAnchor({ href, children, ...rest }) {
           window.dispatchEvent(new CustomEvent('leiagent-open-document', { detail: { path } }));
         }}
       >
-        {children}
+        {inner}
       </button>
     );
   }
   return (
     <a href={href} {...rest} target="_blank" rel="noreferrer">
-      {children}
+      {inner}
     </a>
   );
 }
 
+/** @param {keyof JSX.IntrinsicElements} tag */
+function mdBlock(tag) {
+  const Tag = tag;
+  return function MdBlock({ node: _node, inline: _inline, children, ...rest }) {
+    return <Tag {...rest}>{highlightKeywordChildren(children)}</Tag>;
+  };
+}
+
 const mdComponents = {
   a: MarkdownAnchor,
+  p: mdBlock('p'),
+  li: mdBlock('li'),
+  td: mdBlock('td'),
+  th: mdBlock('th'),
+  blockquote: mdBlock('blockquote'),
+  h1: mdBlock('h1'),
+  h2: mdBlock('h2'),
+  h3: mdBlock('h3'),
+  h4: mdBlock('h4'),
+  h5: mdBlock('h5'),
+  h6: mdBlock('h6'),
 };
 
 /**
@@ -357,27 +377,29 @@ export default function MessageContent({ content, variant = 'assistant', isStrea
 
   return (
     <div ref={bodyRef} className={`message-body message-body--${variant}`}>
-      {parts.map((p, idx) => {
-        if (p.type === 'json') {
-          return <JsonSnippetCard key={`j-${idx}`} raw={p.value} onOpen={openJson} />;
-        }
-        if (p.type === 'code') {
-          return (
-            <pre key={`c-${idx}`} className="msg-fence-block">
-              {p.lang ? <span className="msg-fence-block__lang">{p.lang}</span> : null}
-              <code>{p.value}</code>
-            </pre>
-          );
-        }
-        const md = p.value.trim() ? (
-          <MarkdownSlicesWithDocLinks text={p.value} />
-        ) : null;
-        return md ? (
-          <div key={`m-${idx}`} className="message-markdown message-markdown--with-doc-chips">
-            {md}
-          </div>
-        ) : null;
-      })}
+      <div className="message-body__flow">
+        {parts.map((p, idx) => {
+          if (p.type === 'json') {
+            return <JsonSnippetCard key={`j-${idx}`} raw={p.value} onOpen={openJson} />;
+          }
+          if (p.type === 'code') {
+            return (
+              <pre key={`c-${idx}`} className="msg-fence-block">
+                {p.lang ? <span className="msg-fence-block__lang">{p.lang}</span> : null}
+                <code>{p.value}</code>
+              </pre>
+            );
+          }
+          const md = p.value.trim() ? (
+            <MarkdownSlicesWithDocLinks text={p.value} />
+          ) : null;
+          return md ? (
+            <div key={`m-${idx}`} className="message-markdown message-markdown--with-doc-chips message-markdown--in-flow">
+              {md}
+            </div>
+          ) : null;
+        })}
+      </div>
       {jsonModalText
         ? createPortal(
             <JsonFullModal text={jsonModalText} onClose={closeJson} />,

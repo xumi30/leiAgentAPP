@@ -32,7 +32,7 @@ const (
 	fileAuthorLog     = "author_log.md"
 	fileOutline       = "outline.md"
 	dirChapterMeta    = "meta" // 章浓缩 JSON：meta/chapter_XX.meta.json
-	maxTitleSlugRunes = 72    // 文件名中标题 slug 长度上限
+	maxTitleSlugRunes = 72     // 文件名中标题 slug 长度上限
 )
 
 // novelChapterMDRe 匹配 chapter_03.md 或 chapter_03_标题slug.md（避免 chapter_01 误匹配 chapter_012）。
@@ -104,20 +104,61 @@ func (t *LongFormNovelTool) Results() map[string]interface{} {
 	return map[string]interface{}{
 		"type":        "object",
 		"description": "JSON string: output_dir, files written, chapters_written, chapter_range, resume_used.",
+		"properties": map[string]interface{}{
+			"tool": map[string]interface{}{
+				"type":        "string",
+				"description": "Tool name.",
+			},
+			"output_dir": map[string]interface{}{
+				"type":        "string",
+				"description": "Workspace-relative output directory under the library root.",
+			},
+			"files": map[string]interface{}{
+				"type":        "array",
+				"description": "List of workspace-relative files written/updated.",
+				"items": map[string]interface{}{
+					"type": "string",
+				},
+			},
+			"chapters_written": map[string]interface{}{
+				"type":        "integer",
+				"description": "Number of chapters written in this run.",
+			},
+			"chapter_range": map[string]interface{}{
+				"type":        "array",
+				"description": "Start and end chapter indices for this run.",
+				"items": map[string]interface{}{
+					"type": "integer",
+				},
+			},
+			"resume": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Whether resume mode was used.",
+			},
+			"premise_excerpt": map[string]interface{}{
+				"type":        "string",
+				"description": "Short excerpt of premise used this run.",
+			},
+		},
+		"additionalProperties": true,
 	}
+}
+
+func (t *LongFormNovelTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicWriting, "在工作区目录内多轮生成章节、大纲与小说圣经等长篇创作文件，可续写同一工程。")
 }
 
 func (t *LongFormNovelTool) Execute(ctx context.Context, args string) (string, error) {
 	var params struct {
-		Premise         string `json:"premise"`
-		Outline         string `json:"outline"`
-		ChapterCount    int    `json:"chapter_count"`
-		OutputDir       string `json:"output_dir"`
-		Resume          bool   `json:"resume"`
-		AuthorNotes     string `json:"author_notes"`
-		RefreshOutline  bool   `json:"refresh_outline"`
-		Style           string `json:"style"`
-		Language        string `json:"language"`
+		Premise        string `json:"premise"`
+		Outline        string `json:"outline"`
+		ChapterCount   int    `json:"chapter_count"`
+		OutputDir      string `json:"output_dir"`
+		Resume         bool   `json:"resume"`
+		AuthorNotes    string `json:"author_notes"`
+		RefreshOutline bool   `json:"refresh_outline"`
+		Style          string `json:"style"`
+		Language       string `json:"language"`
 	}
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", fmt.Errorf("invalid JSON args: %w", err)
@@ -546,7 +587,7 @@ func splitChapterResponse(raw string) (body string, metaJSON string) {
 	i := strings.Index(raw, ch)
 	j := strings.Index(raw, me)
 	if i >= 0 && j > i {
-		body = strings.TrimSpace(raw[i+len(ch):j])
+		body = strings.TrimSpace(raw[i+len(ch) : j])
 		metaJSON = strings.TrimSpace(raw[j+len(me):])
 	} else {
 		body = strings.TrimSpace(raw)

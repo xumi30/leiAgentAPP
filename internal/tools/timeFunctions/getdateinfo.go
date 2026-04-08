@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"leiAgent/internal/tools"
+	"leiAgent/utils"
 	"time"
 
 	"github.com/6tail/lunar-go/calendar"
@@ -184,6 +185,10 @@ func getLunarDate(date time.Time) string {
 		lunar.GetYearInGanZhi(),   // 干支年
 		lunar.GetMonthInChinese(), // 月份
 		lunar.GetDayInChinese())   // 日期
+}
+
+func (t *TimeTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicTime, "查询指定公历日期的农历、节气、宜忌、干支生肖等传统历法与民俗信息。")
 }
 
 func (t *TimeTool) Results() map[string]interface{} {

@@ -10,6 +10,7 @@ import (
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
 	"leiAgent/internal/tools/bashfunction"
+	"leiAgent/internal/tools/browsertool"
 	fileFunctions "leiAgent/internal/tools/fileFunction"
 	"leiAgent/internal/tools/libraryfs"
 	"leiAgent/internal/tools/noveltool"
@@ -28,6 +29,36 @@ type Dispatcher struct {
 	ChatID    string
 
 	// 移除 planner 字段，统一使用 agent
+}
+
+func init() {
+	toolRegistry := tools.Getregistry()
+
+	getTime := timeFunctions.NewTimeTool()
+	calculateTimeTool := timeFunctions.NewCalculateTimeTool()
+	getWheatherTool := searchFunctions.NewWeatherTool()
+	getLongitude := searchFunctions.NewGeocodingTool()
+	financeMarket := searchFunctions.NewMarketTool()
+	getcurrenttime := timeFunctions.NewCurrentTimeTool()
+	wikiSearch := searchFunctions.NewWikipediaSearchTool()
+	bashfunction := bashfunction.NewBashTool()
+
+	toolRegistry.Register(bashfunction)
+	toolRegistry.Register(browsertool.New())
+	toolRegistry.Register(browsertool.NewAutomationTool())
+
+	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
+	toolRegistry.Register(fileFunctions.GetFileWriteTool())
+	toolRegistry.Register(libraryfs.New())
+	// toolRegistry.Register(memotool.NewMemoWriteTool())
+	toolRegistry.Register(noveltool.New())
+	toolRegistry.Register(getcurrenttime)
+	toolRegistry.Register(financeMarket)
+	toolRegistry.Register(getLongitude)
+	toolRegistry.Register(getWheatherTool)
+	toolRegistry.Register(wikiSearch)
+	toolRegistry.Register(getTime)
+	toolRegistry.Register(calculateTimeTool)
 }
 
 func NewDispatcher(ctx context.Context, chatID string, cancel context.CancelFunc) (*Dispatcher, error) {
@@ -91,44 +122,53 @@ func (d *Dispatcher) ReplaceRunContext(ctx context.Context, cancel context.Cance
 func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
 
 	logging.Info("Dispatcher 处理消息: %s", message)
-
-	if d.Intention == nil {
-		logging.Info("context 中没有 Intent,重新确认意图...")
-
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "context 中没有 Intent,重新确认意图..."))
-		intent, err := ConfirmIntention(ctx, message)
-		if err != nil {
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
-			return // 确认意图失败，直接返回
-		}
-		d.Intention = intent
-		// 确认意图后 清除旧记忆
-		chatId := ctx.Value(utils.ChatIDString).(string)
-		memory.GetLocalMemory().Clear(chatId)
-	} else if ShouldReclassifyIntent(d.Intention.Intent, message) {
-		logging.Info("根据规则判断需要刷新意图，重新确认...")
-		intent, err := ConfirmIntention(ctx, message)
-		if err != nil {
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "重新确认意图失败，沿用当前模式处理"))
-		} else {
-			d.Intention = intent
-		}
+	intent, err := ConfirmIntention(ctx, message)
+	if err != nil {
+		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
+		return // 确认意图失败，直接返回
 	}
+	d.Intention = intent
+
+	chatId := ctx.Value(utils.ChatIDString).(string)
+	memory.GetLocalMemory().Clear(chatId)
+
+	// if d.Intention == nil {
+	// 	logging.Info("context 中没有 Intent,重新确认意图...")
+
+	// 	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "context 中没有 Intent,重新确认意图..."))
+	// 	intent, err := ConfirmIntention(ctx, message)
+	// 	if err != nil {
+	// 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
+	// 		return // 确认意图失败，直接返回
+	// 	}
+	// 	d.Intention = intent
+	// 	// 确认意图后 清除旧记忆
+	// 	chatId := ctx.Value(utils.ChatIDString).(string)
+	// 	memory.GetLocalMemory().Clear(chatId)
+	// } else if ShouldReclassifyIntent(d.Intention.Intent, message) {
+	// 	logging.Info("根据规则判断需要刷新意图，重新确认...")
+	// 	intent, err := ConfirmIntention(ctx, message)
+	// 	if err != nil {
+	// 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "重新确认意图失败，沿用当前模式处理"))
+	// 	} else {
+	// 		d.Intention = intent
+	// 	}
+	// }
 
 	d.Intention.Goal = message
 	if d.Intention != nil {
 		ctx = context.WithValue(ctx, utils.IntentKey, strings.ToUpper(strings.TrimSpace(d.Intention.Intent)))
 	}
-	fmt.Println("意图: ", d.Intention.Intent)
+	// fmt.Println("意图: ", d.Intention.Intent)
+	logging.Info("意图: %s", d.Intention.Intent)
+
 	upperIntent := strings.ToUpper(d.Intention.Intent)
 	switch upperIntent {
-	case utils.SwitchModeString:
-		d.Intention = nil
-		logging.Info("已重置意图，请继续输入新的消息")
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "已重置意图，请继续输入新的消息"))
 	case utils.ChatModeString:
-		logging.Info("切换到聊天模式")
-		d.handleChat(ctx, d.Intention)
+		memory.AddUserMessage(d.ChatID, message)
+		globalchannel.SendAssitantMessageOnce(ctx, d.Intention.Content)
+		// logging.Info("切换到聊天模式")
+		// d.handleChat(ctx, d.Intention)
 	case utils.PlanModeString:
 		logging.Info("切换到规划模式")
 		d.handlePlan(ctx, d.Intention)
@@ -159,9 +199,7 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 
 	ctx = context.WithValue(ctx, utils.IsPlanningString, true)
 
-	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "开始进行任务规划..."))
-
-	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "正在加载工具信息..."))
+	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "开始进行任务规划...\n"))
 
 	// 单次规划调用：goal 传用户原文。此前此处先 Communicate 再 GeneratePlan，会重复规划且第二次仍用包装后的长串污染 goal。
 	pInst, err := planner.GeneratePlan(ctx, userGoal, string(toolsInfo()))
@@ -177,6 +215,9 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "规划完成，开始执行..."))
 
 	pInst.DoTask(ctx)
+
+	//执行完任务后，重置意图
+	d.Intention = nil
 
 }
 
@@ -195,6 +236,7 @@ func (d *Dispatcher) handleChat(ctx context.Context, intent *Intention) {
 }
 
 func (d *Dispatcher) handleTool(ctx context.Context, intent *Intention) {
+	ctx = context.WithValue(ctx, utils.ToolTopicToLoad, false)
 	message := intent.Goal
 	chatId := ctx.Value(utils.ChatIDString).(string)
 	memory.SetSystemPrompt(chatId, utils.ChatPromptTemplate)
@@ -204,31 +246,20 @@ func (d *Dispatcher) handleTool(ctx context.Context, intent *Intention) {
 
 func toolsInfo() []byte {
 	toolRegistry := tools.Getregistry()
-	getTime := timeFunctions.NewTimeTool()
-
-	calculateTimeTool := timeFunctions.NewCalculateTimeTool()
-	getWheatherTool := searchFunctions.NewWeatherTool()
-	getLongitude := searchFunctions.NewGeocodingTool()
-	financeMarket := searchFunctions.NewMarketTool()
-	getcurrenttime := timeFunctions.NewCurrentTimeTool()
-	bashfunction := bashfunction.NewBashTool()
-	toolRegistry.Register(bashfunction)
-
-	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
-	toolRegistry.Register(fileFunctions.GetFileWriteTool())
-	toolRegistry.Register(libraryfs.New())
-	// toolRegistry.Register(memotool.NewMemoWriteTool())
-	toolRegistry.Register(noveltool.New())
-	toolRegistry.Register(getcurrenttime)
-	toolRegistry.Register(financeMarket)
-	toolRegistry.Register(getLongitude)
-	toolRegistry.Register(getWheatherTool)
-	toolRegistry.Register(getTime)
-	toolRegistry.Register(calculateTimeTool)
 
 	js, err := toolRegistry.ConvertToolsToJSON()
 	if err != nil {
 		logging.Error("ConvertToolsToJSON failed: %v", err)
+		return nil
+	}
+	return js
+}
+
+func getToolsSimpleInfo() []byte {
+	toolRegistry := tools.Getregistry()
+	js, err := toolRegistry.GetToolsSimpleInfo()
+	if err != nil {
+		logging.Error("GetToolsSimpleInfo failed: %v", err)
 		return nil
 	}
 	return js

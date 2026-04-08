@@ -128,7 +128,7 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
 
   const listRows = useMemo(() => {
     const q = listQuery.trim().toLowerCase();
-    return headings.map((h, i) => {
+    const rows = headings.map((h, i) => {
       const slice = getSectionSlice(text, headings, i);
       const body = sectionBodyAfterTitleLine(stripLeiAgentMemoSource(slice));
       return {
@@ -138,6 +138,8 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
         date: extractDateFromSection(slice),
       };
     }).filter((row) => !q || row.title.toLowerCase().includes(q) || row.snippet.toLowerCase().includes(q));
+    // 文档中越靠后的分节越新（新建 / memo_write 追加在末尾）；列表倒序，新的在上
+    return rows.slice().reverse();
   }, [headings, text, listQuery]);
 
   const activeSlice = useMemo(() => {
@@ -275,7 +277,7 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
     }
     setActiveIndex((prev) => {
       if (prev !== null && prev < headings.length) return prev;
-      return 0;
+      return headings.length - 1;
     });
   }, [open, text, headings.length]);
 

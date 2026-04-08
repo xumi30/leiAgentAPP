@@ -8,6 +8,7 @@ import (
 	"leiAgent/internal/doclib"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
+	"leiAgent/utils"
 
 	"os"
 	"path/filepath"
@@ -232,6 +233,10 @@ func (t *WriteFileChunk) Execute(ctx context.Context, args string) (string, erro
 func (t *WriteFileChunk) Run(ctx context.Context, input string) (string, error) {
 	return t.Execute(ctx, input)
 }
+func (t *WriteFileChunk) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicFiles, "按字节偏移分块写入大文件，适合超长内容分段落盘。")
+}
+
 func (t *WriteFileChunk) Results() map[string]interface{} {
 	return map[string]interface{}{
 		"type":        "object",

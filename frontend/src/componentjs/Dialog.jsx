@@ -17,7 +17,37 @@ import {
 
 const MAIN_SHEET_ID = 'main';
 
+/** 同 role 连续消息间隔 ≥ 此毫秒才再次显示头像 */
+const MESSAGE_AVATAR_GROUP_GAP_MS = 3 * 60 * 1000;
+
 const MEMO_CUSTOM_PRESETS_STORAGE_KEY = 'leiAgent.memoComposeCustomPresets.v1';
+
+/** @param {unknown} ts */
+function messageTimestampMs(ts) {
+    if (ts == null || ts === '') return NaN;
+    if (typeof ts === 'number') return Number.isFinite(ts) ? ts : NaN;
+    const n = new Date(ts).getTime();
+    return Number.isFinite(n) ? n : NaN;
+}
+
+/**
+ * 与列表中上一条已展示消息相比：同 role 且发送间隔小于 3 分钟则不重复头像。
+ * @param {{ role: string, timestamp?: unknown }[]} list
+ * @param {number} index
+ */
+function shouldShowMessageAvatar(list, index) {
+    if (index <= 0) return true;
+    const cur = list[index];
+    const prev = list[index - 1];
+    if (!cur || !prev) return true;
+    const curUser = cur.role === 'user';
+    const prevUser = prev.role === 'user';
+    if (curUser !== prevUser) return true;
+    const curMs = messageTimestampMs(cur.timestamp);
+    const prevMs = messageTimestampMs(prev.timestamp);
+    if (Number.isNaN(curMs) || Number.isNaN(prevMs)) return true;
+    return curMs - prevMs >= MESSAGE_AVATAR_GROUP_GAP_MS;
+}
 
 /** 内置快捷提示（不可删）；自定义项存 localStorage */
 const MEMO_COMPOSE_PRESETS_DEFAULT = [
@@ -429,11 +459,14 @@ export default function Dialog() {
         if (kind === 'newTopic') {
             const newId = `sheet_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             const startIdx = messages.length;
-            setSheets((prev) => [
-                ...prev,
-                { id: newId, title: clipSheetTitle(content), startIdx },
-            ]);
-            setActiveSheetId(newId);
+            // 暂时断开“新便签/页签”触发点：保留逻辑与数据结构，但不再创建/切换页签。
+            // setSheets((prev) => [
+            //     ...prev,
+            //     { id: newId, title: clipSheetTitle(content), startIdx },
+            // ]);
+            // setActiveSheetId(newId);
+            void newId;
+            void startIdx;
         }
 
         SendMessage(chatId, content, "user");
@@ -545,7 +578,8 @@ export default function Dialog() {
                                 'dialog__tab' +
                                 (activeSheetId === s.id ? ' dialog__tab--active' : '')
                             }
-                            onClick={() => setActiveSheetId(s.id)}
+                            // 暂时断开“点击页签切换”触发点：保留 UI，但不触发切换。
+                            // onClick={() => setActiveSheetId(s.id)}
                             title={s.title}
                         >
                             <span className="dialog__tab-label">{s.title}</span>
@@ -564,8 +598,9 @@ export default function Dialog() {
                 onScroll={handleMessagesScroll}
                 onMouseDown={onMessagesMemoDismissMouseDown}
             >
-                {memoListMessages.map((msg) => {
+                {memoListMessages.map((msg, msgIndex) => {
                     const isUser = msg.role === 'user';
+                    const showAvatar = shouldShowMessageAvatar(memoListMessages, msgIndex);
                     const streamingHere =
                         !isUser &&
                         streamInActiveSheet &&
@@ -581,7 +616,8 @@ export default function Dialog() {
                             className={
                                 'dialogmessage dialogmessage_' +
                                 (isUser ? 'user' : 'assistant') +
-                                (memoStripOpen ? ' dialogmessage--memo-pick' : '')
+                                (memoStripOpen ? ' dialogmessage--memo-pick' : '') +
+                                (!showAvatar ? ' dialogmessage--avatar-hidden' : '')
                             }
                         >
                             {memoStripOpen ? (
@@ -596,10 +632,12 @@ export default function Dialog() {
                                 </label>
                             ) : null}
                             <div className="dialogmessage__body">
-                                <div className="message-avatar clay-card">
-                                    {isUser ? '🧑🏻' : '🤖'}
-                                    <span className="message-timestamp">{msg.timestamp}</span>
-                                </div>
+                                {showAvatar ? (
+                                    <div className="message-avatar clay-card">
+                                        {isUser ? '🧑🏻' : '🤖'}
+                                        <span className="message-timestamp">{msg.timestamp}</span>
+                                    </div>
+                                ) : null}
                                 <div
                                     className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}${streamingHere ? ' messagecontent--streaming' : ''}`}
                                 >

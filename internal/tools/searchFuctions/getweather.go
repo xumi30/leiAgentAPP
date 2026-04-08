@@ -122,6 +122,10 @@ func (t *WeatherTool) Execute(ctx context.Context, args string) (string, error) 
 	return t.formatWeatherData(body, days)
 }
 
+func (t *WeatherTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicSearch, "根据经纬度查询当地实况与多日天气预报。")
+}
+
 func (t *WeatherTool) Results() map[string]interface{} {
 	return map[string]interface{}{
 		"type":        "object",

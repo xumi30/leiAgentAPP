@@ -251,7 +251,6 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 		return fmt.Errorf("failed to marshal input: %v for step %s", err, step.Id)
 	}
 
-	// 执行工具
 	result, err := tool.Execute(ctx, string(inputJSON))
 
 	if err != nil {

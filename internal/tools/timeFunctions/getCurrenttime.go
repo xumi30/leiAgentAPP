@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"leiAgent/internal/tools"
+	"leiAgent/utils"
 	"time"
 )
 
@@ -71,9 +72,14 @@ func (t *CurrentTimeTool) Execute(ctx context.Context, args string) (string, err
 
 	return string(jsonBytes), nil
 }
+
+func (t *CurrentTimeTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicTime, "获取服务器当前日期时间、星期、农历与节假日等实时时间信息。")
+}
+
 func (t *CurrentTimeTool) Results() map[string]interface{} {
 	return map[string]interface{}{
-		"type": "object",
+		"type":        "object",
 		"description": "Current time information including date, weekday, lunar date, and holiday",
 		"properties": map[string]interface{}{
 			"current_time": map[string]interface{}{
@@ -99,4 +105,3 @@ func (t *CurrentTimeTool) Results() map[string]interface{} {
 		},
 	}
 }
-

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"leiAgent/logging"
+	"leiAgent/utils"
 	"os"
 
 	"github.com/serpapi/serpapi-golang"
@@ -129,6 +130,10 @@ func (t *SerpapiSearch) generateQueries(query string) []string {
 		query + " 教程",
 		query + " 最新",
 	}
+}
+
+func (t *SerpapiSearch) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap("联网搜索", "通过 SerpAPI 调用 Google/Bing 等引擎返回网页检索与摘要类结果。")
 }
 
 func (t *SerpapiSearch) Results() map[string]interface{} {

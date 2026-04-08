@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"leiAgent/utils"
 )
 
 // MarketTool implements market data query
@@ -479,6 +481,10 @@ func normalizeSymbol(input string) string {
 	default:
 		return input
 	}
+}
+
+func (t *MarketTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicSearch, "按交易标的查询股票、加密等金融市场价格与趋势类结构化分析。")
 }
 
 func (t *MarketTool) Results() map[string]interface{} {

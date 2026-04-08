@@ -4,7 +4,7 @@
     height: 100%;
     width: 100%;
     overflow: hidden;
-    margin: 0 8px;
+    margin: 0 6px;
     border-radius: 14px;
     background: var(--apple-surface-solid);
     border: 1px solid var(--apple-separator);
@@ -19,7 +19,7 @@
     flex-shrink: 0;
     min-width: 0;
     overflow: hidden;
-    padding: 12px 20px;
+    padding: 10px 16px;
     background: rgba(255, 255, 255, 0.65);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -29,7 +29,7 @@
     color: var(--apple-label);
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .dialog__header-title {
@@ -45,9 +45,9 @@
 .dialog__header--tabs {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    gap: 6px;
+    padding-top: 8px;
+    padding-bottom: 8px;
 }
 
 .dialog__tabs {
@@ -109,7 +109,7 @@
 
 .dialog__classify-hint {
     flex-shrink: 0;
-    padding: 6px 20px 8px;
+    padding: 5px 14px 6px;
     font-size: 12px;
     color: var(--apple-secondary);
     background: rgba(250, 248, 255, 0.55);
@@ -120,10 +120,10 @@
     min-width: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 18px 20px 22px;
+    padding: 12px 14px 14px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 12px;
     background: linear-gradient(
         180deg,
         rgba(250, 248, 255, 0.55) 0%,
@@ -139,27 +139,27 @@
 
 /* 生成备忘展开：消息区略微内收（避免过大位移） */
 .dialog--memo-strip-open .dialog__messages {
-    padding-left: 24px;
-    padding-right: 24px;
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 
 
 .dialog__input {
     flex-shrink: 0;
-    padding: 14px 16px 16px;
+    padding: 10px 12px 12px;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(245, 246, 250, 0.9) 100%);
     border-top: 1px solid var(--apple-separator);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     max-height: 42%;
-    min-height: 72px;
+    min-height: 64px;
 }
 
 .dialog__input-row {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
+    gap: 8px;
     max-width: 100%;
 }
 
@@ -168,8 +168,8 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
-    margin-top: 4px;
+    gap: 4px;
+    margin-top: 2px;
     padding-top: 2px;
 }
 
@@ -178,7 +178,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-start;
-    gap: 8px;
+    gap: 6px;
 }
 
 .dialog__memo-pill {
@@ -568,8 +568,8 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    min-height: 44px;
-    padding: 0 12px;
+    min-height: 40px;
+    padding: 0 10px;
     border: none;
     border-radius: 14px;
     background: linear-gradient(180deg, rgba(255, 235, 238, 0.95), rgba(255, 205, 210, 0.85));
@@ -622,9 +622,9 @@
 .dialog__textarea {
     display: block;
     width: 100%;
-    min-height: 44px;
+    min-height: 40px;
     max-height: 200px;
-    padding: 11px 16px 12px;
+    padding: 8px 12px 10px;
     border: none;
     border-radius: 18px;
     background: transparent;
@@ -644,8 +644,8 @@
 
 .dialog__btn-send {
     flex-shrink: 0;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -685,10 +685,47 @@
     max-width: 100%;
 }
 
+/* 同 role 连续气泡（已隐藏头像）：略收紧与上一条的间距 */
+.dialog__messages > .dialogmessage--avatar-hidden {
+    margin-top: -4px;
+}
+
+/* 助手侧：连续「隐藏头像」消息之间取消列表 gap，气泡上下合成一块色 */
+.dialog__messages > .dialogmessage_assistant.dialogmessage--avatar-hidden + .dialogmessage_assistant.dialogmessage--avatar-hidden {
+    margin-top: -12px;
+}
+
+.dialog__messages
+    > .dialogmessage_assistant.dialogmessage--avatar-hidden
+    + .dialogmessage_assistant.dialogmessage--avatar-hidden
+    .messagecontent {
+    border-top: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    margin-top: -1px;
+}
+
+/* 叠在中间：去掉阴影，避免接缝处断开；整段最后一条仍保留助手气泡阴影 */
+.dialog__messages
+    > .dialogmessage_assistant.dialogmessage--avatar-hidden
+    + .dialogmessage_assistant.dialogmessage--avatar-hidden:has(+ .dialogmessage_assistant.dialogmessage--avatar-hidden)
+    .messagecontent {
+    box-shadow: none;
+}
+
+.dialog__messages
+    > .dialogmessage_assistant.dialogmessage--avatar-hidden:has(+ .dialogmessage_assistant.dialogmessage--avatar-hidden)
+    .messagecontent {
+    border-bottom: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    box-shadow: none;
+}
+
 .dialogmessage--memo-pick {
     flex-direction: row;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
 }
 
 .dialogmessage__body {
@@ -698,9 +735,20 @@
     flex-direction: column;
 }
 
+/* 头像行与气泡之间收紧 */
+.dialogmessage .dialogmessage__body {
+    row-gap: 2px;
+}
+
+.dialogmessage .message-avatar {
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 2px;
+}
+
 .dialogmessage__memo-pick {
     flex-shrink: 0;
-    padding-top: 10px;
+    padding-top: 8px;
     display: flex;
     align-items: flex-start;
     cursor: pointer;
@@ -734,9 +782,9 @@
 .message-avatar {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-    padding: 4px 0;
+    gap: 8px;
+    margin-bottom: 0;
+    padding: 0;
     background: transparent;
     backdrop-filter: none;
 }
@@ -758,7 +806,7 @@
 
 .messagecontent {
     position: relative;
-    padding: 12px 16px 14px;
+    padding: 9px 12px 11px;
     border-radius: 18px;
     backdrop-filter: blur(12px) saturate(150%);
     -webkit-backdrop-filter: blur(12px) saturate(150%);
@@ -773,14 +821,25 @@
     color: var(--apple-label);
 }
 
+/* 助手气泡：上下内边距为默认的一半（左右保持与 .messagecontent 一致） */
+.messagecontent--assistant {
+    padding-top: 4px;
+    padding-bottom: 5px;
+}
+
 .messagecontent--streaming {
-    padding-top: 26px;
+    padding-top: 22px;
+}
+
+/* 流式时顶部需留出指示器，约为原 streaming 顶内边距减半后仍不压住圆点 */
+.messagecontent--assistant.messagecontent--streaming {
+    padding-top: 18px;
 }
 
 .message-streaming-indicator {
     position: absolute;
-    top: 8px;
-    left: 12px;
+    top: 6px;
+    left: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -812,10 +871,55 @@
     overflow-y: auto;
     overflow-x: hidden;
     font-size: 14px;
-    line-height: 1.65;
+    line-height: 1.55;
     scrollbar-width: thin;
     word-wrap: break-word;
     overflow-wrap: anywhere;
+}
+
+/* 正文 + JSON 胶囊同一行流动，窄屏时与文字一样自动换行（非强制块级换行） */
+.message-body__flow {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.28em;
+    row-gap: 0.15em;
+}
+
+.message-body__flow > .message-markdown--in-flow {
+    display: contents;
+}
+
+.message-body__flow .msg-md-slice {
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+.message-body__flow .msg-md-slice:has(> ul),
+.message-body__flow .msg-md-slice:has(> ol),
+.message-body__flow .msg-md-slice:has(> pre),
+.message-body__flow .msg-md-slice:has(> blockquote),
+.message-body__flow .msg-md-slice:has(> h1),
+.message-body__flow .msg-md-slice:has(> h2),
+.message-body__flow .msg-md-slice:has(> h3) {
+    flex: 1 0 100%;
+}
+
+.message-body__flow > .msg-fence-block {
+    flex: 1 0 100%;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.message-body__flow > .msg-json-snippet {
+    flex: 0 1 auto;
+    align-self: center;
+}
+
+.message-body__flow .msg-doc-path-link--chip {
+    flex: 0 0 auto;
+    align-self: center;
 }
 
 .message-body::-webkit-scrollbar {
@@ -857,22 +961,18 @@
     }
 
     .message-markdown pre,
-    .msg-json-snippet__pre,
     .msg-fence-block {
         scrollbar-width: none;
     }
 
     .message-markdown pre:hover,
     .message-markdown pre:focus-within,
-    .msg-json-snippet__pre:hover,
-    .msg-json-snippet__pre:focus-within,
     .msg-fence-block:hover,
     .msg-fence-block:focus-within {
         scrollbar-width: thin;
     }
 
     .message-markdown pre::-webkit-scrollbar,
-    .msg-json-snippet__pre::-webkit-scrollbar,
     .msg-fence-block::-webkit-scrollbar {
         width: 0;
         height: 0;
@@ -880,8 +980,6 @@
 
     .message-markdown pre:hover::-webkit-scrollbar,
     .message-markdown pre:focus-within::-webkit-scrollbar,
-    .msg-json-snippet__pre:hover::-webkit-scrollbar,
-    .msg-json-snippet__pre:focus-within::-webkit-scrollbar,
     .msg-fence-block:hover::-webkit-scrollbar,
     .msg-fence-block:focus-within::-webkit-scrollbar {
         width: 6px;
@@ -889,7 +987,6 @@
     }
 
     .message-markdown pre::-webkit-scrollbar-thumb,
-    .msg-json-snippet__pre::-webkit-scrollbar-thumb,
     .msg-fence-block::-webkit-scrollbar-thumb {
         background: transparent;
         border-radius: 999px;
@@ -897,8 +994,6 @@
 
     .message-markdown pre:hover::-webkit-scrollbar-thumb,
     .message-markdown pre:focus-within::-webkit-scrollbar-thumb,
-    .msg-json-snippet__pre:hover::-webkit-scrollbar-thumb,
-    .msg-json-snippet__pre:focus-within::-webkit-scrollbar-thumb,
     .msg-fence-block:hover::-webkit-scrollbar-thumb,
     .msg-fence-block:focus-within::-webkit-scrollbar-thumb {
         background: rgba(60, 60, 67, 0.25);
@@ -906,7 +1001,7 @@
 }
 
 .message-markdown {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
 }
 
 .message-markdown:last-child {
@@ -942,8 +1037,290 @@
     text-align: left;
 }
 
+/* 正文中状态词 / 流程起止 / 情感词等高亮 */
+.message-markdown .msg-kw {
+    font-weight: 600;
+    border-radius: 4px;
+    padding: 0 0.12em;
+    margin: 0 0.02em;
+    white-space: nowrap;
+}
+
+.message-markdown .msg-kw--ok {
+    color: rgba(12, 115, 72, 0.96);
+    background: rgba(12, 115, 72, 0.1);
+}
+
+.message-markdown .msg-kw--err {
+    color: rgba(175, 38, 48, 0.96);
+    background: rgba(175, 38, 48, 0.09);
+}
+
+.message-markdown .msg-kw--warn {
+    color: rgba(155, 82, 12, 0.96);
+    background: rgba(200, 115, 20, 0.12);
+}
+
+.message-markdown .msg-kw--info {
+    color: rgba(35, 90, 150, 0.95);
+    background: rgba(35, 90, 150, 0.09);
+}
+
+/* 流程：开始 / 结束 / 启停（偏青绿，与 ok 区分） */
+.message-markdown .msg-kw--flow {
+    color: rgba(0, 118, 105, 0.96);
+    background: rgba(0, 130, 115, 0.1);
+}
+
+/* 情绪：快乐 / 愉悦 / 活力 — 暖橙字 + 浅黄粉底 */
+.message-markdown .msg-kw--emo-joy {
+    color: rgba(210, 105, 28, 0.96);
+    background: linear-gradient(
+        135deg,
+        rgba(255, 236, 175, 0.55) 0%,
+        rgba(255, 220, 200, 0.42) 100%
+    );
+}
+
+/* 情绪：幸福 / 温馨 / 治愈 — 暖米杏底 + 柔棕字 */
+.message-markdown .msg-kw--emo-warm {
+    color: rgba(145, 88, 78, 0.95);
+    background: linear-gradient(
+        135deg,
+        rgba(255, 245, 232, 0.7) 0%,
+        rgba(255, 228, 220, 0.5) 100%
+    );
+}
+
+/* 情绪：希望 / 积极 / 向上 — 嫩青绿 + 薄荷浅底 */
+.message-markdown .msg-kw--emo-hope {
+    color: rgba(22, 130, 115, 0.96);
+    background: linear-gradient(
+        135deg,
+        rgba(200, 245, 230, 0.55) 0%,
+        rgba(185, 230, 248, 0.4) 100%
+    );
+}
+
+/* 情绪：自信 / 力量 / 坚定 — 藏蓝字 + 浅金底 */
+.message-markdown .msg-kw--emo-power {
+    color: rgba(18, 42, 82, 0.98);
+    background: linear-gradient(
+        135deg,
+        rgba(255, 228, 175, 0.5) 0%,
+        rgba(230, 235, 245, 0.45) 100%
+    );
+}
+
+/* 情绪：浪漫 / 心动 / 温柔 — 玫瑰粉 + 淡紫调底 */
+.message-markdown .msg-kw--emo-romantic {
+    color: rgba(165, 72, 118, 0.96);
+    background: linear-gradient(
+        135deg,
+        rgba(250, 220, 238, 0.6) 0%,
+        rgba(235, 225, 250, 0.45) 100%
+    );
+}
+
+/* 情绪：平静 / 放松 — 雾霾蓝字 + 薄荷浅青底 */
+.message-markdown .msg-kw--emo-calm {
+    color: rgba(78, 118, 138, 0.96);
+    background: linear-gradient(
+        135deg,
+        rgba(215, 235, 240, 0.55) 0%,
+        rgba(200, 235, 225, 0.45) 100%
+    );
+}
+
+/* 情绪：消极 — 灰紫，压低饱和度 */
+.message-markdown .msg-kw--emo-neg {
+    color: rgba(95, 78, 118, 0.95);
+    background: rgba(195, 188, 210, 0.22);
+}
+
+/* 用户词表：指令动作 / 打断纠正 / 时间 / 对象资源 / 任务步骤 / 澄清 / 否定限定 / 优先级 / 情绪态度 / 专业技术 / 约束范围 */
+.message-markdown .msg-kw--intent {
+    color: rgba(0, 105, 125, 0.96);
+    background: rgba(0, 155, 165, 0.12);
+}
+
+.message-markdown .msg-kw--interrupt {
+    color: rgba(165, 58, 72, 0.96);
+    background: rgba(220, 95, 105, 0.14);
+}
+
+.message-markdown .msg-kw--time {
+    color: rgba(55, 95, 145, 0.96);
+    background: rgba(95, 145, 205, 0.12);
+}
+
+.message-markdown .msg-kw--resource {
+    color: rgba(125, 88, 42, 0.96);
+    background: rgba(210, 165, 95, 0.18);
+}
+
+.message-markdown .msg-kw--task {
+    color: rgba(88, 62, 145, 0.96);
+    background: rgba(165, 140, 220, 0.16);
+}
+
+.message-markdown .msg-kw--clarify {
+    color: rgba(28, 108, 155, 0.96);
+    background: rgba(95, 175, 225, 0.14);
+}
+
+.message-markdown .msg-kw--negate {
+    color: rgba(95, 88, 105, 0.96);
+    background: rgba(175, 168, 188, 0.2);
+}
+
+.message-markdown .msg-kw--priority {
+    color: rgba(175, 72, 18, 0.96);
+    background: rgba(255, 155, 88, 0.16);
+}
+
+.message-markdown .msg-kw--affect {
+    color: rgba(145, 72, 125, 0.96);
+    background: rgba(235, 185, 210, 0.22);
+}
+
+.message-markdown .msg-kw--tech {
+    color: rgba(28, 95, 88, 0.96);
+    background: rgba(120, 195, 175, 0.14);
+}
+
+.message-markdown .msg-kw--constraint {
+    color: rgba(72, 95, 58, 0.96);
+    background: rgba(175, 195, 145, 0.2);
+}
+
+.message-markdown .msg-kw--trending {
+    color: rgba(185, 58, 42, 0.96);
+    background: rgba(255, 175, 155, 0.22);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--ok {
+    color: rgba(8, 95, 62, 0.98);
+    background: rgba(255, 255, 255, 0.42);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--err {
+    color: rgba(155, 32, 42, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--warn {
+    color: rgba(130, 70, 10, 0.98);
+    background: rgba(255, 255, 255, 0.38);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--info {
+    color: rgba(28, 78, 135, 0.98);
+    background: rgba(255, 255, 255, 0.38);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--flow {
+    color: rgba(0, 105, 95, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--emo-joy {
+    color: rgba(195, 95, 22, 0.98);
+    background: rgba(255, 255, 255, 0.48);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--emo-warm {
+    color: rgba(135, 82, 72, 0.98);
+    background: rgba(255, 255, 255, 0.46);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--emo-hope {
+    color: rgba(18, 115, 100, 0.98);
+    background: rgba(255, 255, 255, 0.44);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--emo-power {
+    color: rgba(18, 38, 72, 0.98);
+    background: rgba(255, 255, 255, 0.44);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--emo-romantic {
+    color: rgba(150, 62, 105, 0.98);
+    background: rgba(255, 255, 255, 0.45);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--emo-calm {
+    color: rgba(68, 108, 128, 0.98);
+    background: rgba(255, 255, 255, 0.44);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--emo-neg {
+    color: rgba(88, 72, 108, 0.98);
+    background: rgba(255, 255, 255, 0.38);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--intent {
+    color: rgba(0, 95, 112, 0.98);
+    background: rgba(255, 255, 255, 0.42);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--interrupt {
+    color: rgba(145, 48, 62, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--time {
+    color: rgba(45, 82, 128, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--resource {
+    color: rgba(108, 75, 35, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--task {
+    color: rgba(75, 52, 128, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--clarify {
+    color: rgba(22, 95, 138, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--negate {
+    color: rgba(82, 78, 92, 0.98);
+    background: rgba(255, 255, 255, 0.38);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--priority {
+    color: rgba(155, 62, 15, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--affect {
+    color: rgba(128, 62, 108, 0.98);
+    background: rgba(255, 255, 255, 0.42);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--tech {
+    color: rgba(22, 85, 78, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--constraint {
+    color: rgba(62, 82, 48, 0.98);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.dialogmessage_user .message-markdown .msg-kw--trending {
+    color: rgba(165, 48, 35, 0.98);
+    background: rgba(255, 255, 255, 0.42);
+}
+
 .message-markdown p {
-    margin: 0.35em 0;
+    margin: 0.28em 0;
 }
 
 .message-markdown p:first-child {
@@ -956,8 +1333,8 @@
 
 .message-markdown ul,
 .message-markdown ol {
-    margin: 0.4em 0;
-    padding-left: 1.35em;
+    margin: 0.3em 0;
+    padding-left: 1.2em;
 }
 
 .message-markdown code {
@@ -971,7 +1348,7 @@
     max-height: 200px;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 10px 12px;
+    padding: 8px 10px;
     border-radius: 10px;
     background: rgba(60, 60, 67, 0.06);
     font-size: 12px;
@@ -1007,80 +1384,87 @@
 .message-markdown h1,
 .message-markdown h2,
 .message-markdown h3 {
-    margin: 0.6em 0 0.35em;
+    margin: 0.45em 0 0.28em;
     font-size: 1.05em;
     font-weight: 700;
 }
 
-/* JSON 小卡片 */
+/* JSON：一体按钮 — 少女粉 / 草莓牛奶系，软萌高光 */
 .msg-json-snippet {
-    margin: 10px 0;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid var(--apple-separator);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    padding: 5px 11px 5px 10px;
+    border-radius: 999px;
+    background: linear-gradient(
+        145deg,
+        rgba(255, 240, 248, 0.92) 0%,
+        rgba(255, 222, 236, 0.78) 55%,
+        rgba(255, 228, 245, 0.85) 100%
+    );
+    border: 1px solid rgba(255, 175, 205, 0.48);
+    box-shadow:
+        0 2px 8px rgba(255, 140, 175, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
     cursor: pointer;
-    transition: transform 0.12s ease, box-shadow 0.15s ease;
-    overflow: hidden;
-    width: 100%;
+    transition:
+        background 0.16s ease,
+        border-color 0.16s ease,
+        box-shadow 0.16s ease;
+    width: fit-content;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
 }
 
 .msg-json-snippet:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    background: linear-gradient(
+        145deg,
+        rgba(255, 232, 244, 0.96) 0%,
+        rgba(255, 210, 230, 0.9) 50%,
+        rgba(255, 218, 240, 0.92) 100%
+    );
+    border-color: rgba(255, 155, 195, 0.58);
+    box-shadow:
+        0 3px 12px rgba(255, 130, 170, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .msg-json-snippet:focus-visible {
-    outline: 2px solid rgba(0, 122, 255, 0.5);
-    outline-offset: 2px;
+    outline: 1px solid rgba(255, 160, 200, 0.75);
+    outline-offset: 1px;
 }
 
 .msg-json-snippet__bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    background: rgba(242, 242, 247, 0.9);
-    border-bottom: 1px solid var(--apple-separator);
+    display: contents;
 }
 
 .msg-json-snippet__badge {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    color: var(--apple-label);
-    background: var(--apple-fill);
-    padding: 3px 8px;
-    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: rgba(190, 88, 130, 0.92);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+    line-height: 1.2;
 }
 
 .msg-json-snippet__action {
-    font-size: 11px;
-    color: var(--apple-blue);
-}
-
-.msg-json-snippet__pre {
-    margin: 0;
-    padding: 10px 12px 12px;
-    font-size: 12px;
-    line-height: 1.5;
-    font-family: ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', Consolas, monospace;
-    color: var(--apple-label);
-    white-space: pre-wrap;
-    overflow-x: hidden;
-    overflow-y: auto;
-    max-height: 160px;
-    word-break: break-word;
-    -webkit-overflow-scrolling: touch;
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(200, 105, 145, 0.88);
+    padding: 0;
+    line-height: 1.2;
 }
 
 /* 非 JSON 代码块 */
 .msg-fence-block {
-    margin: 10px 0;
-    padding: 12px 14px;
+    margin: 8px 0;
+    padding: 9px 11px;
     border-radius: 12px;
     background: rgba(60, 60, 67, 0.05);
     border: 1px solid var(--apple-separator);
@@ -1101,7 +1485,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--apple-secondary);
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     text-transform: uppercase;
 }
 
@@ -1119,7 +1503,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 18px;
     background: rgba(20, 24, 32, 0.38);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
@@ -1131,9 +1515,15 @@
     display: flex;
     flex-direction: column;
     border-radius: 14px;
-    background: var(--apple-surface-solid);
-    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
-    border: 1px solid var(--apple-separator);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 252, 254, 1) 0%,
+        rgba(255, 248, 252, 1) 100%
+    );
+    box-shadow:
+        0 24px 80px rgba(180, 100, 140, 0.14),
+        0 8px 32px rgba(255, 160, 190, 0.08);
+    border: 1px solid rgba(255, 200, 220, 0.55);
     overflow: hidden;
 }
 
@@ -1141,12 +1531,16 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 14px;
     font-weight: 600;
     font-size: 15px;
-    color: var(--apple-label);
-    background: rgba(242, 242, 247, 0.85);
-    border-bottom: 1px solid var(--apple-separator);
+    color: rgba(120, 55, 88, 0.92);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 244, 250, 0.98) 0%,
+        rgba(255, 232, 244, 0.92) 100%
+    );
+    border-bottom: 1px solid rgba(255, 195, 218, 0.45);
 }
 
 .msg-json-modal__close {
@@ -1161,14 +1555,15 @@
 }
 
 .msg-json-modal__close:hover {
-    background: rgba(0, 122, 255, 0.08);
+    background: rgba(255, 140, 180, 0.14);
+    color: rgba(190, 70, 115, 0.95);
 }
 
 .msg-json-modal__body {
     margin: 0;
     flex: 1;
     overflow: auto;
-    padding: 16px 18px 20px;
+    padding: 12px 14px 16px;
     font-size: 12px;
     line-height: 1.5;
     font-family: ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', Consolas, monospace;
@@ -1244,16 +1639,39 @@
 }
 
 .dialogmessage_user .msg-json-snippet {
-    background: rgba(255, 255, 255, 0.52);
-    border-color: rgba(140, 200, 255, 0.4);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 2px 12px rgba(100, 160, 255, 0.1);
+    background: linear-gradient(
+        150deg,
+        rgba(255, 248, 252, 0.88) 0%,
+        rgba(255, 228, 240, 0.72) 45%,
+        rgba(255, 218, 235, 0.68) 100%
+    );
+    border-color: rgba(255, 168, 200, 0.52);
+    box-shadow:
+        0 2px 10px rgba(255, 140, 175, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
-.dialogmessage_user .msg-json-snippet__bar {
-    background: rgba(236, 240, 255, 0.75);
-    border-bottom-color: rgba(140, 200, 255, 0.25);
+.dialogmessage_user .msg-json-snippet:hover {
+    background: linear-gradient(
+        150deg,
+        rgba(255, 244, 250, 0.95) 0%,
+        rgba(255, 218, 236, 0.82) 50%,
+        rgba(255, 208, 230, 0.78) 100%
+    );
+    border-color: rgba(255, 150, 190, 0.6);
+    box-shadow:
+        0 3px 14px rgba(255, 125, 165, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.dialogmessage_user .msg-json-snippet__badge {
+    color: rgba(175, 72, 115, 0.92);
+    background: transparent;
+    border: none;
+}
+
+.dialogmessage_user .msg-json-snippet__action {
+    color: rgba(195, 88, 128, 0.9);
 }
 
 /* 助手侧内嵌块：与气泡同系的马卡龙半透明 */
@@ -1274,13 +1692,37 @@
 }
 
 .dialogmessage_assistant .msg-json-snippet {
-    background: rgba(255, 255, 255, 0.48);
-    border-color: rgba(180, 160, 255, 0.28);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: linear-gradient(
+        155deg,
+        rgba(255, 240, 250, 0.65) 0%,
+        rgba(245, 225, 255, 0.42) 48%,
+        rgba(255, 230, 245, 0.55) 100%
+    );
+    border-color: rgba(230, 175, 215, 0.48);
+    box-shadow:
+        0 2px 10px rgba(220, 140, 190, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-.dialogmessage_assistant .msg-json-snippet__bar {
-    background: rgba(240, 236, 255, 0.72);
-    border-bottom-color: rgba(180, 160, 255, 0.2);
+.dialogmessage_assistant .msg-json-snippet:hover {
+    background: linear-gradient(
+        155deg,
+        rgba(255, 234, 248, 0.78) 0%,
+        rgba(240, 215, 250, 0.52) 50%,
+        rgba(255, 222, 242, 0.68) 100%
+    );
+    border-color: rgba(220, 160, 205, 0.58);
+    box-shadow:
+        0 3px 14px rgba(210, 130, 185, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.dialogmessage_assistant .msg-json-snippet__badge {
+    color: rgba(155, 78, 125, 0.9);
+    background: transparent;
+    border: none;
+}
+
+.dialogmessage_assistant .msg-json-snippet__action {
+    color: rgba(175, 95, 138, 0.88);
 }

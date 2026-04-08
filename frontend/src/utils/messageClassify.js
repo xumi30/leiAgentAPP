@@ -29,10 +29,9 @@ export function classifyUserMessage(text, opts = {}) {
     return 'newTopic';
   }
 
-  // 正在输出时：未命中上面规则时默认新开便签，避免打断当前生成又被混在同一视图
-  if (isStreaming) {
-    return 'newTopic';
-  }
+  // 正在输出时：默认仍视为补充，避免误判导致每条消息都新开便签。
+  // 如需新开便签，请使用上面的“显式新开主题”前缀。
+  void isStreaming;
 
   return 'supplement';
 }

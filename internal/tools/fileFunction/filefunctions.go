@@ -7,6 +7,7 @@ import (
 	"leiAgent/internal/doclib"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
+	"leiAgent/utils"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -186,13 +187,31 @@ func (t *FileWriteTool) Execute(ctx context.Context, args string) (string, error
 	}
 
 	doclib.Register(path)
-	return fmt.Sprintf("Successfully wrote content to file: %s", path), nil
+	out, _ := json.MarshalIndent(map[string]interface{}{
+		"message": fmt.Sprintf("Successfully wrote content to file: %s", path),
+		"path":    path,
+	}, "", "  ")
+	return string(out), nil
 }
 
 func (t *FileWriteTool) Results() map[string]interface{} {
 	return map[string]interface{}{
-		"type":        "string",
-		"description": "A message indicating the result of the file write operation.",
+		"type":        "object",
+		"description": "Result of file write operation.",
+		"properties": map[string]interface{}{
+			"message": map[string]interface{}{
+				"type":        "string",
+				"description": "Human-readable result message.",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "Absolute file path (if available in message).",
+			},
+		},
 	}
 
+}
+
+func (t *FileWriteTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicFiles, "将结构化 Markdown 等内容追加写入指定路径的本地文件。")
 }

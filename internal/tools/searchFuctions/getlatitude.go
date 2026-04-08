@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"leiAgent/logging"
+	"leiAgent/utils"
 	"net/http"
 	"net/url"
 )
@@ -138,6 +139,10 @@ func (t *GeocodingTool) Execute(ctx context.Context, args string) (string, error
 
 	return string(jsonBytes), nil
 
+}
+
+func (t *GeocodingTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicSearch, "将地名、地址或地标文字解析为经纬度坐标（Nominatim）。")
 }
 
 func (t *GeocodingTool) Results() map[string]interface{} {

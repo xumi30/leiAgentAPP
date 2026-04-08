@@ -200,7 +200,14 @@ func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte
 	tls := []openaistyle.Tool{}
 	if intent == utils.ToolModeString {
 		toolRegister := tools.Getregistry()
-		tls = toolRegister.ConvertTools()
+
+		// 尝试获取topic
+		topic, ok := ctx.Value(utils.ToolTopicToLoad).(string)
+		if ok {
+			tls = toolRegister.ConvertToolsByTopic(topic)
+		} else {
+			tls = toolRegister.ConvertTools()
+		}
 	}
 
 	chatMessages := convertMessages(memory.GetLocalMemory().GetMessages(chatID))

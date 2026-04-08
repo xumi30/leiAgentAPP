@@ -29,6 +29,10 @@ type Tool interface {
 	Execute(ctx context.Context, args string) (string, error)
 
 	Results() map[string]interface{}
+
+	// SimpleInfo returns a short topic label and one-line description for UIs or lexicons.
+	// Keys: "topic", "simpledescription" (JSON field names).
+	SimpleInfo() map[string]string
 }
 
 // ToolWithDisplayName is an optional interface that tools can implement

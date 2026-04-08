@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/tools"
+	"leiAgent/utils"
 )
 
 // MemoWriteTool writes to the app memo file (same as the UI 备忘录).
@@ -80,12 +81,22 @@ func (t *MemoWriteTool) Execute(ctx context.Context, args string) (string, error
 		if err := memo.WriteAll(params.Content); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Memo replaced: %s", memo.Path()), nil
+		out, _ := json.MarshalIndent(map[string]interface{}{
+			"message": fmt.Sprintf("Memo replaced: %s", memo.Path()),
+			"path":    memo.Path(),
+			"mode":    "replace",
+		}, "", "  ")
+		return string(out), nil
 	case "append":
 		if err := memo.AppendBlock(title, params.Content); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Memo appended: %s", memo.Path()), nil
+		out, _ := json.MarshalIndent(map[string]interface{}{
+			"message": fmt.Sprintf("Memo appended: %s", memo.Path()),
+			"path":    memo.Path(),
+			"mode":    "append",
+		}, "", "  ")
+		return string(out), nil
 	default:
 		return "", fmt.Errorf("mode must be append or replace, got %q", mode)
 	}
@@ -93,7 +104,25 @@ func (t *MemoWriteTool) Execute(ctx context.Context, args string) (string, error
 
 func (t *MemoWriteTool) Results() map[string]interface{} {
 	return map[string]interface{}{
-		"type":        "string",
-		"description": "Confirmation with memo file path.",
+		"type":        "object",
+		"description": "Result of memo write operation.",
+		"properties": map[string]interface{}{
+			"message": map[string]interface{}{
+				"type":        "string",
+				"description": "Human-readable confirmation message.",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "Absolute path to memo file (if available in message).",
+			},
+			"mode": map[string]interface{}{
+				"type":        "string",
+				"description": "Write mode used (append or replace).",
+			},
+		},
 	}
+}
+
+func (t *MemoWriteTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap("备忘录", "将 Markdown 内容写入或追加到应用内备忘录文件（与界面备忘录同源）。")
 }

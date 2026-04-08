@@ -18,6 +18,7 @@ type Intention struct {
 	Reason                string  `json:"reason"`
 	RequiresClarification bool    `json:"requires_clarification"`
 	Goal                  string  `json:"goal,omitempty"`
+	Content               string  `json:"content,omitempty"`
 }
 
 func ConfirmIntention(ctx context.Context, message string) (*Intention, error) {
@@ -41,16 +42,14 @@ IF the request is ambiguous, set "requires_clarification" to true.
 - No complex reasoning or planning is required.
 - The request is atomic and well-defined.
 - Examples: "Search for latest Bitcoin price", "Translate this sentence to Chinese", "Get weather in New York"
+- If the intent is TOOL, you need to return a JSON object with "intent": "TOOL" and "tooltopic".No need to call any tool.
 
 3. CHAT
 - The request is conversational, explanatory, or opinion-based.
 - No tool usage is required.
 - Examples: "What is blockchain?", "Do you think AI is dangerous?", "Explain Kubernetes simply"
+- If the intent is chat, just reply to the user directly with the content in the json. No need to call any tool.
 
-4. SWITCH
-- User explicitly requests to change the current mode/intention.
-- Keywords: "切换到", "switch to", "change to", "mode"
-- Examples: "切换到工具模式", "switch to tool mode", "change to planning mode"
 
 ---
 
@@ -59,10 +58,12 @@ IF the request is ambiguous, set "requires_clarification" to true.
 You MUST return a JSON object with the following structure:
 
 {
-  "intent": "PLAN | TOOL | CHAT | SWITCH",
+  "intent": "PLAN | TOOL | CHAT ",
   "confidence": 0.0-1.0,
   "reason": "short explanation",
   "requires_clarification": true | false
+  "content": "optional, only used when intent is CHAT"
+  "tooltopic": "optional, only used when intent is TOOL"
 }
 
 ---
@@ -74,7 +75,8 @@ You MUST return a JSON object with the following structure:
 - Prefer CHAT if no execution is required.
 - For SWITCH intent, only classify when user explicitly mentions mode switching.
 - DO NOT output anything other than JSON.`
-	js := toolsInfo()
+	js := getToolsSimpleInfo()
+
 	intentInput := struct {
 		Message string      `json:"message"`
 		Tools   interface{} `json:"TOOL_LIST"`
@@ -87,7 +89,7 @@ You MUST return a JSON object with the following structure:
 		logging.Error("序列化规划输入失败: %v", err)
 	}
 
-	message = `这个json的message这是用户请求,TOOL_LIST是可用的工具列表,根据这个信息，帮我判断用户请求的意图:` + string(intentJSON)
+	message = `这个json的message这是用户请求,TOOL_LIST是可用的工具列表的简单信息,根据这个信息，帮我判断用户请求的意图:` + string(intentJSON)
 
 	chatIDVal := ctx.Value(utils.ChatIDString)
 	chatIDStr, ok := chatIDVal.(string)

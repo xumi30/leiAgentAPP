@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"leiAgent/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -109,6 +110,10 @@ func (t *CalculateTimeTool) Execute(ctx context.Context, args string) (string, e
 	}
 
 	return string(jsonBytes), nil
+}
+
+func (t *CalculateTimeTool) SimpleInfo() map[string]string {
+	return utils.SimpleInfoMap(utils.ToolTopicTime, "以当前时刻为基准按给定时长做加减，得到新的日期时间。")
 }
 
 func (t *CalculateTimeTool) Results() map[string]interface{} {

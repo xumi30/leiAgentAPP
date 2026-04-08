@@ -93,6 +93,16 @@
   transform: translateY(-1px);
 }
 
+/* 当日有对话（创建或更新落在该日）：浅色青绿底 */
+.conv-cal__cell.has-conversation:not(.is-selected) {
+  background: rgba(186, 232, 216, 0.72);
+  color: var(--apple-label);
+}
+
+.conv-cal__cell.has-conversation:not(.is-selected):hover {
+  background: rgba(196, 238, 224, 0.9);
+}
+
 .conv-cal__cell.is-today {
   box-shadow: 0 0 0 2px var(--apple-blue);
 }
