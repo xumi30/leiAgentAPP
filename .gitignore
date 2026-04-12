@@ -1,6 +1,48 @@
+# Build outputs
 build/bin
-node_modules
 frontend/dist
+*.exe
 
-# 本地 LLM 密钥，勿提交；可复制 config/config.example.yaml
+# Dependencies
+node_modules
+
+# Local secrets（可复制 config/config.example.yaml）
 config/config.yaml
+
+# Logs
+logs/
+*.log
+
+# Runtime / local SQLite 与数据目录产物（启动后生成）
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/doc_library.json
+data/memo.md
+
+# macOS
+.DS_Store
+
+# Agent 工作区与用户文稿（本地即可）
+workspace/
+
+# 旅行计划等个人输出
+travel_plans/
+
+# 仓库根目录下的临时 / 演示 HTML
+hello_color.html
+tetris.html
+fortune.html
+dragon_animation.html
+manga_html.html
+
+# 本地记忆
+localmemory/    
+
+# 环境变量（若以后使用）
+.env
+.env.*
+!.env.example
+
+# 工具缓存
+frontend/.vite/

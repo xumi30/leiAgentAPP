@@ -4,6 +4,12 @@ import { getRandomMacaronColor } from './Constant';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
 import ConversationCalendar from './ConversationCalendar.jsx';
 
+/** Go 侧在无记录时可能返回 null，统一为数组避免 .length / .filter 报错 */
+function normalizeConversationList(raw) {
+    if (raw == null) return [];
+    return Array.isArray(raw) ? raw : [];
+}
+
 /** 从时间字段解析本地日历日 YYYY-MM-DD，无效则返回 null */
 function ymdFromConvField(v) {
     if (v == null || v === '') return null;
@@ -38,14 +44,15 @@ export default function ConversationList({
     const [selectedDate, setSelectedDate] = useState(null);
 
     const displayedCons = useMemo(() => {
-        if (!selectedDate) return cons;
-        return cons.filter((c) => conversationMatchesCalendarDay(c, selectedDate));
+        const list = normalizeConversationList(cons);
+        if (!selectedDate) return list;
+        return list.filter((c) => conversationMatchesCalendarDay(c, selectedDate));
     }, [cons, selectedDate]);
 
     /** 日历上标出「当天有对话」的日期（创建或更新落在该日） */
     const conversationDates = useMemo(() => {
         const s = new Set();
-        for (const c of cons) {
+        for (const c of normalizeConversationList(cons)) {
             for (const key of ['updated_at', 'created_at']) {
                 const ymd = ymdFromConvField(c[key]);
                 if (ymd) s.add(ymd);
@@ -97,7 +104,7 @@ export default function ConversationList({
     useEffect(() => {
         const loadConversations = async () => {
             try {
-                const conversations = await ListConversation();
+                const conversations = normalizeConversationList(await ListConversation());
                 console.log("loadConversations:", conversations);
                 setCons(conversations);
                 if (conversations.length > 0) {
@@ -118,9 +125,8 @@ export default function ConversationList({
             console.log("收到对话列表更新事件，数据:", updatedConversation);
             //删除本地的对话列表中对应的对话
             setCons((prevCons) => {
-                // 先过滤掉旧的对话
-                const filteredCons = prevCons.filter((con) => con.id !== updatedConversation.id);
-                // 然后添加新的对话
+                const prev = normalizeConversationList(prevCons);
+                const filteredCons = prev.filter((con) => con.id !== updatedConversation.id);
                 return [updatedConversation, ...filteredCons];
             });
             switchDialog(updatedConversation.id, updatedConversation.title);
@@ -132,7 +138,7 @@ export default function ConversationList({
 
         const handleDeleteSuccess = async () => {
             try {
-                const conversations = await ListConversation();
+                const conversations = normalizeConversationList(await ListConversation());
                 setCons(conversations);
                 if (conversations.length > 0) {
                     const first = conversations[0];
@@ -152,6 +158,7 @@ export default function ConversationList({
                 }
             } catch (err) {
                 console.error('刷新对话列表失败:', err);
+                setCons([]);
             }
         };
 
@@ -220,7 +227,9 @@ export default function ConversationList({
         const chatID = renameTarget.id != null ? String(renameTarget.id) : '';
         UpdateConversationTitle(chatID, trimmed);
         setCons((prev) =>
-            prev.map((c) => (String(c.id ?? '') === chatID ? { ...c, title: trimmed } : c)),
+            normalizeConversationList(prev).map((c) =>
+                String(c.id ?? '') === chatID ? { ...c, title: trimmed } : c,
+            ),
         );
         console.log(`修改对话 ${chatID} 的名称为:`, trimmed);
         closeRenameModal();
@@ -231,7 +240,9 @@ export default function ConversationList({
         const chatID = conversation.id != null ? String(conversation.id) : '';
         try {
             await DeleteConversation(chatID);
-            setCons((prevCons) => prevCons.filter((con) => String(con.id ?? '') !== chatID));
+            setCons((prevCons) =>
+                normalizeConversationList(prevCons).filter((con) => String(con.id ?? '') !== chatID),
+            );
             console.log('删除对话:', conversation);
         } catch (err) {
             console.error('删除对话失败:', err);
@@ -245,7 +256,7 @@ export default function ConversationList({
         const title =
             titleHint !== undefined && titleHint !== null
                 ? titleHint
-                : cons.find((c) => String(c.id ?? '') === idStr)?.title ?? '';
+                : normalizeConversationList(cons).find((c) => String(c.id ?? '') === idStr)?.title ?? '';
         window.dispatchEvent(
             new CustomEvent('conversationChanged', { detail: { conversationId: idStr, title } }),
         );
@@ -262,10 +273,12 @@ export default function ConversationList({
                 onSelectDate={setSelectedDate}
                 onVisibleMonthChange={typeof refreshMemoDates === 'function' ? refreshMemoDates : undefined}
             />
-            <button className="new-conversation-btn" onClick={handleNewConversation}>
-                <span className="btn-icon"> + </span>
-                <span className="btn-text">新建对话</span>
-            </button>
+            {normalizeConversationList(cons).length > 0 ? (
+                <button className="new-conversation-btn" onClick={handleNewConversation}>
+                    <span className="btn-icon"> + </span>
+                    <span className="btn-text">新建对话</span>
+                </button>
+            ) : null}
 
             {renameTarget ? (
                 <div
@@ -418,7 +431,7 @@ export default function ConversationList({
                             </div>
                         );
                     })}
-                    {displayedCons.length === 0 && cons.length > 0 && selectedDate ? (
+                    {displayedCons.length === 0 && normalizeConversationList(cons).length > 0 && selectedDate ? (
                         <p className="conversation-filter-empty">
                             这一天还没有对话，试试其它日期或点下方「显示全部对话」。
                         </p>

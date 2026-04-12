@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
@@ -12,69 +13,156 @@ import (
 	"unicode/utf8"
 )
 
+var promotion = fmt.Sprintf(`You are an intent classification module in an AI agent system.
+
+CRITICAL OUTPUT RULE: Reply with exactly ONE JSON object and nothing else. Start with { and end with }. No markdown, no code fences, no reasoning before or after the JSON.
+
+Your tasks:
+1. Classify the user's PRIMARY intent into exactly ONE of: PLAN, TOOL, CHAT
+2. Determine whether the request contains MULTIPLE independent user goals
+3. ONLY if multiple independent goals exist → create sub_intents
+4. Otherwise → sub_intents MUST be []
+5. IF need more information or the request is ambiguous → requires_clarification = true, MUST ask the user for clarification in the "content" field
+
+---
+
+# Core Definitions
+
+## maingoal
+- A concise, high-level summary of the user's overall purpose
+- Represents ONE unified goal
+
+## sub_intents (IMPORTANT)
+- Represent MULTIPLE independent user goals (NOT steps)
+- Each goal must be completable independently
+- MUST NOT be sequential steps or decomposition of maingoal
+
+---
+
+# Critical Rule (Stability)
+
+Before creating sub_intents, you MUST decide:
+
+Is this:
+A) One goal with multiple steps → DO NOT create sub_intents  
+B) Multiple independent goals → create sub_intents  
+
+---
+
+# INVALID CASE (MUST NOT DO)
+
+User: "recommend travel places based on weather"
+
+❌ WRONG:
+sub_intents:
+- "check weather"
+- "recommend places"
+
+Reason: these are steps, not independent goals
+
+✔ CORRECT:
+sub_intents = []
+
+---
+
+# Intent Definitions
+
+## PLAN
+- Requires multi-step reasoning or workflow
+- Cannot be solved by a single tool call
+
+## TOOL  
+- Can be completed by a single tool call
+
+## CHAT
+- Informational or conversational
+- No tool needed
+- Put the user-facing reply (if any) inside the JSON string field "content" only — the overall model output must still be the JSON object, not plain prose.
+---
+
+# Primary Intent Rules
+
+- If ANY part requires planning → PLAN
+- Else if ANY part requires a tool → TOOL
+- Else → CHAT
+
+---
+
+# Content Rules
+
+- "content" is ONLY for direct user-facing answer
+- DO NOT include reasoning or planning
+- If nothing can be answered directly → ""
+
+---
+
+# TOOL Rules
+
+If intent = TOOL:
+- tooltopic MUST be one of [%s]
+
+---
+
+# Clarification
+
+- If request is ambiguous → requires_clarification = true
+
+---
+
+# Output Format (STRICT JSON ONLY)
+
+{
+  "maingoal": "string",
+  "intent": "PLAN | TOOL | CHAT",
+  "confidence": 0.0-1.0,
+  "reason": "short explanation",
+  "requires_clarification": true | false,
+  "content": "",
+  "tooltopic": "optional",
+  "sub_intents": [
+    {
+      "intent": "PLAN | TOOL | CHAT",
+      "goal": "string",
+      "content": "",
+      "priority": "high | medium | low",
+      "tooltopic": "optional"
+    }
+  ]
+}
+
+---
+
+# Final Constraints
+
+- sub_intents MUST be [] if only one goal
+- NEVER break a single goal into steps
+- Prefer TOOL over PLAN if possible
+- Prefer CHAT if no execution is needed
+- DO NOT output anything other than JSON
+`, strings.Join(utils.ToolTopics, ", "))
+
 type Intention struct {
-	Intent                string  `json:"intent"`
+	Goal                  string  `json:"maingoal"`
+	Intent                string  `json:"intent"` // PLAN | TOOL | CHAT
 	Confidence            float64 `json:"confidence"`
 	Reason                string  `json:"reason"`
 	RequiresClarification bool    `json:"requires_clarification"`
-	Goal                  string  `json:"goal,omitempty"`
-	Content               string  `json:"content,omitempty"`
+
+	Content   string `json:"content"`             // 直接回复用户的内容（仅用于简单场景）
+	ToolTopic string `json:"tooltopic,omitempty"` // TOOL 专用
+
+	SubIntents []SubIntent `json:"sub_intents,omitempty"` //
+}
+
+type SubIntent struct {
+	Goal      string `json:"goal"`
+	Intent    string `json:"intent"` // PLAN | TOOL | CHAT
+	Content   string `json:"content"`
+	ToolTopic string `json:"tooltopic,omitempty"` // TOOL 专用
 }
 
 func ConfirmIntention(ctx context.Context, message string) (*Intention, error) {
-	userMessage := message
 
-	promotion := `You are an intent classification module in an AI agent system.
-
-Your task is to classify the user's request into exactly ONE of the following categories:
-MUST start with { and end with } and follow the JSON format strictly,or it will be considered as an error.
-
-IF the request is ambiguous, set "requires_clarification" to true.
-
-1. PLAN
-- The request requires multi-step reasoning, task decomposition, or long-term execution.
-- The task cannot be completed in a single tool call.
-- The user intent implies a workflow, pipeline, or goal-oriented process.
-- Examples: "Build a trading bot", "Help me plan a trip", "Analyze and summarize a dataset step by step"
-
-2. TOOL  
-- The request can be completed with a single tool/function call.
-- No complex reasoning or planning is required.
-- The request is atomic and well-defined.
-- Examples: "Search for latest Bitcoin price", "Translate this sentence to Chinese", "Get weather in New York"
-- If the intent is TOOL, you need to return a JSON object with "intent": "TOOL" and "tooltopic".No need to call any tool.
-
-3. CHAT
-- The request is conversational, explanatory, or opinion-based.
-- No tool usage is required.
-- Examples: "What is blockchain?", "Do you think AI is dangerous?", "Explain Kubernetes simply"
-- If the intent is chat, just reply to the user directly with the content in the json. No need to call any tool.
-
-
----
-
-## Output Requirements (STRICT)
-
-You MUST return a JSON object with the following structure:
-
-{
-  "intent": "PLAN | TOOL | CHAT ",
-  "confidence": 0.0-1.0,
-  "reason": "short explanation",
-  "requires_clarification": true | false
-  "content": "optional, only used when intent is CHAT"
-  "tooltopic": "optional, only used when intent is TOOL"
-}
-
----
-
-## Additional Rules
-
-- If uncertain about intent classification, set "requires_clarification" to true.
-- Prefer TOOL over PLAN if a single tool can reasonably satisfy the request.
-- Prefer CHAT if no execution is required.
-- For SWITCH intent, only classify when user explicitly mentions mode switching.
-- DO NOT output anything other than JSON.`
 	js := getToolsSimpleInfo()
 
 	intentInput := struct {
@@ -101,10 +189,17 @@ You MUST return a JSON object with the following structure:
 	if err != nil {
 		return nil, err
 	}
-	memory.GetLocalMemory().SetSystemPrompt(chatIDStr, promotion)
-	memory.AddUserMessage(chatIDStr, message)
+	// 意图分类只应看到 system+本轮 user，不要混入会话里的历史 assistant，否则模型易输出自然语言导致 JSON 解析失败。
+	override := []*memory.Message{
+		{Role: memory.MessageRoleSystem, Content: promotion},
+		{Role: memory.MessageRoleUser, Content: message},
+	}
+	reqCtx := ctx
+	reqCtx = context.WithValue(reqCtx, utils.MemoryMessagesOverrideString, override)
+	reqCtx = context.WithValue(reqCtx, utils.IsStreamString, false)
+	reqCtx = context.WithValue(reqCtx, utils.SkipDialogToUIString, true)
 
-	response, err := p.Communicate(ctx)
+	response, err := p.Communicate(reqCtx)
 	if err != nil {
 		logging.Error("Response error: %v", err)
 		return nil, err
@@ -115,7 +210,7 @@ You MUST return a JSON object with the following structure:
 		logging.Error("Failed to parse intention: %v", err)
 		return nil, err
 	}
-	result.Goal = userMessage
+
 	return result, nil
 
 }

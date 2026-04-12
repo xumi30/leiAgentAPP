@@ -12,6 +12,7 @@ function shortConnectionLabel(loading, status) {
 export default function Header({
   onOpenMemo,
   onOpenDocLibrary,
+  onOpenLocalMemory,
   connectionLoading,
   connectionStatus,
   onRefreshConnection,
@@ -47,7 +48,7 @@ export default function Header({
             type="button"
             className="header-settings-btn clay-card"
             onClick={onOpenSettings}
-            title="编辑 LLM 配置（YAML）"
+            title="编辑 LLM 配置"
           >
             <span className="header-settings-btn__icon" aria-hidden>
               ⚙
@@ -67,6 +68,20 @@ export default function Header({
               📚
             </span>
             <span className="header-library-btn__text">文库</span>
+          </button>
+        ) : null}
+
+        {typeof onOpenLocalMemory === 'function' ? (
+          <button
+            type="button"
+            className="header-localmemory-btn clay-card"
+            onClick={onOpenLocalMemory}
+            title="查看当前对话的 localMemory（LLM 上下文）"
+          >
+            <span className="header-localmemory-btn__icon" aria-hidden>
+              🧠
+            </span>
+            <span className="header-localmemory-btn__text">本地记忆</span>
           </button>
         ) : null}
 

@@ -3,12 +3,14 @@
 #
 # 单后端：配置 llm。
 # 多后端故障转移：配置 llm_backends（非空时忽略 llm）；按数组顺序尝试，失败则换下一个。
+# 某行未写 api_key 时，若上方 llm.api_key 已填写，会回退使用该 Key（再否则用环境变量）。
 #
 # 单后端时可用环境变量覆盖：LEIAGENT_LLM_API_KEY、LEIAGENT_LLM_BASE_URL、LEIAGENT_LLM_MODEL、
 # LEIAGENT_LLM_PROVIDER、LEIAGENT_LLM_STREAM_MODE、LEIAGENT_LLM_MAX_OUTPUT_TOKENS（补全 token 上限）。
 #
 # 可选 max_output_tokens：对应 API 的 max_tokens；不填时默认 8192，任务规划阶段会自动不低于 16384。
 # 多后端时每行须写全 base_url、model、api_key（api_key 可留空则回退到环境变量中的 Key）。
+# 多后端时每行可选 enabled: false，表示不参与故障转移（省略默认 true）；至少须有一条启用。
 #
 # 可选：provider 留空为 Bearer；Google Gemini 填 gemini（使用 x-goog-api-key）。
 # 可选：stream_mode 为 nonstream | stream | both（默认 both；Gemini 未指定时默认 nonstream）。

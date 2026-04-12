@@ -128,7 +128,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	//fmt.Println("最终生成内容: ", result)
 	//fmt.Println("最终推理内容: ", reasoningResult)
 
-	//logging.Info("响应内容: %s", result)
+	logging.Info("响应内容: %s", result)
 	tlsJSON, err := json.Marshal(tls)
 	if err != nil {
 		logging.Error("序列化工具列表失败: %v", err)

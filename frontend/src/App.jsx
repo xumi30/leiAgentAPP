@@ -9,6 +9,7 @@ import Reasoning from './componentjs/Reasonging.jsx';
 import MemoModal from './componentjs/MemoModal.jsx';
 import DocLibraryModal from './componentjs/DocLibraryModal.jsx';
 import SettingsModal from './componentjs/SettingsModal.jsx';
+import LocalMemoryModal from './componentjs/LocalMemoryModal.jsx';
 import {
   GetMemoCalendarDates,
   GetLLMConnectionStatus,
@@ -36,6 +37,7 @@ function App() {
   const [docLibOpen, setDocLibOpen] = useState(false);
   const [docLibFocusPath, setDocLibFocusPath] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [localMemoryOpen, setLocalMemoryOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState('');
   const [activeChatTitle, setActiveChatTitle] = useState('');
   /** 助手流式输出进行中（按 chatID），用于侧栏列表显示加载态 */
@@ -239,6 +241,7 @@ function App() {
           setDocLibFocusPath(null);
           setDocLibOpen(true);
         }}
+        onOpenLocalMemory={() => setLocalMemoryOpen(true)}
         connectionLoading={connectionLoading}
         connectionStatus={connectionStatus}
         onRefreshConnection={refreshConnection}
@@ -261,6 +264,7 @@ function App() {
           setDocLibFocusPath(null);
         }}
       />
+      <LocalMemoryModal open={localMemoryOpen} chatId={activeChatId} onClose={() => setLocalMemoryOpen(false)} />
       <div className="main-content">
         <div
           className="main-content__sidebar-slot"

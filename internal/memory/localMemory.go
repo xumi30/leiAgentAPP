@@ -43,6 +43,10 @@ type ToolCallFunction struct {
 type localMemory struct {
 	Messages map[string][]*Message
 	RwLock   sync.RWMutex
+
+	// assistantReplyTurns 记录每会话「助手正文回复」次数，用于每满 AutoCompressEveryAssistantTurns 触发记忆压缩。
+	assistantReplyTurns map[string]int
+	compressTurnMu      sync.Mutex
 }
 
 var (
@@ -58,7 +62,7 @@ func GetLocalMemory() *localMemory {
 	return localMemoryInstance
 }
 
-func (m *localMemory) SetSystemPrompt(chatID string, systemPrompt string) {
+func (m *localMemory) SetSystemPrompt(chatID string, systemPrompt string) int {
 	logging.Info("SetSystemPrompt called")
 	m.RwLock.Lock()
 	defer m.RwLock.Unlock()
@@ -67,18 +71,37 @@ func (m *localMemory) SetSystemPrompt(chatID string, systemPrompt string) {
 	}
 	m.Messages[chatID] = append(m.Messages[chatID], &Message{
 		Role:    MessageRoleSystem,
-		Content: systemPrompt,
+	Content: systemPrompt,
 	})
+	return len(m.Messages[chatID]) - 1
+}
+
+func (m *localMemory) ClearSystemPrompt(chatID string) {
+	m.RwLock.Lock()
+	defer m.RwLock.Unlock()
+	if _, ok := m.Messages[chatID]; !ok {
+		return
+	}
+	// 遍历找到role为system的message，如果存在，则删除，否则返回
+	for i, msg := range m.Messages[chatID] {
+		if msg.Role == MessageRoleSystem {
+			deleted := append(m.Messages[chatID][:i], m.Messages[chatID][i+1:]...)
+			m.Messages[chatID] = deleted
+			return
+		}
+	}
+	logging.Info("clear SystemPrompt called: %s", chatID)
 }
 
 func newLocalMemory() *localMemory {
 	messages := make(map[string][]*Message)
 	return &localMemory{
-		Messages: messages,
+		Messages:            messages,
+		assistantReplyTurns: make(map[string]int),
 	}
 }
 
-func (m *localMemory) AddMessage(chatID string, message *Message) {
+func (m *localMemory) AddMessage(chatID string, message *Message) int {
 	// logging.Info("AddMessage called for chatID: %s: %v", chatID, message)
 	m.RwLock.Lock()
 	defer m.RwLock.Unlock()
@@ -86,6 +109,7 @@ func (m *localMemory) AddMessage(chatID string, message *Message) {
 		m.Messages[chatID] = []*Message{}
 	}
 	m.Messages[chatID] = append(m.Messages[chatID], message)
+	return len(m.Messages[chatID]) - 1
 }
 
 func (m *localMemory) GetMessages(chatID string) []*Message {
@@ -103,11 +127,26 @@ func (m *localMemory) Clear(chatID string) {
 	m.RwLock.Lock()
 	defer m.RwLock.Unlock()
 	delete(m.Messages, chatID)
+	m.compressTurnMu.Lock()
+	delete(m.assistantReplyTurns, chatID)
+	m.compressTurnMu.Unlock()
 }
 
-func AddToolMessage(chatId, toolid string, toolMessage string) {
+func (m *localMemory) DeleteMemoryByIndex(chatID string, index int) bool {
+	m.RwLock.Lock()
+	defer m.RwLock.Unlock()
+	if msgs, ok := m.Messages[chatID]; ok {
+		if index >= 0 && index < len(msgs) {
+			m.Messages[chatID][index] = nil
+			return true
+		}
+	}
+	return false
+}
+
+func AddToolMessage(chatId, toolid string, toolMessage string) int {
 	if utils.IsBlank(toolMessage) && utils.IsBlank(toolid) {
-		return
+		return -1
 	}
 	memoryLocal := GetLocalMemory()
 	toolResultMsg := Message{
@@ -115,55 +154,60 @@ func AddToolMessage(chatId, toolid string, toolMessage string) {
 		ToolCallID: toolid,
 		Content:    toolMessage,
 	}
-	memoryLocal.AddMessage(chatId, &toolResultMsg)
+	return memoryLocal.AddMessage(chatId, &toolResultMsg)
 }
 
-func AddUserMessage(chatId, userMessage string) {
+func AddUserMessage(chatId, userMessage string) int {
 	if utils.IsBlank(userMessage) {
-		return
+		return -1
 	}
 	memoryLocal := GetLocalMemory()
 	userMsg := Message{
 		Role:    MessageRoleUser,
 		Content: userMessage,
 	}
-	memoryLocal.AddMessage(chatId, &userMsg)
+	return memoryLocal.AddMessage(chatId, &userMsg)
 }
 
-func AddAssistantToolCallsMessage(chatId string, toolCalls []ToolCall) {
+func AddAssistantToolCallsMessage(chatId string, toolCalls []ToolCall) int {
 	if len(toolCalls) == 0 {
-		return
+		return -1
 	}
 	memoryLocal := GetLocalMemory()
 	assistantMsg := Message{
 		Role:      MessageRoleAssistant,
 		ToolCalls: toolCalls,
 	}
-	memoryLocal.AddMessage(chatId, &assistantMsg)
+	return memoryLocal.AddMessage(chatId, &assistantMsg)
 }
 
-func AddAssistantContentMessage(chatId string, assistantMessage string) {
+func AddAssistantContentMessage(chatId string, assistantMessage string) int {
 	if utils.IsBlank(assistantMessage) {
-		return
+		return -1
 	}
 	memoryLocal := GetLocalMemory()
 	assistantMsg := Message{
 		Role:    MessageRoleAssistant,
 		Content: assistantMessage,
 	}
-	memoryLocal.AddMessage(chatId, &assistantMsg)
+	idx := memoryLocal.AddMessage(chatId, &assistantMsg)
+	memoryLocal.afterAssistantContentTurn(chatId)
+	return idx
 }
 
-func SetSystemPrompt(chatId string, systemprompt string) {
+func SetSystemPrompt(chatId string, systemprompt string) int {
 	if utils.IsBlank(systemprompt) {
-		return
+		return -1
 	}
 	memoryLocal := GetLocalMemory()
-	systempromptMsg := Message{
-		Role:    MessageRoleSystem,
-		Content: systemprompt,
+	for i, msg := range memoryLocal.Messages[chatId] {
+		if msg.Role == MessageRoleSystem {
+			msg.Content = systemprompt
+			logging.Info("update SystemPrompt called: %s", chatId)
+			return i
+		}
 	}
-	memoryLocal.AddMessage(chatId, &systempromptMsg)
+	return memoryLocal.SetSystemPrompt(chatId, systemprompt)
 }
 
 func SetToolsInfo(chatId string) {
@@ -174,4 +218,9 @@ func SetToolsInfo(chatId string) {
 
 	}
 	AddUserMessage(chatId, fmt.Sprintf("这些是你能使用的工具消息：\n%s", js))
+}
+
+func DeleteMemoryByIndex(chatId string, index int) bool {
+	memoryLocal := GetLocalMemory()
+	return memoryLocal.DeleteMemoryByIndex(chatId, index)
 }

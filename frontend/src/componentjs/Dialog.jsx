@@ -157,7 +157,11 @@ export default function Dialog() {
     const messagesRef = useRef(null);
     const [pinnedToBottom, setPinnedToBottom] = useState(true);
     const inputRef = useRef(null);
+    /** 中文等 IME：拼音阶段为 true，避免回车被当成发送 */
+    const imeComposingRef = useRef(false);
     const hintTimerRef = useRef(null);
+    const chatIdRef = useRef(chatId);
+    chatIdRef.current = chatId;
 
     const sortedSheets = useMemo(
         () => [...sheets].sort((a, b) => a.startIdx - b.startIdx),
@@ -213,6 +217,15 @@ export default function Dialog() {
     }, [visibleMessages, streamInActiveSheet, streamPulse, chatId]);
 
     const memoMarkedCount = memoMarkedIds.size;
+
+    /** 当前便签内时间顺序上最后一条用户消息（用于「等待首包」时的 loading 锚点） */
+    const lastUserMessageIdInSheet = useMemo(() => {
+        const list = visibleMessages ?? [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            if (list[i].role === 'user') return String(list[i].messageID);
+        }
+        return null;
+    }, [visibleMessages]);
 
     const allMemoComposePresets = useMemo(
         () => [...MEMO_COMPOSE_PRESETS_DEFAULT, ...customMemoPresets],
@@ -310,6 +323,7 @@ export default function Dialog() {
             const { conversationId } = event.detail;
             setChatId(conversationId);
             setStreamPulse(null);
+            setStopVisible(false);
             setPinnedToBottom(true);
             setSheets([{ id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 }]);
             setActiveSheetId(MAIN_SHEET_ID);
@@ -404,6 +418,8 @@ export default function Dialog() {
         const handleSenderror = (error) => {
             alert("发送消息失败: " + error);
             console.log("发送消息失败: ", error);
+            setStopVisible(false);
+            setStreamPulse(null);
         }
 
         const handleDialogStreamEnd = (payload) => {
@@ -414,6 +430,9 @@ export default function Dialog() {
                 if (prev.chatID === cid && prev.messageID === mid) return null;
                 return prev;
             });
+            if (cid === chatIdRef.current) {
+                setStopVisible(false);
+            }
         };
 
         EventsOn("dialogAppend", appendMessage); // 监听对话追加事件
@@ -483,10 +502,13 @@ export default function Dialog() {
 
     /** @param {React.KeyboardEvent<HTMLTextAreaElement>} e */
     const onInputKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
+        if (e.key !== 'Enter' || e.shiftKey) return;
+        // 不要用 nativeEvent.isComposing：选字后按回车发送时，部分 WebView 仍会为 true，导致既不发送又拦了默认行为。
+        // 仅用 composition 事件维护的 ref；229 表示 IME 正在处理该键（拼音阶段）。
+        if (imeComposingRef.current) return;
+        if (e.keyCode === 229 || e.which === 229) return;
+        e.preventDefault();
+        sendMessage();
     };
 
     const finishMemoAppend = useCallback(() => {
@@ -607,6 +629,12 @@ export default function Dialog() {
                         streamPulse &&
                         String(streamPulse.chatID) === String(chatId) &&
                         String(streamPulse.messageID) === String(msg.messageID);
+                    const awaitingAssistantFirstChunk =
+                        isUser &&
+                        stopVisible &&
+                        !streamPulse &&
+                        lastUserMessageIdInSheet != null &&
+                        String(msg.messageID) === lastUserMessageIdInSheet;
                     const mid = String(msg.messageID);
                     return (
                         <div
@@ -639,8 +667,18 @@ export default function Dialog() {
                                     </div>
                                 ) : null}
                                 <div
-                                    className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}${streamingHere ? ' messagecontent--streaming' : ''}`}
+                                    className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}${streamingHere ? ' messagecontent--streaming' : ''}${awaitingAssistantFirstChunk ? ' messagecontent--user-awaiting' : ''}`}
                                 >
+                                    {awaitingAssistantFirstChunk ? (
+                                        <span
+                                            className="message-user-awaiting-indicator"
+                                            role="status"
+                                            aria-live="polite"
+                                            aria-label="等待回复"
+                                        >
+                                            <span className="message-user-awaiting-indicator__ring" aria-hidden />
+                                        </span>
+                                    ) : null}
                                     {streamingHere ? (
                                         <span
                                             className="message-streaming-indicator"
@@ -681,6 +719,15 @@ export default function Dialog() {
                             className="dialog__textarea"
                             placeholder="输入消息，Enter 发送 · Shift+Enter 换行"
                             rows={1}
+                            onCompositionStart={() => {
+                                imeComposingRef.current = true;
+                            }}
+                            onCompositionEnd={() => {
+                                imeComposingRef.current = false;
+                            }}
+                            onBlur={() => {
+                                imeComposingRef.current = false;
+                            }}
                             onKeyDown={onInputKeyDown}
                             onInput={(e) => {
                                 const ta = e.target;

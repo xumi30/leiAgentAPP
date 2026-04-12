@@ -338,7 +338,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 			globalchannel.SendAssitantMessageOnce(ctx, "你没有生成任何执行步骤，请重新规划")
 			return nil, fmt.Errorf("模型未生成任何执行步骤；若你只是在讨论或补充信息，可用较短说法触发模式重判，或把任务写得更具体后再发")
 		}
-		planner.Status = "pending"
+		planner.Status = utils.TaskPending
 		if err := planner.saveTodb(chatId); err != nil {
 			logging.Error("保存规划到数据库失败: %v", err)
 			return nil, err

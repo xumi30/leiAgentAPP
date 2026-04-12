@@ -147,6 +147,87 @@ func ExtractJSON(raw string) string {
 	return raw
 }
 
+// jsonQuoteClosesToken reports whether the double-quote at index i is a JSON string terminator:
+// after optional ASCII whitespace, the next byte starts a structural token (: , } ]).
+// This distinguishes closing quotes from LLM-typical unescaped " inside string values
+// (e.g. 像是"本地"的), which would otherwise break encoding/json.
+func jsonQuoteClosesToken(s string, i int) bool {
+	if i < 0 || i >= len(s) || s[i] != '"' {
+		return false
+	}
+	j := i + 1
+	for j < len(s) {
+		switch s[j] {
+		case ' ', '\t', '\n', '\r':
+			j++
+		default:
+			switch s[j] {
+			case ':', ',', '}', ']':
+				return true
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// RepairUnescapedInnerQuotesInJSONStrings escapes ASCII " that appear inside JSON string values
+// but were not written as \". LLMs often emit quotes around Chinese terms in "content"/"reason"
+// text, which is invalid JSON and yields errors like invalid character 'æ' (mis-parsed UTF-8).
+func RepairUnescapedInnerQuotesInJSONStrings(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 16)
+	inString := false
+	escaped := false
+
+	for i := 0; i < len(s); {
+		c := s[i]
+
+		if !inString {
+			if c == '"' {
+				inString = true
+				escaped = false
+				b.WriteByte('"')
+				i++
+				continue
+			}
+			b.WriteByte(c)
+			i++
+			continue
+		}
+
+		if escaped {
+			b.WriteByte(c)
+			escaped = false
+			i++
+			continue
+		}
+		if c == '\\' {
+			b.WriteByte('\\')
+			escaped = true
+			i++
+			continue
+		}
+		if c != '"' {
+			b.WriteByte(c)
+			i++
+			continue
+		}
+
+		// '"' inside string: either real closing quote or unescaped inner quote
+		if jsonQuoteClosesToken(s, i) {
+			inString = false
+			b.WriteByte('"')
+			i++
+			continue
+		}
+		b.WriteString(`\"`)
+		i++
+	}
+	return b.String()
+}
+
 // EscapeRawNewlinesInJSONStrings replaces literal control characters inside JSON string
 // values with escape sequences. LLMs often emit real newlines inside "content" fields,
 // which makes the payload invalid for encoding/json.
@@ -194,7 +275,9 @@ func EscapeRawNewlinesInJSONStrings(s string) string {
 // and escapes literal newlines/tabs inside string values. Use before encoding/json.Unmarshal
 // for any LLM-produced JSON payload.
 func PrepareLLMJSON(raw string) string {
-	return EscapeRawNewlinesInJSONStrings(ExtractJSON(raw))
+	extracted := ExtractJSON(raw)
+	fixed := RepairUnescapedInnerQuotesInJSONStrings(extracted)
+	return EscapeRawNewlinesInJSONStrings(fixed)
 }
 
 func GenerateChatID() string {

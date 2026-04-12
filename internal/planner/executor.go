@@ -7,6 +7,7 @@ import (
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
+	"leiAgent/utils"
 )
 
 func (p *Planning) DoExe(ctx context.Context) (string, error) {
@@ -15,8 +16,9 @@ func (p *Planning) DoExe(ctx context.Context) (string, error) {
 	// 执行计划
 	err := p.Execute(ctx)
 	if err != nil {
+		p.Status = utils.TaskFailed
 		logging.Error("Execute failed: %v", err)
-		return "", err
+		return fmt.Sprintf("%v", p), err
 	}
 
 	for i := range p.Steps {
@@ -40,7 +42,7 @@ func (p *Planning) DoExe(ctx context.Context) (string, error) {
 	rst, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		logging.Error("Failed to marshal plan results: %v", err)
-		return "", err
+		return fmt.Sprintf("%v", p), err
 	}
 	resultSteps = string(rst)
 
@@ -70,8 +72,8 @@ func (p *Planning) Execute(ctx context.Context) error {
 
 	//初始化所有步骤状态
 	for i := range p.Steps {
-		if p.Steps[i].Status != "completed" {
-			p.Steps[i].Status = "pending"
+		if p.Steps[i].Status != utils.StepCompleted {
+			p.Steps[i].Status = utils.StepPending
 		}
 	}
 
@@ -107,6 +109,7 @@ func (p *Planning) Execute(ctx context.Context) error {
 		if err := p.ExecuteStep(ctx, current); err != nil {
 			logging.Error("步骤 %s 执行失败: %v", p.Steps[current].Id, err)
 			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err))
+			p.Status = utils.TaskFailed
 			// return fmt.Errorf("step %s failed: %v", p.Steps[current].Id, err)
 		}
 
@@ -131,12 +134,12 @@ func (p *Planning) Execute(ctx context.Context) error {
 	// 检查是否所有任务都已完成
 	logging.Info("检查所有步骤完成状态")
 	for _, step := range p.Steps {
-		if step.Status != "completed" {
-			p.Status = "failed"
+		if step.Status != utils.StepCompleted {
+			p.Status = utils.TaskFailed
 			logging.Error("步骤 %s 未完成，状态: %s", step.Id, step.Status)
 		}
 	}
-	if p.Status == "failed" {
+	if p.Status == utils.TaskFailed {
 		return fmt.Errorf("some steps failed")
 	}
 
@@ -147,7 +150,7 @@ func (p *Planning) Execute(ctx context.Context) error {
 }
 
 func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
-	if p.Steps[stepIndex].Status == "completed" {
+	if p.Steps[stepIndex].Status == utils.StepCompleted {
 		logging.Info("步骤 %s 已完成，跳过执行", p.Steps[stepIndex].Id)
 		return nil
 	}
@@ -157,13 +160,13 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 	}
 
 	step := &p.Steps[stepIndex]
-	step.Status = "running"
+	step.Status = utils.StepRunning
 
 	// 获取工具
 	toolRegistry := tools.Getregistry()
 	tool, exists := toolRegistry.Get(step.Tool)
 	if !exists {
-		step.Status = "failed"
+		step.Status = utils.StepFailed
 		step.Error = fmt.Sprintf("tool not found: %s", step.Tool)
 		logging.Error("步骤 %s 执行失败: tool not found: %s", step.Id, step.Tool)
 		return fmt.Errorf("tool not found: %s", step.Tool)
@@ -182,7 +185,7 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 		// 如果引用输入也为空，则跳过
 		if iv.RefStepID == "" || iv.RefStepOutField == "" {
 			logging.Info("步骤 %s 的输入引用为空，key: %s", step.Id, key)
-			step.Status = "failed"
+			step.Status = utils.StepFailed
 			step.Error = fmt.Sprintf("步骤 %s 的输入引用为空，key: %s", step.Id, key)
 			continue
 		}
@@ -197,7 +200,7 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 		}
 
 		if refStep == nil {
-			step.Status = "failed"
+			step.Status = utils.StepFailed
 			step.Error = fmt.Sprintf("找不到引用的步骤 %s", iv.RefStepID)
 			logging.Error("步骤 %s 执行失败: 找不到引用的步骤 %s", step.Id, iv.RefStepID)
 			return fmt.Errorf("找不到引用的步骤 %s", iv.RefStepID)
@@ -205,14 +208,14 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 
 		// 检查依赖步骤是否已完成
 		if refStep.Status != "completed" {
-			step.Status = "failed"
+			step.Status = utils.StepFailed
 			step.Error = fmt.Sprintf("依赖的步骤 %s 未完成", iv.RefStepID)
 			logging.Error("步骤 %s 执行失败: 依赖的步骤 %s 未完成", step.Id, iv.RefStepID)
 		}
 
 		// 如果引用步骤的结果为空，则跳过处理
 		if refStep.Result == nil {
-			step.Status = "failed"
+			step.Status = utils.StepFailed
 			step.Error = fmt.Sprintf("依赖的步骤 %s 的结果为空", iv.RefStepID)
 			logging.Error("步骤 %s 执行失败: 依赖的步骤 %s 的结果为空", step.Id, iv.RefStepID)
 		}
@@ -222,7 +225,7 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 		// 将 string 转换为 []byte
 		resultBytes, ok := refStep.Result.(string)
 		if !ok {
-			step.Status = "failed"
+			step.Status = utils.StepFailed
 			step.Error = fmt.Sprintf("依赖的步骤 %s 的结果类型错误，期望 string", iv.RefStepID)
 			logging.Error("步骤 %s 执行失败: 依赖的步骤 %s 的结果类型错误", step.Id, iv.RefStepID)
 			return fmt.Errorf("依赖的步骤 %s 的结果类型错误", iv.RefStepID)
@@ -230,7 +233,7 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 		err := json.Unmarshal([]byte(resultBytes), &resultData)
 
 		if err != nil {
-			step.Status = "failed"
+			step.Status = utils.StepFailed
 			step.Error = fmt.Sprintf("解析依赖的步骤 %s 的结果失败: %v", iv.RefStepID, err)
 			logging.Error("步骤 %s 执行失败: 解析依赖的步骤 %s 的结果失败: %v", step.Id, iv.RefStepID, err)
 		}
@@ -246,7 +249,7 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 	//将 processedInput 序列化为 JSON 字符串
 	inputJSON, err := json.Marshal(processedInput)
 	if err != nil {
-		step.Status = "failed"
+		step.Status = utils.StepFailed
 		step.Error = fmt.Sprintf("failed to marshal input: %v for step %s", err, step.Id)
 		return fmt.Errorf("failed to marshal input: %v for step %s", err, step.Id)
 	}
@@ -254,7 +257,7 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 	result, err := tool.Execute(ctx, string(inputJSON))
 
 	if err != nil {
-		step.Status = "failed"
+		step.Status = utils.StepFailed
 		step.Error = fmt.Sprintf("tool execution failed: %v", err)
 		logging.Error("步骤 %s %s 执行失败: %v", step.Id, step.Tool, err)
 		return fmt.Errorf("tool execution failed: %v", err)
@@ -262,6 +265,6 @@ func (p *Planning) ExecuteStep(ctx context.Context, stepIndex int) error {
 	logging.Info("步骤 %s 执行成功,结果: %v", p.Steps[stepIndex].Id, result)
 
 	step.Result = result
-	step.Status = "completed"
+	step.Status = utils.StepCompleted
 	return nil
 }

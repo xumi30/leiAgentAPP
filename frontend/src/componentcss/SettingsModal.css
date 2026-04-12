@@ -35,6 +35,10 @@
   animation: settings-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.settings-sheet--wide {
+  width: min(920px, 100%);
+}
+
 @keyframes settings-sheet-up {
   from {
     opacity: 0;
@@ -132,6 +136,166 @@
 .settings-sheet__editor:focus {
   border-color: rgba(0, 122, 255, 0.45);
   box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.settings-tabs__btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #6e6e73;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.settings-tabs__btn--active {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1d1d1f;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.settings-sheet__note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #86868b;
+}
+
+.settings-sheet__scroll {
+  flex: 1;
+  min-height: 200px;
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.settings-table--wide {
+  min-width: 720px;
+}
+
+.settings-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  padding: 10px 8px;
+  font-weight: 600;
+  color: #3a3a3c;
+  background: rgba(250, 250, 252, 0.96);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+.settings-table tbody td {
+  padding: 6px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.settings-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.settings-table__input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1d1d1f;
+  outline: none;
+}
+
+.settings-table__input:focus {
+  border-color: rgba(0, 122, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.12);
+}
+
+.settings-table__input--num {
+  max-width: 88px;
+}
+
+.settings-table__th-check {
+  width: 44px;
+  text-align: center;
+}
+
+.settings-table__cell-check {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.settings-table__check {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #007aff;
+}
+
+.settings-table__th-actions {
+  width: 56px;
+}
+
+.settings-table__actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.settings-table__remove {
+  border: none;
+  background: transparent;
+  color: #c62828;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.settings-table__remove:hover {
+  background: rgba(198, 40, 40, 0.08);
+}
+
+.settings-table__empty {
+  text-align: center;
+  color: #aeaeb2;
+  padding: 28px 12px !important;
+  font-size: 13px;
+}
+
+.settings-list-block__toolbar {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.settings-btn--small {
+  font-size: 13px;
+  padding: 7px 14px;
 }
 
 .settings-sheet__actions {

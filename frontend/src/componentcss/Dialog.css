@@ -863,6 +863,32 @@
     }
 }
 
+/* 用户消息：助手首包未到时的浅色等待（与助手侧 streaming 指示器位置一致） */
+.messagecontent--user-awaiting {
+    padding-top: 20px;
+}
+
+.message-user-awaiting-indicator {
+    position: absolute;
+    top: 6px;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.message-user-awaiting-indicator__ring {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(90, 120, 180, 0.14);
+    border-top-color: rgba(120, 160, 220, 0.38);
+    box-sizing: border-box;
+    animation: message-streaming-spin 0.75s linear infinite;
+}
+
 /* 单条消息主体：限制高度，内部滚动，避免撑满整屏 */
 .message-body {
     max-height: min(52vh, 440px);

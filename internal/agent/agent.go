@@ -10,6 +10,8 @@ import (
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
 	"leiAgent/utils"
+	"strings"
+	"time"
 )
 
 type Agent struct {
@@ -44,7 +46,7 @@ func NewAgent(opts ...options) (*Agent, error) {
 	for _, opt := range opts {
 		opt(a)
 	}
-	a.taskLoopTimes = 10 //单个任务的最大循环次数，防止死循环，默认5次
+	a.taskLoopTimes = 1 //单个任务的最大循环次数，防止死循环，默认5次
 
 	return a, nil
 }
@@ -94,7 +96,7 @@ func (a *Agent) HandleChat(ctx context.Context, message string) (string, error) 
 	memory.AddUserMessage(chatId, message)
 
 	toolAndContent, err := a.proxy.Communicate(ctx)
-	//logging.Info("代理返回信息: %v", toolAndContent)
+	logging.Info("代理返回信息: %v", toolAndContent)
 
 	if err != nil {
 		return "", fmt.Errorf("通信失败: %w", err)
@@ -117,14 +119,32 @@ func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *p
 
 	if len(toolAndContent.ToolList) > 0 {
 		// 工具执行
-		logging.Info("开始执行工具:")
+		names := make([]string, 0, len(toolAndContent.ToolList))
+		for _, tc := range toolAndContent.ToolList {
+			if tc.Function.Name != "" {
+				names = append(names, tc.Function.Name)
+			}
+		}
+		logging.Info("开始执行工具: count=%d names=%s", len(toolAndContent.ToolList), strings.Join(names, ","))
 		a.executeTools(ctx, toolAndContent)
-
+	} else {
+		logging.Info("本轮模型未触发工具调用（ToolList 为空）")
 	}
 
 	if toolAndContent.Content != "" {
 		memory.AddAssistantContentMessage(chatId, toolAndContent.Content)
 	}
+}
+
+func truncateForLog(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	s = strings.TrimSpace(s)
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "...(truncated)"
 }
 
 func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndContent) {
@@ -165,13 +185,16 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			continue
 		}
 
-		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, tool.Function.Arguments)
+		argsPreview := truncateForLog(tool.Function.Arguments, 800)
+		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, argsPreview)
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 		logging.Info("%s", outStr)
 
+		start := time.Now()
 		str, err := functl.Execute(ctx, tool.Function.Arguments)
+		elapsed := time.Since(start)
 		if err != nil {
-			outStr = fmt.Sprintf("工具%s执行失败: %v", toolname, err)
+			outStr = fmt.Sprintf("工具%s执行失败: %v (elapsed=%s)", toolname, err, elapsed)
 			logging.Error("%s", outStr)
 			memory.AddToolMessage(chatId, tool.ID, outStr)
 			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
@@ -179,7 +202,8 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			continue
 		}
 
-		outStr = fmt.Sprintf("工具%s执行成功: %s", toolname, str)
+		resultPreview := truncateForLog(str, 1200)
+		outStr = fmt.Sprintf("工具%s执行成功 (elapsed=%s): %s", toolname, elapsed, resultPreview)
 		logging.Info("%s", outStr)
 		memory.AddToolMessage(chatId, tool.ID, outStr)
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
@@ -188,6 +212,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 	if a.taskLoopTimes >= 0 {
 		logging.Info("工具执行完成,继续请求模型生成最终回复")
 		a.taskLoopTimes--
+		
 		a.HandleChat(ctx, "工具已经执行完成,请继续。如果需要调用工具，请继续调用。如果不需要调用工具了，请直接给出最终回复。")
 	}
 	logging.Info("工具执行完成,或者达到最大循环次数,结束工具执行")

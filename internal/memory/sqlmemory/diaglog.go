@@ -151,6 +151,46 @@ func (m *SQLMemory) GetReasoningMessage(chatID string) ([]map[string]interface{}
 	return messages, nil
 }
 
+// GetMessagesByChatIDAndRole 按 chatID 与 role 获取消息列表（时间升序，字段与 GetMessages 一致）
+func (m *SQLMemory) GetMessagesByChatIDAndRole(chatID, role string) ([]map[string]interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	query := `SELECT chatID, messageID, role, content, timestamp FROM messages WHERE chatID = ? AND role = ? ORDER BY timestamp ASC`
+
+	rows, err := m.db.Query(query, chatID, role)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages by role: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []map[string]interface{}
+
+	for rows.Next() {
+		var cid string
+		var messageID string
+		var r, content string
+		var timestamp time.Time
+
+		if err := rows.Scan(&cid, &messageID, &r, &content, &timestamp); err != nil {
+			return nil, fmt.Errorf("failed to scan message: %w", err)
+		}
+		messages = append(messages, map[string]interface{}{
+			"chatID":    cid,
+			"messageID": messageID,
+			"role":      r,
+			"content":   content,
+			"timestamp": timestamp,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating messages by role: %w", err)
+	}
+
+	return messages, nil
+}
+
 // GetMessages 获取对话的所有消息
 func (m *SQLMemory) GetMessages(chatID string) ([]map[string]interface{}, error) {
 	m.mu.RLock()

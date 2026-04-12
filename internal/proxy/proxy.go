@@ -193,24 +193,28 @@ func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte
 		isStream = val
 	}
 
-	intent, ok := ctx.Value(utils.IntentKey).(string)
-	if !ok {
-		intent = ""
-	}
 	tls := []openaistyle.Tool{}
-	if intent == utils.ToolModeString {
-		toolRegister := tools.Getregistry()
-
+	// toolchoice := "aoto"
+	if istool, ok := ctx.Value(utils.ToolsString).(bool); ok && istool {
+		logging.Info("正在加载工具")
+		// toolchoice = "required"
 		// 尝试获取topic
 		topic, ok := ctx.Value(utils.ToolTopicToLoad).(string)
+		toolRegister := tools.Getregistry()
 		if ok {
 			tls = toolRegister.ConvertToolsByTopic(topic)
 		} else {
 			tls = toolRegister.ConvertTools()
 		}
+		logging.Info("已经加载的工具 %v", tls)
 	}
 
-	chatMessages := convertMessages(memory.GetLocalMemory().GetMessages(chatID))
+	var chatMessages []openaistyle.ChatMessage
+	if override, ok := ctx.Value(utils.MemoryMessagesOverrideString).([]*memory.Message); ok && len(override) > 0 {
+		chatMessages = convertMessages(override)
+	} else {
+		chatMessages = convertMessages(memory.GetLocalMemory().GetMessages(chatID))
+	}
 
 	maxTok := resolveMaxOutputTokens(ctx, info)
 	logging.Info("LLM 请求 max_tokens=%d", maxTok)
@@ -221,6 +225,7 @@ func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte
 		openaistyle.WithMaxTokens(maxTok),
 		openaistyle.WithStream(isStream),
 		openaistyle.WithTools(tls),
+		// openaistyle.WithToolChoice(&openaistyle.ToolChoice{Type: "auto"}),
 	}
 	if IsLLMThinkingDisabled() {
 		opts = append(opts,
@@ -243,7 +248,7 @@ func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte
 			return nil, err
 		}
 	}
-
+	logging.Info("请求参数：%s", string(jsonData))
 	return jsonData, nil
 }
 

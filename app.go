@@ -16,6 +16,7 @@ import (
 	"leiAgent/internal/dispatcher"
 	"leiAgent/internal/doclib"
 	"leiAgent/internal/globalchannel"
+	"leiAgent/internal/memory"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools/noveltool"
@@ -32,6 +33,9 @@ type App struct {
 	agentPool    map[string]*dispatcher.Dispatcher
 	poolLastUsed map[string]time.Time // 与 poolMutex 共用：最近一次 SwitchChat/dispatcher 命中时间，用于满池时 LRU 驱逐
 	poolMutex    sync.RWMutex
+
+	switchMu         sync.Mutex
+	lastActiveChatID string // 当前前端选中的会话，用于切换前落盘与关闭时落盘
 }
 
 // NewApp creates a new App application struct
@@ -109,6 +113,28 @@ func (a *App) GetMessages(chatID string) []map[string]interface{} {
 	messages := dataoperation.GetDialogs(chatID)
 	//logging.Info("Getting messages for conversation with ID: %s %v", chatID, messages)
 	return messages
+}
+
+// GetLocalMemoryMessages 返回当前 chat 的 localMemory（用于调试/查看 LLM 上下文）。
+func (a *App) GetLocalMemoryMessages(chatID string) []map[string]interface{} {
+	cid := strings.TrimSpace(chatID)
+	msgs := memory.GetLocalMemory().GetMessages(cid)
+	out := make([]map[string]interface{}, 0, len(msgs))
+	for i, m := range msgs {
+		if m == nil {
+			continue
+		}
+		item := map[string]interface{}{
+			"idx":         i,
+			"role":        string(m.Role),
+			"content":     m.Content,
+			"toolCallID":  m.ToolCallID,
+			"toolCalls":   m.ToolCalls,
+			"toolCallCnt": len(m.ToolCalls),
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (a *App) GetMessagesEvent(chatID string) {
@@ -247,6 +273,9 @@ func (a *App) evictLRUDispatcherLocked() {
 		return
 	}
 	logging.Info("agentPool is full, evicting LRU dispatcher chatID=%s", victim)
+	if err := memory.PersistLocalMemoryToYAMLFile(victim); err != nil {
+		logging.Error("LRU 驱逐前写入本地记忆失败 chatID=%s: %v", victim, err)
+	}
 	if oldDp, exists := a.agentPool[victim]; exists {
 		oldDp.Shutdown()
 		delete(a.agentPool, victim)
@@ -414,8 +443,37 @@ func (a *App) StopChat(chatID string) {
 }
 
 func (a *App) SwitchChat(chatID string) {
-	logging.Info("Switching to chatID: %s", chatID)
-	a.dispatcher(chatID)
+	newID := strings.TrimSpace(chatID)
+	logging.Info("Switching to chatID: %s", newID)
+
+	a.switchMu.Lock()
+	prev := a.lastActiveChatID
+	if prev != "" && prev != newID {
+		if err := memory.PersistLocalMemoryToYAMLFile(prev); err != nil {
+			logging.Error("切换会话前写入本地记忆失败 chatID=%s: %v", prev, err)
+		}
+	}
+	a.lastActiveChatID = newID
+	if newID != "" && prev != newID {
+		dispatcher.LoadLocalMemorySnapshotForChat(newID)
+	}
+	a.switchMu.Unlock()
+
+	if newID != "" {
+		a.dispatcher(newID)
+	}
+}
+
+// shutdown 应用退出时把当前会话的本地记忆写入 localmemory/{chatID}.yaml。
+func (a *App) shutdown(_ context.Context) {
+	a.switchMu.Lock()
+	defer a.switchMu.Unlock()
+	if a.lastActiveChatID == "" {
+		return
+	}
+	if err := memory.PersistLocalMemoryToYAMLFile(a.lastActiveChatID); err != nil {
+		logging.Error("退出时写入本地记忆失败 chatID=%s: %v", a.lastActiveChatID, err)
+	}
 }
 
 // GetLLMConnectionStatus 加载配置并对首个 OpenAI 兼容后端请求 /v1/models（或 /models）做轻量探测。
@@ -444,6 +502,16 @@ func (a *App) GetLLMConfigEditorState() (map[string]interface{}, error) {
 // SaveLLMConfigText 校验并写入配置文件。
 func (a *App) SaveLLMConfigText(content string) (string, error) {
 	return proxy.SaveLLMConfigText(content)
+}
+
+// GetLLMConfigFormState 返回 LLM 配置的表格编辑数据（多后端列表；旧版仅 llm 时会合成一行展示）。
+func (a *App) GetLLMConfigFormState() (proxy.LLMConfigFormState, error) {
+	return proxy.GetLLMConfigFormState()
+}
+
+// SaveLLMConfigForm 将表格数据序列化为 YAML 并校验、写入。
+func (a *App) SaveLLMConfigForm(primary proxy.LLMConfigRow, backends []proxy.LLMConfigRow) (string, error) {
+	return proxy.SaveLLMConfigForm(primary, backends)
 }
 
 // GetMemoContent 读取备忘录全文（主存 SQLite；与 memo_write 工具共用同一存储）。

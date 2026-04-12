@@ -313,12 +313,12 @@ func SendAssitantMessageStream(ctx context.Context, msg string, messageid string
 
 func SendAReasonningMessageStream(ctx context.Context, msg string, messageid string, isFinish bool) {
 	chatID := ctx.Value(utils.ChatIDString).(string)
-	dialogOutChan := GetGlobalDialogOutChannel(chatID)
+	reasonOutChan := GetGlobalReasonOutChannel(chatID)
 
-	dialogOutChan <- &Message{
+	reasonOutChan <- &Message{
 		MessageID:  messageid,
 		Content:    msg,
-		Role:       utils.MessageRoleAssistant,
+		Role:       utils.MessageRoleReasoning,
 		IsFinished: isFinish,
 	}
 

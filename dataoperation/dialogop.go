@@ -21,6 +21,20 @@ func GetDialogs(chatID string) []map[string]interface{} {
 	return messages
 }
 
+// GetUserRoleDialogs 按 chatID 仅返回 role 为 user 的消息列表（时间升序）
+func GetUserRoleDialogs(chatID string) []map[string]interface{} {
+	sql := GetSqlInstance()
+	if sql == nil {
+		return nil
+	}
+	messages, err := sql.GetMessagesByChatIDAndRole(chatID, "user")
+	if err != nil {
+		logging.Error("获取用户消息失败: %v", err)
+		return nil
+	}
+	return messages
+}
+
 func GetDialogsByMessageID(messageID string) map[string]interface{} {
 	sql := GetSqlInstance()
 	if sql == nil {

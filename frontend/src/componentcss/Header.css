@@ -163,6 +163,34 @@
     letter-spacing: 0.02em;
   }
 
+  .header-localmemory-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 999px;
+    background: var(--apple-fill);
+    color: var(--apple-blue);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+
+  .header-localmemory-btn:hover {
+    background: rgba(0, 122, 255, 0.12);
+  }
+
+  .header-localmemory-btn__icon {
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .header-localmemory-btn__text {
+    letter-spacing: 0.02em;
+  }
+
   .header-memo-btn {
     display: inline-flex;
     align-items: center;

@@ -17,6 +17,8 @@ export function GetConversation(arg1:string):Promise<void>;
 
 export function GetLLMConfigEditorState():Promise<Record<string, any>>;
 
+export function GetLLMConfigFormState():Promise<proxy.LLMConfigFormState>;
+
 export function GetLLMConnectionStatus():Promise<proxy.LLMConnectionStatus>;
 
 export function GetLLMResolvedConfigPath():Promise<string>;
@@ -24,6 +26,8 @@ export function GetLLMResolvedConfigPath():Promise<string>;
 export function GetLLMThinkingDisabled():Promise<boolean>;
 
 export function GetLibraryWorkspaceRoot():Promise<string>;
+
+export function GetLocalMemoryMessages(arg1:string):Promise<Array<Record<string, any>>>;
 
 export function GetMemoCalendarDates():Promise<Array<string>>;
 
@@ -62,6 +66,8 @@ export function ReadDocumentForViewer(arg1:string):Promise<Record<string, any>>;
 export function ResumeNovelLongform(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number):Promise<void>;
 
 export function RevealDocumentInExplorer(arg1:string):Promise<void>;
+
+export function SaveLLMConfigForm(arg1:proxy.LLMConfigRow,arg2:Array<proxy.LLMConfigRow>):Promise<string>;
 
 export function SaveLLMConfigText(arg1:string):Promise<string>;
 

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "playwright:server": "node playwright-server/server.js"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -18,6 +19,7 @@
     "@types/react-dom": "^18.0.6",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.27",
+    "playwright": "^1.55.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
     "vite": "^8.0.3"

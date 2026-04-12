@@ -237,6 +237,7 @@ Return:
 `
 
 func (p *Planning) VerifyResult(ctx context.Context, result string) (string, error) {
+	logging.Info("开始验证执行结果")
 
 	chatID, ok := ctx.Value(utils.ChatIDString).(string)
 	if !ok {

@@ -59,6 +59,10 @@ func SaveLLMConfigText(content string) (savedPath string, err error) {
 	if err := ValidateLLMConfigYAML(data); err != nil {
 		return "", err
 	}
+	return writeLLMConfigBytes(data)
+}
+
+func writeLLMConfigBytes(data []byte) (savedPath string, err error) {
 	path := DefaultConfigWritePath()
 	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {

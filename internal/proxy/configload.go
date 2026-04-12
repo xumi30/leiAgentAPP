@@ -21,7 +21,15 @@ type llmYAML struct {
 	Model            string `yaml:"model"`
 	Provider         string `yaml:"provider"`
 	StreamMode       string `yaml:"stream_mode"`
-	MaxOutputTokens  int    `yaml:"max_output_tokens"` // 可选，>0 时作为该后端的 max_tokens 上限基准
+	MaxOutputTokens  int    `yaml:"max_output_tokens,omitempty"` // 可选，>0 时作为该后端的 max_tokens 上限基准
+	Enabled          *bool  `yaml:"enabled,omitempty"`           // 多后端时：false 表示不参与故障转移；省略默认 true
+}
+
+func backendRowEnabled(row llmYAML) bool {
+	if row.Enabled == nil {
+		return true
+	}
+	return *row.Enabled
 }
 
 func resolveConfigPath() (path string, ok bool) {
@@ -195,13 +203,23 @@ func mergeLLMYAML(row llmYAML, globalEnv bool, cfgPath string) (*ModelAPIInfo, e
 // modelConfigsFromRoot 将已解析的 YAML 根节点转为后端列表（供磁盘加载与内存校验共用）。
 func modelConfigsFromRoot(root fileRoot, cfgPath string) ([]*ModelAPIInfo, error) {
 	if len(root.LLMBackends) > 0 {
+		fallbackKey := strings.TrimSpace(root.LLM.APIKey)
 		out := make([]*ModelAPIInfo, 0, len(root.LLMBackends))
 		for i, row := range root.LLMBackends {
+			if !backendRowEnabled(row) {
+				continue
+			}
+			if strings.TrimSpace(row.APIKey) == "" && fallbackKey != "" {
+				row.APIKey = fallbackKey
+			}
 			m, err := mergeLLMYAML(row, false, cfgPath)
 			if err != nil {
 				return nil, fmt.Errorf("llm_backends[%d]: %w", i, err)
 			}
 			out = append(out, m)
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("llm_backends 中至少需要启用一条后端（enabled 为 true 或省略）")
 		}
 		return out, nil
 	}

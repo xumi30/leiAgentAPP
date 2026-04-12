@@ -30,6 +30,10 @@ export function GetLLMConfigEditorState() {
   return window['go']['main']['App']['GetLLMConfigEditorState']();
 }
 
+export function GetLLMConfigFormState() {
+  return window['go']['main']['App']['GetLLMConfigFormState']();
+}
+
 export function GetLLMConnectionStatus() {
   return window['go']['main']['App']['GetLLMConnectionStatus']();
 }
@@ -44,6 +48,10 @@ export function GetLLMThinkingDisabled() {
 
 export function GetLibraryWorkspaceRoot() {
   return window['go']['main']['App']['GetLibraryWorkspaceRoot']();
+}
+
+export function GetLocalMemoryMessages(arg1) {
+  return window['go']['main']['App']['GetLocalMemoryMessages'](arg1);
 }
 
 export function GetMemoCalendarDates() {
@@ -120,6 +128,10 @@ export function ResumeNovelLongform(arg1, arg2, arg3, arg4, arg5) {
 
 export function RevealDocumentInExplorer(arg1) {
   return window['go']['main']['App']['RevealDocumentInExplorer'](arg1);
+}
+
+export function SaveLLMConfigForm(arg1, arg2) {
+  return window['go']['main']['App']['SaveLLMConfigForm'](arg1, arg2);
 }
 
 export function SaveLLMConfigText(arg1) {
