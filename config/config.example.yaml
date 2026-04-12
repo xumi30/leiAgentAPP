@@ -33,3 +33,21 @@ llm:
 #     api_key: "sk-2"
 #     base_url: "https://api.deepseek.com/v1/chat/completions"
 #     model: "deepseek-chat"
+
+# 可选：配置 MCP 服务器，供 list_mcp_tools / call_mcp_tool 使用。
+# mcp_servers:
+#   - label: "chrome-devtools"
+#     command: "npx"
+#     args:
+#       - "-y"
+#       - "chrome-devtools-mcp@latest"
+#       - "--browser-url=http://127.0.0.1:9222"
+#       - "--isolated=false"
+#     transport_type: "stdio"
+#
+#   - label: "my-http-mcp"
+#     url: "http://127.0.0.1:3001"
+#     transport_type: "streamable_http"
+#     allowed_tools: ["search_docs", "lookup_user"]
+#     headers:
+#       Authorization: "Bearer your-token"

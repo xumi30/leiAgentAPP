@@ -6,6 +6,7 @@ const HOST = process.env.PW_SERVER_HOST || "127.0.0.1";
 const PORT = Number(process.env.PW_SERVER_PORT || "3111");
 const DEFAULT_TIMEOUT_MS = Number(process.env.PW_TIMEOUT_MS || "30000");
 const SCREENSHOT_DIR = process.env.PW_SCREENSHOT_DIR || "";
+const DEFAULT_OBSERVE_LIMIT = Number(process.env.PW_OBSERVE_LIMIT || "8");
 
 /** @type {Map<string, { browser: import('playwright').Browser, context: import('playwright').BrowserContext, page: import('playwright').Page }>} */
 const sessions = new Map();
@@ -54,6 +55,110 @@ function getSession(sessionId) {
     throw err;
   }
   return s;
+}
+
+async function resolveTextLocator(page, text, exact = true, preferredRole = "") {
+  const roles = preferredRole
+    ? [preferredRole]
+    : ["link", "button", "tab", "menuitem"];
+
+  for (const role of roles) {
+    const locator = page.getByRole(role, { name: text, exact });
+    const count = await locator.count();
+    if (count > 0) {
+      return { locator: locator.first(), matchedBy: `role:${role}` };
+    }
+  }
+
+  const textLocator = page.getByText(text, { exact });
+  const textCount = await textLocator.count();
+  if (textCount > 0) {
+    return { locator: textLocator.first(), matchedBy: "text" };
+  }
+
+  return { locator: null, matchedBy: "" };
+}
+
+async function collectLinks(page, limit = 20) {
+  return page.evaluate((max) => {
+    const anchors = Array.from(document.querySelectorAll("a"));
+    return anchors
+      .map((a) => ({
+        text: (a.textContent || "").trim(),
+        title: (a.getAttribute("title") || "").trim(),
+        href: a.href || "",
+        ariaLabel: (a.getAttribute("aria-label") || "").trim(),
+      }))
+      .filter((item) => item.text || item.title || item.ariaLabel || item.href)
+      .slice(0, max);
+  }, limit);
+}
+
+async function collectInputs(page, limit = 12) {
+  return page.evaluate((max) => {
+    const elements = Array.from(document.querySelectorAll("input, textarea, select"));
+    return elements
+      .map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        type: (el.getAttribute("type") || "").trim(),
+        name: (el.getAttribute("name") || "").trim(),
+        id: (el.getAttribute("id") || "").trim(),
+        placeholder: (el.getAttribute("placeholder") || "").trim(),
+        ariaLabel: (el.getAttribute("aria-label") || "").trim(),
+        value: el.tagName === "SELECT" ? "" : String(el.value || "").trim().slice(0, 80),
+      }))
+      .filter((item) => item.name || item.id || item.placeholder || item.ariaLabel || item.type)
+      .slice(0, max);
+  }, limit);
+}
+
+async function collectButtons(page, limit = 10) {
+  return page.evaluate((max) => {
+    const elements = Array.from(document.querySelectorAll("button, [role='button'], input[type='submit']"));
+    return elements
+      .map((el) => ({
+        text: (el.textContent || el.getAttribute("value") || "").trim(),
+        id: (el.getAttribute("id") || "").trim(),
+        ariaLabel: (el.getAttribute("aria-label") || "").trim(),
+        title: (el.getAttribute("title") || "").trim(),
+      }))
+      .filter((item) => item.text || item.id || item.ariaLabel || item.title)
+      .slice(0, max);
+  }, limit);
+}
+
+async function collectHeadings(page, limit = 6) {
+  return page.evaluate((max) => {
+    const elements = Array.from(document.querySelectorAll("h1, h2, h3, [role='heading']"));
+    return elements
+      .map((el) => (el.textContent || "").trim())
+      .filter(Boolean)
+      .slice(0, max);
+  }, limit);
+}
+
+async function observePage(page, limit = DEFAULT_OBSERVE_LIMIT) {
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 20) : DEFAULT_OBSERVE_LIMIT;
+  const [title, url, headings, links, inputs, buttons] = await Promise.all([
+    page.title().catch(() => ""),
+    Promise.resolve(page.url()),
+    collectHeadings(page, Math.min(safeLimit, 6)).catch(() => []),
+    collectLinks(page, safeLimit).catch(() => []),
+    collectInputs(page, safeLimit).catch(() => []),
+    collectButtons(page, safeLimit).catch(() => []),
+  ]);
+
+  return { title, url, headings, links, inputs, buttons };
+}
+
+async function maybeAttachObservation(page, params, result, defaultObserve = true) {
+  const observe = params.observe !== undefined ? params.observe !== false : defaultObserve;
+  if (!observe) return result;
+  const observeLimit = typeof params.observeLimit === "number" ? params.observeLimit : DEFAULT_OBSERVE_LIMIT;
+  return {
+    ...result,
+    observation: await observePage(page, observeLimit),
+  };
 }
 
 async function handleCreateSession(req, res) {
@@ -109,14 +214,27 @@ async function handleAction(req, res) {
         if (typeof url !== "string") throw Object.assign(new Error("params.url must be a string"), { code: "bad_request" });
         const waitUntil = typeof params.waitUntil === "string" ? params.waitUntil : "load";
         const resp = await page.goto(url, { waitUntil });
-        result = { url: page.url(), status: resp?.status?.() ?? null };
+        result = await maybeAttachObservation(page, params, { url: page.url(), status: resp?.status?.() ?? null });
         break;
       }
       case "click": {
         const selector = params.selector;
         if (typeof selector !== "string") throw Object.assign(new Error("params.selector must be a string"), { code: "bad_request" });
         await page.click(selector);
-        result = { clicked: selector };
+        result = await maybeAttachObservation(page, params, { clicked: selector });
+        break;
+      }
+      case "click_text": {
+        const text = params.text;
+        if (typeof text !== "string") throw Object.assign(new Error("params.text must be a string"), { code: "bad_request" });
+        const exact = params.exact !== false;
+        const role = typeof params.role === "string" ? params.role : "";
+        const { locator, matchedBy } = await resolveTextLocator(page, text, exact, role);
+        if (!locator) {
+          throw Object.assign(new Error(`no element found by text: ${text}`), { code: "not_found" });
+        }
+        await locator.click();
+        result = await maybeAttachObservation(page, params, { clickedText: text, matchedBy });
         break;
       }
       case "fill": {
@@ -125,7 +243,7 @@ async function handleAction(req, res) {
         if (typeof selector !== "string") throw Object.assign(new Error("params.selector must be a string"), { code: "bad_request" });
         if (typeof value !== "string") throw Object.assign(new Error("params.value must be a string"), { code: "bad_request" });
         await page.fill(selector, value);
-        result = { filled: selector };
+        result = await maybeAttachObservation(page, params, { filled: selector }, false);
         break;
       }
       case "press": {
@@ -134,14 +252,37 @@ async function handleAction(req, res) {
         if (typeof selector !== "string") throw Object.assign(new Error("params.selector must be a string"), { code: "bad_request" });
         if (typeof key !== "string") throw Object.assign(new Error("params.key must be a string"), { code: "bad_request" });
         await page.press(selector, key);
-        result = { pressed: key, selector };
+        result = await maybeAttachObservation(page, params, { pressed: key, selector });
         break;
       }
       case "wait_for_selector": {
         const selector = params.selector;
         if (typeof selector !== "string") throw Object.assign(new Error("params.selector must be a string"), { code: "bad_request" });
         await page.waitForSelector(selector);
-        result = { found: selector };
+        result = await maybeAttachObservation(page, params, { found: selector }, false);
+        break;
+      }
+      case "list_links": {
+        const limit = typeof params.limit === "number" ? params.limit : 20;
+        result = {
+          url: page.url(),
+          title: await page.title().catch(() => ""),
+          links: await collectLinks(page, limit),
+        };
+        break;
+      }
+      case "list_inputs": {
+        const limit = typeof params.limit === "number" ? params.limit : 12;
+        result = {
+          url: page.url(),
+          title: await page.title().catch(() => ""),
+          inputs: await collectInputs(page, limit),
+        };
+        break;
+      }
+      case "observe": {
+        const limit = typeof params.limit === "number" ? params.limit : DEFAULT_OBSERVE_LIMIT;
+        result = await observePage(page, limit);
         break;
       }
       case "evaluate": {
@@ -188,11 +329,22 @@ async function handleAction(req, res) {
       result,
     });
   } catch (e) {
+    const pageInfo = await (async () => {
+      try {
+        return {
+          url: page.url(),
+          title: await page.title(),
+        };
+      } catch {
+        return { url: "", title: "" };
+      }
+    })();
     json(res, 500, {
       ok: false,
       sessionId,
       action,
       tookMs: Date.now() - startedAt,
+      page: pageInfo,
       error: {
         code: e?.code || "execution_failed",
         message: e?.message || String(e),
@@ -232,4 +384,3 @@ server.listen(PORT, HOST, () => {
   // Keep output minimal (can be captured by calling process).
   console.log(`playwright server listening on http://${HOST}:${PORT}`);
 });
-

@@ -7,6 +7,7 @@ import (
 	"leiAgent/internal/tools"
 	"leiAgent/utils"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -153,14 +154,45 @@ var dangerousCommands = []string{
 	"reboot",
 	"halt",
 	"poweroff",
-	"format",
 	"del /f /s /q",
 	"rmdir /s /q",
 }
 
+var dangerousCommandPatterns = []struct {
+	label   string
+	pattern *regexp.Regexp
+}{
+	{
+		label:   "format",
+		pattern: regexp.MustCompile(`(?i)^\s*format(?:\s|$)`),
+	},
+}
+
 // validateCommand 检查命令是否包含危险操作
 func validateCommand(command string) error {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return fmt.Errorf("command is empty")
+	}
+
+	segments, err := splitSafeCommandSegments(command)
+	if err != nil {
+		return err
+	}
+	for _, segment := range segments {
+		if err := validateSingleCommand(segment); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateSingleCommand(command string) error {
 	cmdLower := strings.ToLower(strings.TrimSpace(command))
+	if cmdLower == "" {
+		return fmt.Errorf("command segment is empty")
+	}
 
 	// 检查是否匹配危险命令
 	for _, dangerous := range dangerousCommands {
@@ -169,12 +201,38 @@ func validateCommand(command string) error {
 		}
 	}
 
-	// 检查是否包含命令链字符（可能用于命令注入）
-	if strings.ContainsAny(cmdLower, "&|;`$()<>") {
+	for _, rule := range dangerousCommandPatterns {
+		if rule.pattern.MatchString(command) {
+			return fmt.Errorf("command contains potentially dangerous operation: %s", rule.label)
+		}
+	}
+
+	// 检查是否包含命令注入高风险字符。
+	// `&&` 会在 splitSafeCommandSegments 中作为受控串联被允许。
+	if strings.ContainsAny(cmdLower, "|;`$()<>") {
+		return fmt.Errorf("command contains potentially dangerous characters for command injection")
+	}
+	if strings.Contains(cmdLower, "&") {
 		return fmt.Errorf("command contains potentially dangerous characters for command injection")
 	}
 
 	return nil
+}
+
+func splitSafeCommandSegments(command string) ([]string, error) {
+	parts := strings.Split(command, "&&")
+	segments := make([]string, 0, len(parts))
+	for _, part := range parts {
+		seg := strings.TrimSpace(part)
+		if seg == "" {
+			return nil, fmt.Errorf("command contains an empty chained segment")
+		}
+		if strings.Contains(seg, "||") || strings.Contains(seg, ";") {
+			return nil, fmt.Errorf("command contains unsupported chained operators")
+		}
+		segments = append(segments, seg)
+	}
+	return segments, nil
 }
 
 func (t *BashTool) Results() map[string]interface{} {

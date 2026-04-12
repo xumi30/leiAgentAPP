@@ -54,6 +54,10 @@ export function GetLocalMemoryMessages(arg1) {
   return window['go']['main']['App']['GetLocalMemoryMessages'](arg1);
 }
 
+export function GetMCPConfigFormState() {
+  return window['go']['main']['App']['GetMCPConfigFormState']();
+}
+
 export function GetMemoCalendarDates() {
   return window['go']['main']['App']['GetMemoCalendarDates']();
 }
@@ -138,6 +142,10 @@ export function SaveLLMConfigText(arg1) {
   return window['go']['main']['App']['SaveLLMConfigText'](arg1);
 }
 
+export function SaveMCPConfigForm(arg1) {
+  return window['go']['main']['App']['SaveMCPConfigForm'](arg1);
+}
+
 export function SaveMemoContent(arg1) {
   return window['go']['main']['App']['SaveMemoContent'](arg1);
 }
@@ -164,4 +172,8 @@ export function SwitchChat(arg1) {
 
 export function UpdateConversationTitle(arg1, arg2) {
   return window['go']['main']['App']['UpdateConversationTitle'](arg1, arg2);
+}
+
+export function ValidateMCPConfigRow(arg1) {
+  return window['go']['main']['App']['ValidateMCPConfigRow'](arg1);
 }

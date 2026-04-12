@@ -422,6 +422,13 @@ export default function Dialog() {
             setStreamPulse(null);
         }
 
+        const handleDispatcherError = (error) => {
+            alert("无法启动对话引擎（Dispatcher）\n\n" + error);
+            console.error("dispatcherError:", error);
+            setStopVisible(false);
+            setStreamPulse(null);
+        };
+
         const handleDialogStreamEnd = (payload) => {
             const cid = String(payload?.chatID ?? '');
             const mid = String(payload?.messageID ?? '');
@@ -439,12 +446,14 @@ export default function Dialog() {
         EventsOn("dialogStreamEnd", handleDialogStreamEnd);
         EventsOn("GetMessagesByMessageID", handleMessage); // 监听消息更新事件
         EventsOn("sendMessageError", handleSenderror); // 监听发送错误事件
+        EventsOn("dispatcherError", handleDispatcherError);
 
         return () => {
             EventsOff("dialogAppend");
             EventsOff("dialogStreamEnd");
             EventsOff("GetMessagesByMessageID");
             EventsOff("sendMessageError");
+            EventsOff("dispatcherError");
         };
     }, []);
 

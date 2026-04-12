@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/proxy"
@@ -20,6 +21,8 @@ type Agent struct {
 	taskLoopTimes int
 	ctx           context.Context
 }
+
+const defaultTaskLoopLimit = 4
 
 type options func(*Agent)
 
@@ -46,7 +49,7 @@ func NewAgent(opts ...options) (*Agent, error) {
 	for _, opt := range opts {
 		opt(a)
 	}
-	a.taskLoopTimes = 1 //单个任务的最大循环次数，防止死循环，默认5次
+	a.taskLoopTimes = defaultTaskLoopLimit
 
 	return a, nil
 }
@@ -109,6 +112,11 @@ func (a *Agent) HandleChat(ctx context.Context, message string) (string, error) 
 	a.recordMeomoryFromResponse(ctx, toolAndContent)
 
 	return toolAndContent.Content, nil
+}
+
+func (a *Agent) BeginTask(ctx context.Context, message string) (string, error) {
+	a.taskLoopTimes = defaultTaskLoopLimit
+	return a.HandleChat(ctx, message)
 }
 
 func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *proxy.ToolAndContent) {
@@ -178,12 +186,6 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		var outStr string
 
 		functl, flag := tools.Getregistry().Get(toolname)
-		if !flag {
-			outStr = fmt.Sprintf("工具%s不存在", toolname)
-			memory.AddToolMessage(chatId, tool.ID, outStr)
-			logging.Error("%s", outStr)
-			continue
-		}
 
 		argsPreview := truncateForLog(tool.Function.Arguments, 800)
 		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, argsPreview)
@@ -191,7 +193,20 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		logging.Info("%s", outStr)
 
 		start := time.Now()
-		str, err := functl.Execute(ctx, tool.Function.Arguments)
+		var (
+			str string
+			err error
+		)
+		if flag {
+			str, err = functl.Execute(ctx, tool.Function.Arguments)
+		} else if _, ok := mcpbridge.ResolveDynamicTool(toolname); ok {
+			str, err = mcpbridge.ExecuteDynamicTool(ctx, toolname, tool.Function.Arguments)
+		} else {
+			outStr = fmt.Sprintf("工具%s不存在", toolname)
+			memory.AddToolMessage(chatId, tool.ID, outStr)
+			logging.Error("%s", outStr)
+			continue
+		}
 		elapsed := time.Since(start)
 		if err != nil {
 			outStr = fmt.Sprintf("工具%s执行失败: %v (elapsed=%s)", toolname, err, elapsed)
@@ -212,7 +227,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 	if a.taskLoopTimes >= 0 {
 		logging.Info("工具执行完成,继续请求模型生成最终回复")
 		a.taskLoopTimes--
-		
+
 		a.HandleChat(ctx, "工具已经执行完成,请继续。如果需要调用工具，请继续调用。如果不需要调用工具了，请直接给出最终回复。")
 	}
 	logging.Info("工具执行完成,或者达到最大循环次数,结束工具执行")

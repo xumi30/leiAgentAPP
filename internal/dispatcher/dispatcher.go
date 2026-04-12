@@ -2,7 +2,9 @@ package dispatcher
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/agent"
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
@@ -11,6 +13,8 @@ import (
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
 	"leiAgent/internal/tools/bashfunction"
+	"leiAgent/internal/tools/browsertool"
+	"leiAgent/internal/tools/mcptool"
 
 	fileFunctions "leiAgent/internal/tools/fileFunction"
 	"leiAgent/internal/tools/libraryfs"
@@ -43,10 +47,16 @@ func init() {
 	getcurrenttime := timeFunctions.NewCurrentTimeTool()
 	wikiSearch := searchFunctions.NewWikipediaSearchTool()
 	bashfunction := bashfunction.NewBashTool()
-	// browser := browsertool.New()
+	browser := browsertool.New()
+	baiduBrowserSearch := browsertool.NewBaiduBrowserSearchTool()
+	listMCPTools := mcptool.NewListMCPTools(nil)
+	callMCPTool := mcptool.NewCallMCPTool(nil)
 
 	toolRegistry.Register(bashfunction)
-	// toolRegistry.Register(browser)
+	toolRegistry.Register(browser)
+	toolRegistry.Register(baiduBrowserSearch)
+	toolRegistry.Register(listMCPTools)
+	toolRegistry.Register(callMCPTool)
 
 	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
 	toolRegistry.Register(fileFunctions.GetFileWriteTool())
@@ -105,8 +115,7 @@ func NewDispatcher(ctx context.Context, chatID string, cancel context.CancelFunc
 
 func (d *Dispatcher) Run(ctx context.Context) {
 	logging.Info("Dispatcher 开始运行...")
-	inputchannel := globalchannel.GetGlobalInputChannel(d.ChatID)
-	fmt.Println(inputchannel)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -116,8 +125,8 @@ func (d *Dispatcher) Run(ctx context.Context) {
 				continue
 			}
 			logging.Info("Dispatcher 收到消息: %s", msg.Content)
-			// 统一处理，通过提示词控制行为
-			go d.handleMessage(ctx, msg.Content)
+			// 同一 chatID 下严格串行处理，避免共享 agent / memory / intention 并发踩踏。
+			d.handleMessage(ctx, msg.Content)
 		}
 	}
 }
@@ -141,96 +150,55 @@ func (d *Dispatcher) ReplaceRunContext(ctx context.Context, cancel context.Cance
 
 func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
 	chatIDForPersist, _ := ctx.Value(utils.ChatIDString).(string)
-	defer func() {
-		cid := strings.TrimSpace(chatIDForPersist)
-		if cid == "" {
-			return
-		}
-		if err := memory.PersistLocalMemoryToYAMLFile(cid); err != nil {
-			logging.Error("本轮对话后写入本地记忆 YAML 失败 chatID=%s: %v", cid, err)
-		}
-	}()
 
 	logging.Info("Dispatcher 处理消息: %s", message)
 	memory.AddUserMessage(chatIDForPersist, fmt.Sprintf("用户请求: %s", message))
-	intent, err := ConfirmIntention(ctx, message)
+	intent, err := ConfirmIntention(ctx, message, d.Intention)
 	if err != nil {
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
 		return // 确认意图失败，直接返回
 	}
 	d.Intention = intent
 
-	chatId := ctx.Value(utils.ChatIDString).(string)
-	memory.GetLocalMemory().ClearSystemPrompt(chatId)
-	// globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("清除系统提示词: %s", chatId))
-
-	// if d.Intention == nil {
-	// 	logging.Info("context 中没有 Intent,重新确认意图...")
-
-	// 	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "context 中没有 Intent,重新确认意图..."))
-	// 	intent, err := ConfirmIntention(ctx, message)
-	// 	if err != nil {
-	// 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
-	// 		return // 确认意图失败，直接返回
-	// 	}
-	// 	d.Intention = intent
-	// 	// 确认意图后 清除旧记忆
-	// 	chatId := ctx.Value(utils.ChatIDString).(string)
-	// 	memory.GetLocalMemory().Clear(chatId)
-	// } else if ShouldReclassifyIntent(d.Intention.Intent, message) {
-	// 	logging.Info("根据规则判断需要刷新意图，重新确认...")
-	// 	intent, err := ConfirmIntention(ctx, message)
-	// 	if err != nil {
-	// 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "重新确认意图失败，沿用当前模式处理"))
-	// 	} else {
-	// 		d.Intention = intent
-	// 	}
-	// }
-
-	// if d.Intention != nil {
-	// 	ctx = context.WithValue(ctx, utils.IntentKey, strings.ToUpper(strings.TrimSpace(d.Intention.Intent)))
-	// }
-	// fmt.Println("意图: ", d.Intention.Intent)
 	logging.Info("意图: %s", d.Intention.Intent)
 
+	if d.Intention.RequiresClarification {
+		if d.Intention.Content != "" {
+			globalchannel.SendAssitantMessageOnce(ctx, d.Intention.Content)
+		} else {
+			globalchannel.SendAssitantMessageOnce(ctx, "我需要先确认一点信息，才能继续处理这个请求。")
+		}
+		return
+	}
+
 	if d.Intention.Intent != "" {
-		d.switchIntent(ctx, &Intention{
-			Goal:    d.Intention.Goal,
-			Content: d.Intention.Content,
-		})
+		d.switchIntent(ctx, d.Intention)
 	}
 
 	subIntentions := d.Intention.SubIntents
 
 	for _, subIntent := range subIntentions {
-		if subIntent.Content != "" {
-			globalchannel.SendAssitantMessageOnce(ctx, subIntent.Content)
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("子意图内容: %s 开始处理", subIntent.Content))
-
+		if strings.TrimSpace(subIntent.Intent) == "" {
+			continue
 		}
-		if subIntent.Intent != "" {
-			d.switchIntent(ctx, &Intention{
-				Goal:    subIntent.Goal,
-				Content: subIntent.Content,
-			})
-		}
+		d.switchIntent(ctx, &Intention{
+			Goal:       subIntent.Goal,
+			Intent:     subIntent.Intent,
+			Content:    subIntent.Content,
+			ToolTopic:  subIntent.ToolTopic,
+			ToolSource: subIntent.ToolSource,
+		})
 
 	}
 }
 
 func (d *Dispatcher) switchIntent(ctx context.Context, intent *Intention) {
-	upperIntent := strings.ToUpper(d.Intention.Intent)
+	upperIntent := strings.ToUpper(strings.TrimSpace(intent.Intent))
 	switch upperIntent {
 	case utils.ChatModeString:
 		logging.Info("切换到对话模式")
 		if intent.Content != "" {
-			chatId := ctx.Value(utils.ChatIDString).(string)
-			// 意图分类不再写入共享记忆，此处补一条 user+assistant，保持与主对话一致
-			if g := strings.TrimSpace(intent.Goal); g != "" {
-				memory.AddAssistantContentMessage(chatId, fmt.Sprintf("assistant分解的子意图: %s", g))
-			}
 			globalchannel.SendAssitantMessageOnce(ctx, intent.Content)
-			memory.AddAssistantContentMessage(chatId, intent.Content)
 		} else {
 			logging.Info("对话模式下，意图内容为空，不发送")
 			// 如果意图内容为空，则直接把goal用户原文发送给模型，进行对话
@@ -307,13 +275,15 @@ func (d *Dispatcher) handleChat(ctx context.Context, intent *Intention) {
 }
 
 func (d *Dispatcher) handleTool(ctx context.Context, intent *Intention) {
-	ctx = context.WithValue(ctx, utils.ToolTopicToLoad, false)
+	ctx = context.WithValue(ctx, utils.ToolTopicToLoad, intent.ToolTopic)
+	ctx = context.WithValue(ctx, utils.ToolSourceToLoad, intent.ToolSource)
 	ctx = context.WithValue(ctx, utils.ToolsString, true)
 	message := intent.Goal
+	ctx = context.WithValue(ctx, utils.UserGoalString, message)
 	chatId := ctx.Value(utils.ChatIDString).(string)
 	memory.SetSystemPrompt(chatId, utils.SingleToolPromptTemplate)
 	logging.Info("tool对话系统提示词已加载...")
-	d.agent.HandleChat(ctx, message)
+	d.agent.BeginTask(ctx, message)
 }
 
 func toolsInfo() []byte {
@@ -333,6 +303,16 @@ func getToolsSimpleInfo() []byte {
 	if err != nil {
 		logging.Error("GetToolsSimpleInfo failed: %v", err)
 		return nil
+	}
+	return js
+}
+
+func getMCPSimpleInfo() []byte {
+	infos := mcpbridge.GetMCPSimpleInfos()
+	js, err := json.MarshalIndent(infos, "", "  ")
+	if err != nil {
+		logging.Error("GetMCPSimpleInfos failed: %v", err)
+		return []byte("[]")
 	}
 	return js
 }

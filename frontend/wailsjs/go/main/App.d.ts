@@ -29,6 +29,8 @@ export function GetLibraryWorkspaceRoot():Promise<string>;
 
 export function GetLocalMemoryMessages(arg1:string):Promise<Array<Record<string, any>>>;
 
+export function GetMCPConfigFormState():Promise<proxy.MCPConfigFormState>;
+
 export function GetMemoCalendarDates():Promise<Array<string>>;
 
 export function GetMemoContent():Promise<string>;
@@ -71,6 +73,8 @@ export function SaveLLMConfigForm(arg1:proxy.LLMConfigRow,arg2:Array<proxy.LLMCo
 
 export function SaveLLMConfigText(arg1:string):Promise<string>;
 
+export function SaveMCPConfigForm(arg1:Array<proxy.MCPConfigRow>):Promise<string>;
+
 export function SaveMemoContent(arg1:string):Promise<void>;
 
 export function SendMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -84,3 +88,5 @@ export function StopChat(arg1:string):Promise<void>;
 export function SwitchChat(arg1:string):Promise<void>;
 
 export function UpdateConversationTitle(arg1:string,arg2:string):Promise<void>;
+
+export function ValidateMCPConfigRow(arg1:proxy.MCPConfigRow):Promise<proxy.MCPValidationResult>;

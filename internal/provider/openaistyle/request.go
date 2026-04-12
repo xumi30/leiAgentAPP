@@ -1,5 +1,7 @@
 package openaistyle
 
+import "encoding/json"
+
 const (
 	// RoleSystem 系统角色
 	RoleSystem = "system"
@@ -24,7 +26,9 @@ const (
 	ContentTypeText       = "text"
 	ContentTypeInputAudio = "input_audio"
 
-	ToolChoiceEnabled = "auto"
+	ToolChoiceAuto     = "auto"
+	ToolChoiceRequired = "required"
+	ToolChoiceNone     = "none"
 )
 
 // ChatCompletionRequest 对话补全请求基础结构体
@@ -48,7 +52,7 @@ type ChatCompletionRequest struct {
 	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`   // 响应格式
 	Seed             *int            `json:"seed,omitempty"`              // 随机种子
 	Enablesearch     bool            `json:"enable_search,omitempty"`     // 是否启用搜索QWEN
-	EnableThinking   *bool           `json:"enable_thinking,omitempty"`     // 百炼/DashScope Qwen 思考开关（兼容 OpenAI 扩展字段）
+	EnableThinking   *bool           `json:"enable_thinking,omitempty"`   // 百炼/DashScope Qwen 思考开关（兼容 OpenAI 扩展字段）
 }
 
 // ChatMessage 对话消息结构体
@@ -110,7 +114,31 @@ type MCP struct {
 
 // ToolChoice 工具选择策略
 type ToolChoice struct {
-	Type string `json:"type"` // 目前仅支持 "auto"
+	Type     string    `json:"-"`
+	Function *Function `json:"function,omitempty"`
+}
+
+func (t *ToolChoice) MarshalJSON() ([]byte, error) {
+	if t == nil {
+		return []byte("null"), nil
+	}
+
+	switch t.Type {
+	case ToolChoiceAuto, ToolChoiceRequired, ToolChoiceNone:
+		if t.Function == nil {
+			return json.Marshal(t.Type)
+		}
+	}
+
+	type toolChoiceAlias struct {
+		Type     string    `json:"type"`
+		Function *Function `json:"function,omitempty"`
+	}
+
+	return json.Marshal(toolChoiceAlias{
+		Type:     t.Type,
+		Function: t.Function,
+	})
 }
 
 // ToolCall 工具调用信息
@@ -123,7 +151,7 @@ type ToolCall struct {
 
 // ChatThinking 思维链配置
 type ChatThinking struct {
-	Type          string `json:"type"`                      // 是否开启思维链: enabled/disabled
+	Type          string `json:"type"`                     // 是否开启思维链: enabled/disabled
 	ClearThinking bool   `json:"clear_thinking,omitempty"` // 是否清除历史思维链
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/memory"
 	gemini "leiAgent/internal/provider/Gemin"
 	"leiAgent/internal/provider/openaistyle"
@@ -75,6 +76,27 @@ func NewProxy(httpClient *http.Client) (*Proxy, error) {
 }
 
 func (p *Proxy) Communicate(ctx context.Context) (*ToolAndContent, error) {
+	chatIDVal := ctx.Value(utils.ChatIDString)
+	chatID, ok := chatIDVal.(string)
+	if !ok || chatID == "" {
+		return nil, fmt.Errorf("context 缺少有效的 chatID")
+	}
+
+	var sourceMessages []*memory.Message
+	if override, ok := ctx.Value(utils.MemoryMessagesOverrideString).([]*memory.Message); ok && len(override) > 0 {
+		sourceMessages = override
+	} else {
+		sourceMessages = memory.GetLocalMemory().GetMessages(chatID)
+	}
+
+	return p.communicateWithChatMessages(ctx, convertMessages(sourceMessages))
+}
+
+func (p *Proxy) CommunicateWithMessages(ctx context.Context, messages []openaistyle.ChatMessage) (*ToolAndContent, error) {
+	return p.communicateWithChatMessages(ctx, messages)
+}
+
+func (p *Proxy) communicateWithChatMessages(ctx context.Context, chatMessages []openaistyle.ChatMessage) (*ToolAndContent, error) {
 	isStream := true
 	if val, ok := ctx.Value(utils.IsStreamString).(bool); ok {
 		isStream = val
@@ -87,7 +109,7 @@ func (p *Proxy) Communicate(ctx context.Context) (*ToolAndContent, error) {
 			label = fmt.Sprintf("#%d", i)
 		}
 
-		jsonData, err := p.makeRequestJson(ctx, info)
+		jsonData, err := p.makeRequestJSONFromChatMessages(ctx, info, chatMessages)
 		if err != nil {
 			lastErr = err
 			logging.Error("LLM 后端 %s 构造请求失败: %v", label, err)
@@ -188,32 +210,66 @@ func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte
 		return nil, fmt.Errorf("context 缺少有效的 chatID")
 	}
 
+	var sourceMessages []*memory.Message
+	if override, ok := ctx.Value(utils.MemoryMessagesOverrideString).([]*memory.Message); ok && len(override) > 0 {
+		sourceMessages = override
+	} else {
+		sourceMessages = memory.GetLocalMemory().GetMessages(chatID)
+	}
+
+	return p.makeRequestJSONFromChatMessages(ctx, info, convertMessages(sourceMessages))
+}
+
+func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *ModelAPIInfo, chatMessages []openaistyle.ChatMessage) ([]byte, error) {
 	isStream := true
 	if val, ok := ctx.Value(utils.IsStreamString).(bool); ok {
 		isStream = val
 	}
 
 	tls := []openaistyle.Tool{}
-	// toolchoice := "aoto"
+	var toolChoice *openaistyle.ToolChoice
 	if istool, ok := ctx.Value(utils.ToolsString).(bool); ok && istool {
 		logging.Info("正在加载工具")
-		// toolchoice = "required"
-		// 尝试获取topic
+		toolChoice = &openaistyle.ToolChoice{Type: openaistyle.ToolChoiceAuto}
 		topic, ok := ctx.Value(utils.ToolTopicToLoad).(string)
+		source, _ := ctx.Value(utils.ToolSourceToLoad).(string)
+		if ok && topic != "" {
+			logging.Info("正在加载工具话题 %v, source=%s", topic, source)
+		}
 		toolRegister := tools.Getregistry()
-		if ok {
-			tls = toolRegister.ConvertToolsByTopic(topic)
-		} else {
+		switch strings.TrimSpace(source) {
+		case utils.ToolSourceMCP:
+			tls = mcpbridge.BuildDynamicToolsByTopic(topic)
+		case utils.ToolSourceMixed:
+			tls = append(tls, toolRegister.ConvertToolsByTopic(topic)...)
+			tls = append(tls, mcpbridge.BuildDynamicToolsByTopic(topic)...)
+		case utils.ToolSourceLocal, "":
+			if ok {
+				tls = toolRegister.ConvertToolsByTopic(topic)
+			} else {
+				tls = toolRegister.ConvertTools()
+			}
+		default:
+			if ok {
+				tls = toolRegister.ConvertToolsByTopic(topic)
+			} else {
+				tls = toolRegister.ConvertTools()
+			}
+		}
+		if len(tls) == 0 && strings.TrimSpace(source) == utils.ToolSourceMCP {
+			logging.Warn("MCP source requested but no dynamic tools found for topic=%s, fallback to local tools", topic)
+			if ok {
+				tls = toolRegister.ConvertToolsByTopic(topic)
+			} else {
+				tls = toolRegister.ConvertTools()
+			}
+		}
+		if !ok {
 			tls = toolRegister.ConvertTools()
 		}
-		logging.Info("已经加载的工具 %v", tls)
-	}
-
-	var chatMessages []openaistyle.ChatMessage
-	if override, ok := ctx.Value(utils.MemoryMessagesOverrideString).([]*memory.Message); ok && len(override) > 0 {
-		chatMessages = convertMessages(override)
-	} else {
-		chatMessages = convertMessages(memory.GetLocalMemory().GetMessages(chatID))
+		for _, t := range tls {
+			logging.Info("加载完成的工具 %v", t)
+		}
 	}
 
 	maxTok := resolveMaxOutputTokens(ctx, info)
@@ -225,7 +281,7 @@ func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte
 		openaistyle.WithMaxTokens(maxTok),
 		openaistyle.WithStream(isStream),
 		openaistyle.WithTools(tls),
-		// openaistyle.WithToolChoice(&openaistyle.ToolChoice{Type: "auto"}),
+		openaistyle.WithToolChoice(toolChoice),
 	}
 	if IsLLMThinkingDisabled() {
 		opts = append(opts,
@@ -256,6 +312,12 @@ func convertMessages(messages []*memory.Message) []openaistyle.ChatMessage {
 	logging.Info("convertMessages")
 	chatMessages := make([]openaistyle.ChatMessage, 0, len(messages))
 	for _, msg := range messages {
+		if msg == nil {
+			continue
+		}
+		if strings.TrimSpace(msg.Content) == "" && len(msg.ToolCalls) == 0 && msg.ToolCallID == "" {
+			continue
+		}
 		chatMsg := openaistyle.ChatMessage{
 			Role:    string(msg.Role),
 			Content: msg.Content,
@@ -271,6 +333,9 @@ func convertMessages(messages []*memory.Message) []openaistyle.ChatMessage {
 				if regOK {
 					desc = tl.Description()
 					params = tl.Parameters()
+				} else if dynDesc, dynParams, dynOK := mcpbridge.GetDynamicToolMeta(toolName); dynOK {
+					desc = dynDesc
+					params = dynParams
 				} else {
 					logging.Error("工具 %s 不存在", toolName)
 				}

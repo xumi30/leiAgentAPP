@@ -3,9 +3,9 @@
   inset: 0;
   z-index: 1000;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 0 12px 12px;
+  padding: 12px;
   background: rgba(20, 24, 32, 0.38);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -22,8 +22,10 @@
 }
 
 .settings-sheet {
-  width: min(720px, 100%);
-  max-height: min(86vh, 820px);
+  width: 80%;
+  max-width: 80%;
+  height: 100%;
+  max-height: calc(100vh - 24px);
   display: flex;
   flex-direction: column;
   padding: 20px 22px 18px;
@@ -36,7 +38,8 @@
 }
 
 .settings-sheet--wide {
-  width: min(920px, 100%);
+  width: 80%;
+  max-width: 80%;
 }
 
 @keyframes settings-sheet-up {
@@ -195,6 +198,10 @@
   min-width: 720px;
 }
 
+.settings-table--mcp {
+  min-width: 1180px;
+}
+
 .settings-table thead th {
   position: sticky;
   top: 0;
@@ -236,6 +243,28 @@
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.12);
 }
 
+.settings-table__textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 84px;
+  box-sizing: border-box;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1d1d1f;
+  outline: none;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.settings-table__textarea:focus {
+  border-color: rgba(0, 122, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.12);
+}
+
 .settings-table__input--num {
   max-width: 88px;
 }
@@ -258,12 +287,38 @@
 }
 
 .settings-table__th-actions {
-  width: 56px;
+  width: 96px;
+}
+
+.settings-table__th-status {
+  width: 44px;
+  text-align: center;
+}
+
+.settings-table__status-cell {
+  text-align: center;
+  vertical-align: top;
+  padding-top: 12px !important;
 }
 
 .settings-table__actions {
   text-align: right;
   white-space: nowrap;
+}
+
+.settings-table__validate {
+  border: none;
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  margin-right: 6px;
+}
+
+.settings-table__validate:hover {
+  background: rgba(0, 122, 255, 0.16);
 }
 
 .settings-table__remove {
@@ -280,6 +335,63 @@
   background: rgba(198, 40, 40, 0.08);
 }
 
+.settings-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #c7c7cc;
+  box-shadow: 0 0 0 3px rgba(199, 199, 204, 0.18);
+}
+
+.settings-status-dot--checking {
+  background: #ff9f0a;
+  box-shadow: 0 0 0 3px rgba(255, 159, 10, 0.16);
+}
+
+.settings-status-dot--ok {
+  background: #30d158;
+  box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.16);
+}
+
+.settings-status-dot--error {
+  background: #ff453a;
+  box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.16);
+}
+
+.settings-mcp-meta {
+  margin-top: 6px;
+}
+
+.settings-mcp-meta__text {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #6e6e73;
+}
+
+.settings-mcp-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.settings-mcp-tool-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(0, 122, 255, 0.08);
+  color: #225b9e;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.settings-mcp-tool-chip--muted {
+  background: rgba(120, 120, 128, 0.12);
+  color: #6e6e73;
+}
+
 .settings-table__empty {
   text-align: center;
   color: #aeaeb2;
@@ -291,6 +403,39 @@
   padding: 8px 10px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   background: rgba(255, 255, 255, 0.5);
+}
+
+.settings-import {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-import__textarea {
+  width: 100%;
+  min-height: 112px;
+  box-sizing: border-box;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.94);
+  color: #1d1d1f;
+  outline: none;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.settings-import__textarea:focus {
+  border-color: rgba(0, 122, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.12);
+}
+
+.settings-import__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .settings-btn--small {

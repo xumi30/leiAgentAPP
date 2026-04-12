@@ -7,6 +7,7 @@ import (
 
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
+	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -35,7 +36,6 @@ func (planner *Planning) DoTask(ctx context.Context) (string, error) {
 
 	if err != nil {
 		logging.Error("第一次执行规划失败: %v", err)
-		memory.AddUserMessage(chatId, "第一次执行规划失败，返回的错误是："+err.Error())
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("第一次执行规划失败: %v", err))
 	}
 
@@ -52,7 +52,6 @@ func (planner *Planning) DoTask(ctx context.Context) (string, error) {
 		}
 
 		// 错误信息
-		memory.AddUserMessage(chatId, "计划执行失败倒数第"+fmt.Sprint(planner.RetryCount)+"次，以下是重试后的结果："+retryResult)
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("计划执行失败倒数第%d次，以下是重试后的结果：%s", planner.RetryCount, retryResult))
 		pstr, err = planner.DoExe(ctx)
 
@@ -60,17 +59,15 @@ func (planner *Planning) DoTask(ctx context.Context) (string, error) {
 			logging.Error("执行规划失败倒数第%d次: %v", planner.RetryCount, err)
 
 			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("执行规划失败倒数第%d次: %v", planner.RetryCount, err))
-			memory.AddUserMessage(chatId, fmt.Sprintf("执行规划失败倒数第%d次: %v", planner.RetryCount, err))
 			return "", err
 		}
 
 	}
 
-	memory.AddUserMessage(chatId, "全部规划尝试执行完成，以下是执行结果："+pstr)
 	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("全部规划尝试执行完成，以下是执行结果：%s", pstr))
 	logging.Info("全部规划尝试执行完成，以下是执行结果：%s", pstr)
 
-	if planner.Status != utils.TaskCompleted {
+	if planner.Status == utils.TaskFailed {
 		logging.Error("执行规划失败: %v", planner.Status)
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("执行规划失败: %v", planner.Status))
 		// return "", fmt.Errorf("执行规划失败: %v", planner.Status)
@@ -91,15 +88,23 @@ func summarizePlanExecution(ctx context.Context, chatId string) error {
 
 	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "正在生成执行总结…\n"))
 
-	memory.GetLocalMemory().SetSystemPrompt(chatId, PlanSummarySystemPrompt)
-	memory.AddUserMessage(chatId, "综合以上信息生成面向用户goal的总结。不要强调执行了哪些步骤，而是强调最终结果。不要关注错误步骤，只关注成功获取的信息,然后结合你的相关知识补充扩展,给出兼具理性和感性的回复。")
-
 	p, err := proxy.NewProxy(nil)
 	if err != nil {
 		return fmt.Errorf("创建 LLM 代理失败: %w", err)
 	}
 
-	tc, err := p.Communicate(ctx)
+	reqCtx := context.WithValue(ctx, utils.ChatIDString, chatId)
+	reqCtx = context.WithValue(reqCtx, utils.SkipDialogToUIString, true)
+	msgs := []openaistyle.ChatMessage{{
+		Role:    openaistyle.RoleSystem,
+		Content: PlanSummarySystemPrompt,
+	}}
+	msgs = append(msgs, historyToChatMessages(memory.GetLocalMemory().GetMessages(chatId))...)
+	msgs = append(msgs, openaistyle.ChatMessage{
+		Role:    openaistyle.RoleUser,
+		Content: "综合以上信息生成面向用户goal的总结。不要强调执行了哪些步骤，而是强调最终结果。不要关注错误步骤，只关注成功获取的信息,然后结合你的相关知识补充扩展,给出兼具理性和感性的回复。",
+	})
+	tc, err := p.CommunicateWithMessages(reqCtx, msgs)
 	if err != nil {
 		return err
 	}
@@ -107,4 +112,39 @@ func summarizePlanExecution(ctx context.Context, chatId string) error {
 		memory.AddAssistantContentMessage(chatId, tc.Content)
 	}
 	return nil
+}
+
+func historyToChatMessages(msgs []*memory.Message) []openaistyle.ChatMessage {
+	out := make([]openaistyle.ChatMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		if msg == nil {
+			continue
+		}
+		if strings.TrimSpace(msg.Content) == "" && len(msg.ToolCalls) == 0 && msg.ToolCallID == "" {
+			continue
+		}
+		chatMsg := openaistyle.ChatMessage{
+			Role:    string(msg.Role),
+			Content: msg.Content,
+		}
+		if msg.ToolCallID != "" {
+			chatMsg.ToolCallID = msg.ToolCallID
+		}
+		if len(msg.ToolCalls) > 0 {
+			tc := make([]openaistyle.ToolCall, 0, len(msg.ToolCalls))
+			for _, call := range msg.ToolCalls {
+				tc = append(tc, openaistyle.ToolCall{
+					ID:   call.ID,
+					Type: call.Type,
+					Function: &openaistyle.Function{
+						Name: call.Function.Name,
+					},
+					Index: call.Index,
+				})
+			}
+			chatMsg.ToolCalls = tc
+		}
+		out = append(out, chatMsg)
+	}
+	return out
 }

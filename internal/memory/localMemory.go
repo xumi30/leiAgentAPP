@@ -71,7 +71,7 @@ func (m *localMemory) SetSystemPrompt(chatID string, systemPrompt string) int {
 	}
 	m.Messages[chatID] = append(m.Messages[chatID], &Message{
 		Role:    MessageRoleSystem,
-	Content: systemPrompt,
+		Content: systemPrompt,
 	})
 	return len(m.Messages[chatID]) - 1
 }
@@ -118,7 +118,19 @@ func (m *localMemory) GetMessages(chatID string) []*Message {
 	defer m.RwLock.RUnlock()
 	if msgs, ok := m.Messages[chatID]; ok {
 		logging.Info("Messages found for chatID: %s", chatID)
-		return msgs
+		out := make([]*Message, 0, len(msgs))
+		for _, msg := range msgs {
+			if msg == nil {
+				out = append(out, nil)
+				continue
+			}
+			cp := *msg
+			if len(msg.ToolCalls) > 0 {
+				cp.ToolCalls = append([]ToolCall(nil), msg.ToolCalls...)
+			}
+			out = append(out, &cp)
+		}
+		return out
 	}
 	return []*Message{}
 }
@@ -200,6 +212,11 @@ func SetSystemPrompt(chatId string, systemprompt string) int {
 		return -1
 	}
 	memoryLocal := GetLocalMemory()
+	memoryLocal.RwLock.Lock()
+	defer memoryLocal.RwLock.Unlock()
+	if _, ok := memoryLocal.Messages[chatId]; !ok {
+		memoryLocal.Messages[chatId] = []*Message{}
+	}
 	for i, msg := range memoryLocal.Messages[chatId] {
 		if msg.Role == MessageRoleSystem {
 			msg.Content = systemprompt
@@ -207,7 +224,12 @@ func SetSystemPrompt(chatId string, systemprompt string) int {
 			return i
 		}
 	}
-	return memoryLocal.SetSystemPrompt(chatId, systemprompt)
+	memoryLocal.Messages[chatId] = append(memoryLocal.Messages[chatId], &Message{
+		Role:    MessageRoleSystem,
+		Content: systemprompt,
+	})
+	logging.Info("SetSystemPrompt called")
+	return len(memoryLocal.Messages[chatId]) - 1
 }
 
 func SetToolsInfo(chatId string) {

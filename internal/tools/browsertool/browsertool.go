@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"leiAgent/internal/tools"
@@ -43,19 +44,28 @@ Important:
 - You MUST start the Playwright server first (once per machine):
   cd frontend && npm install && npm run playwright:server
 - Default server URL: http://127.0.0.1:3111 (override with env PW_SERVER_URL)
+- If the health check fails, stop and ask the user to start the Playwright server before retrying.
 
 Core workflow (always do this):
 1) operation=create_session  -> get sessionId
 2) operation=action         -> run one action at a time using the same sessionId
 3) operation=close_session  -> close the session to release resources
 
+Session policy:
+- If the user asks to open or view a webpage, prefer keeping the browser session open at the end.
+- Only close the session when the user explicitly asks to close it, or when the task is clearly a one-off extraction/screenshot job.
+
 Supported actions (operation=action):
-- goto:        params.url (string, required), params.waitUntil (optional: "load"|"domcontentloaded"|"networkidle")
+- goto:        params.url (string, required), params.waitUntil (optional: "load"|"domcontentloaded"|"networkidle"), params.observe (optional bool, default true)
 - wait_for_selector: params.selector (string, required)
-- click:       params.selector (string, required)
-- fill:        params.selector (string, required), params.value (string, required)
-- press:       params.selector (string, required), params.key (string, required; e.g. "Enter")
+- click:       params.selector (string, required), params.observe (optional bool, default true)
+- click_text:  params.text (string, required), params.exact (optional bool, default true), params.role (optional: "link"|"button"|"tab"|"menuitem"), params.observe (optional bool, default true)
+- fill:        params.selector (string, required), params.value (string, required), params.observe (optional bool, default false)
+- press:       params.selector (string, required), params.key (string, required; e.g. "Enter"), params.observe (optional bool, default true)
 - text:        params.selector (string, required) -> returns textContent
+- list_links:  params.limit (optional integer, default 20) -> returns visible-ish link text/title/href candidates for navigation debugging
+- list_inputs: params.limit (optional integer, default 12) -> returns form/input metadata such as name/id/placeholder/aria-label
+- observe:     params.limit (optional integer, default 8) -> returns page title/url/headings/links/inputs/buttons snapshot
 - content:     no params -> returns page HTML
 - url:         no params -> returns current page url
 - screenshot:  params.fullPage (bool, default true), params.path (optional string). Always returns base64 png in result.bytesBase64.
@@ -63,12 +73,14 @@ Supported actions (operation=action):
 
 Selector tips:
 - Prefer stable selectors: data-testid, aria-label, input[name=...], button:has-text("...").
+- For nav bars or tabs like "电影", prefer click_text before guessing CSS selectors.
+- After goto/click/press, the tool usually returns an observation block with page title, links, and inputs. Use that before guessing selectors.
 - If an action fails due to timing, call wait_for_selector first, then retry click/fill.
 
 Failure/self-debug recipe:
-1) wait_for_selector for the element you expect
-2) screenshot (fullPage=true)
-3) content (to inspect DOM) or url (to confirm navigation)
+1) observe or list_links/list_inputs to inspect what is currently on the page
+2) wait_for_selector for the element you expect
+3) screenshot (fullPage=true) or content if deeper inspection is still needed
 
 Copy-paste examples:
 
@@ -82,6 +94,18 @@ Wait + fill + press Enter:
 {"operation":"action","sessionId":"<id>","action":"wait_for_selector","params":{"selector":"input[name='q']"}}
 {"operation":"action","sessionId":"<id>","action":"fill","params":{"selector":"input[name='q']","value":"Playwright"}}
 {"operation":"action","sessionId":"<id>","action":"press","params":{"selector":"input[name='q']","key":"Enter"}}
+
+Click nav item by text:
+{"operation":"action","sessionId":"<id>","action":"click_text","params":{"text":"电影","role":"link","exact":true}}
+
+Inspect page links:
+{"operation":"action","sessionId":"<id>","action":"list_links","params":{"limit":20}}
+
+Inspect form fields:
+{"operation":"action","sessionId":"<id>","action":"list_inputs","params":{"limit":10}}
+
+Observe current page:
+{"operation":"action","sessionId":"<id>","action":"observe","params":{"limit":8}}
 
 Screenshot:
 {"operation":"action","sessionId":"<id>","action":"screenshot","params":{"fullPage":true}}
@@ -105,11 +129,11 @@ func (t *BrowserPlaywrightTool) Parameters() map[string]interface{} {
 			},
 			"action": map[string]interface{}{
 				"type":        "string",
-				"description": "Required when operation=action. Supported: goto, click, fill, press, wait_for_selector, evaluate, screenshot, content, text, url.",
+				"description": "Required when operation=action. Supported: goto, click, click_text, fill, press, wait_for_selector, list_links, list_inputs, observe, evaluate, screenshot, content, text, url.",
 			},
 			"params": map[string]interface{}{
 				"type":        "object",
-				"description": "Action parameters object. Required fields depend on action. Examples: goto{url,waitUntil}; click{selector}; fill{selector,value}; press{selector,key}; wait_for_selector{selector}; text{selector}; evaluate{expression}; screenshot{fullPage,path}.",
+				"description": "Action parameters object. Required fields depend on action. Examples: goto{url,waitUntil,observe}; click{selector,observe}; click_text{text,exact,role,observe}; fill{selector,value,observe}; press{selector,key,observe}; wait_for_selector{selector}; list_links{limit}; list_inputs{limit}; observe{limit}; text{selector}; evaluate{expression}; screenshot{fullPage,path}.",
 			},
 			"timeoutMs": map[string]interface{}{
 				"type":        "integer",
@@ -139,7 +163,7 @@ func (t *BrowserPlaywrightTool) Parameters() map[string]interface{} {
 func (t *BrowserPlaywrightTool) Results() map[string]interface{} {
 	return map[string]interface{}{
 		"type":        "object",
-		"description": "Result of browser operation. The actual tool return is a JSON string from the Playwright server; this schema provides a minimal, consistent shape for UIs.",
+		"description": "Result of browser operation. Many navigation actions also return an observation block containing title/url/headings/links/inputs/buttons to help the model choose the next step.",
 		"properties": map[string]interface{}{
 			"message": map[string]interface{}{
 				"type":        "string",
@@ -162,6 +186,10 @@ func (t *BrowserPlaywrightTool) Run(ctx context.Context, input string) (string, 
 }
 
 func (t *BrowserPlaywrightTool) Execute(ctx context.Context, args string) (string, error) {
+	if err := t.ensureServerHealthy(ctx); err != nil {
+		return "", err
+	}
+
 	args = utils.ExtractJSON(args)
 	args = utils.EscapeRawNewlinesInJSONStrings(args)
 
@@ -185,6 +213,15 @@ func (t *BrowserPlaywrightTool) Execute(ctx context.Context, args string) (strin
 		sid, _ := params["sessionId"].(string)
 		if utils.IsBlank(sid) {
 			return "", fmt.Errorf("%w: sessionId is required for close_session", tools.ErrInvalidParams)
+		}
+		if shouldKeepSessionOpen(ctx) {
+			return prettyJSONMust(map[string]interface{}{
+				"ok":        true,
+				"sessionId": sid,
+				"closed":    false,
+				"kept_open": true,
+				"reason":    "session kept open because the user goal is to open or view the page",
+			}), nil
 		}
 		return t.delete(ctx, "/sessions/"+sid)
 
@@ -240,6 +277,59 @@ func (t *BrowserPlaywrightTool) Execute(ctx context.Context, args string) (strin
 	}
 }
 
+func shouldKeepSessionOpen(ctx context.Context) bool {
+	goal, _ := ctx.Value(utils.UserGoalString).(string)
+	goal = strings.ToLower(strings.TrimSpace(goal))
+	if goal == "" {
+		return false
+	}
+
+	closeHints := []string{
+		"关闭", "关掉", "退出浏览器", "关闭浏览器", "close browser", "close the browser", "close session",
+	}
+	for _, hint := range closeHints {
+		if strings.Contains(goal, hint) {
+			return false
+		}
+	}
+
+	openHints := []string{
+		"打开", "访问", "进入", "看看网页", "打开网页", "打开页面",
+		"open", "visit", "browse", "navigate", "open page", "open webpage",
+	}
+	for _, hint := range openHints {
+		if strings.Contains(goal, hint) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (t *BrowserPlaywrightTool) ensureServerHealthy(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.baseURL+"/health", nil)
+	if err != nil {
+		return fmt.Errorf("%w: failed to create browser health-check request: %v", tools.ErrExecutionFailed, err)
+	}
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("%w: Playwright server is not reachable at %s. Start it with: cd frontend && npm install && npm run playwright:server", tools.ErrExecutionFailed, t.baseURL)
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := bytes.TrimSpace(raw)
+		if len(msg) == 0 {
+			return fmt.Errorf("%w: Playwright server health check failed with status %s. Server URL: %s", tools.ErrExecutionFailed, resp.Status, t.baseURL)
+		}
+		return fmt.Errorf("%w: Playwright server health check failed with status %s. Response: %s", tools.ErrExecutionFailed, resp.Status, string(msg))
+	}
+
+	return nil
+}
+
 func (t *BrowserPlaywrightTool) postJSON(ctx context.Context, path string, body any) (string, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -260,7 +350,11 @@ func (t *BrowserPlaywrightTool) postJSON(ctx context.Context, path string, body 
 
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return string(raw), fmt.Errorf("%w: server returned %s", tools.ErrExecutionFailed, resp.Status)
+		msg := strings.TrimSpace(string(raw))
+		if msg == "" {
+			return "", fmt.Errorf("%w: server returned %s", tools.ErrExecutionFailed, resp.Status)
+		}
+		return msg, fmt.Errorf("%w: server returned %s: %s", tools.ErrExecutionFailed, resp.Status, msg)
 	}
 	return prettyJSON(raw), nil
 }
@@ -293,4 +387,12 @@ func prettyJSON(raw []byte) string {
 		return string(bytes.TrimSpace(raw))
 	}
 	return string(out)
+}
+
+func prettyJSONMust(v any) string {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return prettyJSON(raw)
 }

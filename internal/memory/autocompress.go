@@ -18,7 +18,14 @@ const AutoCompressYAMLMessageThreshold = 20
 var (
 	autoCompressHook   func(context.Context, string)
 	autoCompressHookMu sync.RWMutex
+	autoCompressState  sync.Map // map[string]*compressRunState
 )
+
+type compressRunState struct {
+	mu      sync.Mutex
+	running bool
+	rerun   bool
+}
 
 // SetAutoCompressHook 注册满轮次后的压缩逻辑（由上层注入，避免 memory 包依赖 proxy/memoryagent）。
 // 典型实现：调用 memoryagent.Compress。可为 nil 表示关闭自动压缩。
@@ -28,7 +35,16 @@ func SetAutoCompressHook(h func(context.Context, string)) {
 	autoCompressHook = h
 }
 
-// invokeAutoCompressHook 同步调用已注册的压缩逻辑（与内存计数、YAML 加载共用）。
+func getCompressRunState(chatID string) *compressRunState {
+	if v, ok := autoCompressState.Load(chatID); ok {
+		return v.(*compressRunState)
+	}
+	state := &compressRunState{}
+	actual, _ := autoCompressState.LoadOrStore(chatID, state)
+	return actual.(*compressRunState)
+}
+
+// invokeAutoCompressHook 异步调用已注册的压缩逻辑，并对同一 chatID 做去重/补跑控制。
 func invokeAutoCompressHook(chatID string) {
 	cid := strings.TrimSpace(chatID)
 	if cid == "" {
@@ -40,17 +56,45 @@ func invokeAutoCompressHook(chatID string) {
 	if h == nil {
 		return
 	}
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logging.Error("自动记忆压缩 panic chatID=%s: %v", cid, r)
+
+	state := getCompressRunState(cid)
+	state.mu.Lock()
+	if state.running {
+		state.rerun = true
+		state.mu.Unlock()
+		logging.Info("自动记忆压缩已在进行，标记补跑 chatID=%s", cid)
+		return
+	}
+	state.running = true
+	state.rerun = false
+	state.mu.Unlock()
+
+	go func() {
+		for {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logging.Error("自动记忆压缩 panic chatID=%s: %v", cid, r)
+					}
+				}()
+				h(context.Background(), cid)
+			}()
+
+			state.mu.Lock()
+			if state.rerun {
+				state.rerun = false
+				state.mu.Unlock()
+				logging.Info("自动记忆压缩补跑 chatID=%s", cid)
+				continue
 			}
-		}()
-		h(context.Background(), cid)
+			state.running = false
+			state.mu.Unlock()
+			return
+		}
 	}()
 }
 
-// afterAssistantContentTurn 在成功追加一条 assistant 正文消息后调用（同步触发压缩，避免与后续用户消息竞态）。
+// afterAssistantContentTurn 在成功追加一条 assistant 正文消息后调用（异步触发压缩，避免阻塞用户链路）。
 func (m *localMemory) afterAssistantContentTurn(chatID string) {
 	cid := strings.TrimSpace(chatID)
 	if cid == "" {

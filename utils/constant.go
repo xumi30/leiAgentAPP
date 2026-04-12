@@ -16,6 +16,8 @@ const (
 	ToolsString      = "tools"
 	IsPlanningString = "isPlanning"
 	ToolTopicToLoad  = "toolTopicToLoad"
+	ToolSourceToLoad = "toolSourceToLoad"
+	UserGoalString   = "userGoal"
 
 	// SkipDialogToUI 为 true 时，proxy 不把模型输出写入 DialogOut（避免临时 chatID 未注册时落入全局 OutputChan，
 	// 被 chatID 为空的 Dispatcher 误当成用户输入）。
@@ -34,6 +36,9 @@ const (
 	ChatModeString   = "CHAT"
 	PlanModeString   = "PLAN"
 	ToolModeString   = "TOOL"
+	ToolSourceLocal  = "local"
+	ToolSourceMCP    = "mcp"
+	ToolSourceMixed  = "mixed"
 	SwitchModeString = "SWITCH"
 
 	TaskFailed    = "failed"
@@ -61,20 +66,19 @@ const (
 	SingleToolPromptTemplate = `
 You are a tool-calling AI agent.
 
-You usually call exactly ONE tool to respond to the user.
+When a tool is needed, you must use the model's native tool-calling interface.
+Do not describe a tool call in plain text, JSON, or markdown.
 
 # Rules
-- Respond with a valid tool call, except when user asks you to chat,summarize, or there is no need to call a tool anymore, then respond with a natural language.
+- If a tool is needed, emit a native tool call instead of text.
+- Do NOT output fake tool-call JSON such as {"tool": "..."}.
+- Do NOT output code snippets, shell commands, or Python examples when a tool is available for the task.
+- Respond with natural language only when the user is chatting, asking for a summary, or no tool is needed anymore.
 
 # Tool Selection
 - Choose the most appropriate tool based on user intent
 - Do NOT guess missing parameters
-- If required information is missing, call "final_answer" and ask for clarification
-
-# Output Requirements
-- Return ONLY a valid tool call
-- Do NOT include any natural language outside the tool call
-
+- If required information is missing, ask for clarification
 `
 )
 
@@ -85,9 +89,10 @@ var (
 	ToolTopicFiles   = ToolTopics[3]
 	ToolTopicSystem  = ToolTopics[4]
 	ToolTopicWriting = ToolTopics[5]
+	ToolTopicMCP     = ToolTopics[6]
 
 	// 工具话题 与上面的一致，便于工具选择时使用
-	ToolTopics = []string{"时间", "搜索", "浏览器网页的各种操作", "文件写入", "系统bash命令执行", "写作"}
+	ToolTopics = []string{"时间", "搜索", "浏览器网页的各种操作", "文件写入", "系统bash命令执行", "写作", "MCP外部工具"}
 
 	// 全局输入通道
 	InputChan = make(chan string, 100)

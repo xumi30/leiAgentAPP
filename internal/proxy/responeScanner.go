@@ -190,7 +190,7 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 		logging.Warn("模型因 max_tokens 上限结束（finish_reason=length），输出可能被截断；可调大 max_output_tokens 或 LEIAGENT_LLM_MAX_OUTPUT_TOKENS")
 	}
 	logging.Info("响应内容: %s", openaiResp.Choices[0].Message.Content)
-
+	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("响应内容: %s", openaiResp.Choices[0].Message.Content))
 	tools := openaiResp.Choices[0].Message.ToolCalls
 
 	var content string

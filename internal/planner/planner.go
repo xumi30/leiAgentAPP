@@ -9,7 +9,7 @@ import (
 
 	"leiAgent/dataoperation"
 	"leiAgent/internal/globalchannel"
-	"leiAgent/internal/memory"
+	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -290,15 +290,24 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 	if err != nil {
 		return nil, err
 	}
-	memory.GetLocalMemory().SetSystemPrompt(chatId, PlannerPromotion)
 	logging.Info("planning系统提示词已加载...")
-
-	memory.AddUserMessage(chatId, string(planjson))
+	ctx = context.WithValue(ctx, utils.SkipDialogToUIString, true)
+	ctx = context.WithValue(ctx, utils.DialogOutChatIDString, chatId)
+	workingMessages := []openaistyle.ChatMessage{
+		{
+			Role:    openaistyle.RoleSystem,
+			Content: PlannerPromotion,
+		},
+		{
+			Role:    openaistyle.RoleUser,
+			Content: string(planjson),
+		},
+	}
 
 	const maxPlanParseAttempts = 3
 	var lastParseErr error
 	for attempt := 1; attempt <= maxPlanParseAttempts; attempt++ {
-		response, err := plannerProxy.Communicate(ctx)
+		response, err := plannerProxy.CommunicateWithMessages(ctx, workingMessages)
 		if err != nil {
 			logging.Error("规划请求失败: %v", err)
 			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("规划请求失败: %v", err.Error()))
@@ -324,11 +333,13 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 			if attempt < maxPlanParseAttempts {
 				// 把错误原因带回给模型，让它修正 JSON 后“只输出 JSON”重试一次。
 				preview := rawJSON
-
-				memory.AddUserMessage(chatId, fmt.Sprintf(
-					"你上一次输出不是合法 JSON，解析错误：%v。\n请严格按系统提示的 schema 重新输出，注意：所有 key 必须有双引号、不要尾逗号、depends_on 必须是数组（空用 []）、不要输出 ```json 等任何额外文本。\n上一版：\n%s",
-					err, preview,
-				))
+				workingMessages = append(workingMessages, openaistyle.ChatMessage{
+					Role: openaistyle.RoleUser,
+					Content: fmt.Sprintf(
+						"你上一次输出不是合法 JSON，解析错误：%v。\n请严格按系统提示的 schema 重新输出，注意：所有 key 必须有双引号、不要尾逗号、depends_on 必须是数组（空用 []）、不要输出 ```json 等任何额外文本。\n上一版：\n%s",
+						err, preview,
+					),
+				})
 				continue
 			}
 			break

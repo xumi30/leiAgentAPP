@@ -173,29 +173,38 @@ func GetLLMConfigFormState() (LLMConfigFormState, error) {
 	}, nil
 }
 
-func marshalLLMConfigForm(backends []LLMConfigRow) ([]byte, error) {
+func marshalLLMConfigForm(root mcpFileRoot, backends []LLMConfigRow) ([]byte, error) {
 	if len(backends) == 0 {
 		return nil, fmt.Errorf("多后端列表至少需一行")
 	}
-	header := strings.TrimRight(llmFormYAMLHeader, "\n") + "\n\n"
 	rows := make([]llmYAML, 0, len(backends))
 	for _, b := range backends {
 		rows = append(rows, b.toYAML())
 	}
-	root := struct {
-		LLMBackends []llmYAML `yaml:"llm_backends"`
-	}{LLMBackends: rows}
+	root.LLM = llmYAML{}
+	root.LLMBackends = rows
 	b, err := yaml.Marshal(&root)
 	if err != nil {
 		return nil, err
 	}
+	header := strings.TrimRight(llmFormYAMLHeader, "\n") + "\n\n"
 	return append([]byte(header), b...), nil
 }
 
 // SaveLLMConfigForm 将表格数据序列化为 YAML，校验并写入（与 SaveLLMConfigText 相同落盘规则）。
 func SaveLLMConfigForm(primary LLMConfigRow, backends []LLMConfigRow) (savedPath string, err error) {
 	_ = primary
-	data, err := marshalLLMConfigForm(backends)
+	content, _, _, err := ReadLLMConfigForUI()
+	if err != nil {
+		return "", err
+	}
+	var root mcpFileRoot
+	if strings.TrimSpace(content) != "" {
+		if err := yaml.Unmarshal([]byte(strings.ReplaceAll(content, "\r\n", "\n")), &root); err != nil {
+			return "", fmt.Errorf("YAML 解析失败：%w", err)
+		}
+	}
+	data, err := marshalLLMConfigForm(root, backends)
 	if err != nil {
 		return "", err
 	}

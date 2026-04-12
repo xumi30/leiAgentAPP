@@ -16,8 +16,8 @@ import (
 	"leiAgent/internal/dispatcher"
 	"leiAgent/internal/doclib"
 	"leiAgent/internal/globalchannel"
-	"leiAgent/internal/memory"
 	"leiAgent/internal/memo"
+	"leiAgent/internal/memory"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools/noveltool"
 	"leiAgent/logging"
@@ -308,7 +308,18 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		dp, err = dispatcher.NewDispatcher(ctx, chatID, cancel) // 传递 cancel 函数
 		if err != nil {
 			logging.Error("创建 Dispatcher 失败: %v", err)
+			globalchannel.SendAssitantMessageOnce(ctx, "创建 Dispatcher 失败: "+err.Error())
 			runtime.EventsEmit(a.ctx, "dispatcherError", err.Error())
+			if a.ctx != nil {
+				_, dlgErr := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+					Type:    runtime.ErrorDialog,
+					Title:   "无法启动对话引擎",
+					Message: "创建 Dispatcher 失败：\n" + err.Error(),
+				})
+				if dlgErr != nil {
+					logging.Error("MessageDialog: %v", dlgErr)
+				}
+			}
 			cancel()
 			return nil
 		}
@@ -454,14 +465,32 @@ func (a *App) SwitchChat(chatID string) {
 		}
 	}
 	a.lastActiveChatID = newID
-	if newID != "" && prev != newID {
+	shouldRestore := newID != "" && prev != newID && a.shouldRestoreLocalMemorySnapshot(newID)
+	a.switchMu.Unlock()
+
+	if shouldRestore {
 		dispatcher.LoadLocalMemorySnapshotForChat(newID)
 	}
-	a.switchMu.Unlock()
 
 	if newID != "" {
 		a.dispatcher(newID)
 	}
+}
+
+func (a *App) shouldRestoreLocalMemorySnapshot(chatID string) bool {
+	cid := strings.TrimSpace(chatID)
+	if cid == "" {
+		return false
+	}
+
+	a.poolMutex.RLock()
+	_, hasDispatcher := a.agentPool[cid]
+	a.poolMutex.RUnlock()
+	if hasDispatcher {
+		return false
+	}
+
+	return len(memory.GetLocalMemory().GetMessages(cid)) == 0
 }
 
 // shutdown 应用退出时把当前会话的本地记忆写入 localmemory/{chatID}.yaml。
@@ -512,6 +541,21 @@ func (a *App) GetLLMConfigFormState() (proxy.LLMConfigFormState, error) {
 // SaveLLMConfigForm 将表格数据序列化为 YAML 并校验、写入。
 func (a *App) SaveLLMConfigForm(primary proxy.LLMConfigRow, backends []proxy.LLMConfigRow) (string, error) {
 	return proxy.SaveLLMConfigForm(primary, backends)
+}
+
+// GetMCPConfigFormState 返回 MCP 配置的表格编辑数据。
+func (a *App) GetMCPConfigFormState() (proxy.MCPConfigFormState, error) {
+	return proxy.GetMCPConfigFormState()
+}
+
+// SaveMCPConfigForm 将 MCP 表格数据序列化为 YAML 并写入，保留现有 LLM 配置。
+func (a *App) SaveMCPConfigForm(servers []proxy.MCPConfigRow) (string, error) {
+	return proxy.SaveMCPConfigForm(servers)
+}
+
+// ValidateMCPConfigRow 校验单条 MCP 配置并执行 tools/list，用于前端配置页状态展示。
+func (a *App) ValidateMCPConfigRow(row proxy.MCPConfigRow) (proxy.MCPValidationResult, error) {
+	return proxy.ValidateMCPConfigRow(row)
 }
 
 // GetMemoContent 读取备忘录全文（主存 SQLite；与 memo_write 工具共用同一存储）。

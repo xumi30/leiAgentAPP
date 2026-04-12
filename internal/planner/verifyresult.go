@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"leiAgent/dataoperation"
-	"leiAgent/internal/memory"
+	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/proxy"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -248,14 +248,22 @@ func (p *Planning) VerifyResult(ctx context.Context, result string) (string, err
 		return "", errors.New("database not available")
 	}
 
-	memory.GetLocalMemory().Clear(chatID)
-	memory.SetSystemPrompt(chatID, VerifySystemPrompt)
-	memory.AddUserMessage(chatID, "this is the execution state of this plan:\n\n"+result)
-	fmt.Println("this is the execution state of this plan:\n\n" + result)
-	memory.AddUserMessage(chatID, "this is the prompt of the planner who produced this plan and he made miskakes(help him to fix them):\n"+PlannerPromotion)
-	memory.SetToolsInfo(chatID)
+	workingMessages := []openaistyle.ChatMessage{
+		{
+			Role:    openaistyle.RoleSystem,
+			Content: VerifySystemPrompt,
+		},
+		{
+			Role:    openaistyle.RoleUser,
+			Content: "this is the execution state of this plan:\n\n" + result,
+		},
+		{
+			Role:    openaistyle.RoleUser,
+			Content: "this is the prompt of the planner who produced this plan and he made miskakes(help him to fix them):\n" + PlannerPromotion,
+		},
+	}
 
-	finalResult, err := p.verifyResultWithRetry(ctx, chatID, result)
+	finalResult, err := p.verifyResultWithRetry(ctx, chatID, workingMessages)
 	if err != nil {
 		return "", err
 	}
@@ -263,11 +271,11 @@ func (p *Planning) VerifyResult(ctx context.Context, result string) (string, err
 	return finalResult, nil
 }
 
-func (p *Planning) verifyResultWithRetry(ctx context.Context, subChatId, result string) (string, error) {
+func (p *Planning) verifyResultWithRetry(ctx context.Context, chatID string, workingMessages []openaistyle.ChatMessage) (string, error) {
 	var lastErr error
 
 	for attempt := 1; attempt <= maxVerifyAttempts; attempt++ {
-		raw, err := sendMessage(ctx)
+		raw, err := sendVerifyMessage(ctx, chatID, workingMessages)
 		if err != nil {
 			return "", err
 		}
@@ -276,20 +284,29 @@ func (p *Planning) verifyResultWithRetry(ctx context.Context, subChatId, result 
 		if err := json.Unmarshal([]byte(raw), &goalsteps); err != nil {
 			logging.Error("解析JSON失败: %v", err)
 			lastErr = fmt.Errorf("解析JSON失败: %w", err)
-			memory.AddUserMessage(subChatId, "执行结果分析失败：上次返回不是合法 JSON，请只输出一节严格符合约定的 JSON（含 analysis 与 Goalsteps）。")
+			workingMessages = append(workingMessages, openaistyle.ChatMessage{
+				Role:    openaistyle.RoleUser,
+				Content: "执行结果分析失败：上次返回不是合法 JSON，请只输出一节严格符合约定的 JSON（含 analysis 与 Goalsteps）。",
+			})
 			continue
 		}
 
 		if _, ok := goalsteps["analysis"]; !ok {
 			logging.Error("返回的JSON缺少 'analysis' 字段")
 			lastErr = fmt.Errorf("返回的JSON缺少 'analysis' 字段")
-			memory.AddUserMessage(subChatId, "执行结果分析失败,返回的JSON缺少 'analysis' 字段")
+			workingMessages = append(workingMessages, openaistyle.ChatMessage{
+				Role:    openaistyle.RoleUser,
+				Content: "执行结果分析失败,返回的JSON缺少 'analysis' 字段",
+			})
 			continue
 		}
 		if _, ok := goalsteps["Goalsteps"]; !ok {
 			logging.Error("返回的JSON缺少 'Goalsteps' 字段")
 			lastErr = fmt.Errorf("返回的JSON缺少 'Goalsteps' 字段")
-			memory.AddUserMessage(subChatId, "执行结果分析失败,返回的JSON缺少 'Goalsteps' 字段")
+			workingMessages = append(workingMessages, openaistyle.ChatMessage{
+				Role:    openaistyle.RoleUser,
+				Content: "执行结果分析失败,返回的JSON缺少 'Goalsteps' 字段",
+			})
 			continue
 		}
 
@@ -301,7 +318,10 @@ func (p *Planning) verifyResultWithRetry(ctx context.Context, subChatId, result 
 			if err != nil {
 				logging.Error("序列化Goalsteps失败: %v", err)
 				lastErr = fmt.Errorf("序列化Goalsteps失败: %w", err)
-				memory.AddUserMessage(subChatId, "执行结果分析失败：Goalsteps 字段无法序列化为 JSON，请修正后重试。")
+				workingMessages = append(workingMessages, openaistyle.ChatMessage{
+					Role:    openaistyle.RoleUser,
+					Content: "执行结果分析失败：Goalsteps 字段无法序列化为 JSON，请修正后重试。",
+				})
 				continue
 			}
 		}
@@ -310,18 +330,20 @@ func (p *Planning) verifyResultWithRetry(ctx context.Context, subChatId, result 
 	}
 
 	if lastErr != nil {
-		return result, lastErr
+		return "", lastErr
 	}
-	return result, fmt.Errorf("验证结果在 %d 次尝试后仍失败", maxVerifyAttempts)
+	return "", fmt.Errorf("验证结果在 %d 次尝试后仍失败", maxVerifyAttempts)
 }
 
-func sendMessage(ctx context.Context) (string, error) {
-
+func sendVerifyMessage(ctx context.Context, chatID string, workingMessages []openaistyle.ChatMessage) (string, error) {
 	px, err := proxy.NewProxy(nil)
 	if err != nil {
 		return "", err
 	}
-	response, err := px.Communicate(ctx)
+	reqCtx := context.WithValue(ctx, utils.ChatIDString, chatID)
+	reqCtx = context.WithValue(reqCtx, utils.IsStreamString, false)
+	reqCtx = context.WithValue(reqCtx, utils.SkipDialogToUIString, true)
+	response, err := px.CommunicateWithMessages(reqCtx, workingMessages)
 
 	if err != nil {
 		return "", err
