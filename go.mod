@@ -5,8 +5,10 @@ go 1.26
 require (
 	github.com/6tail/lunar-go v1.4.6
 	github.com/PuerkitoBio/goquery v1.12.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/zerolog v1.35.0
 	github.com/serpapi/serpapi-golang v0.0.0-20260126142127-0e41c7993cda
+	github.com/teambition/rrule-go v1.8.2
 	github.com/wailsapp/wails/v2 v2.12.0
 	go.yaml.in/yaml/v2 v2.4.4
 	modernc.org/sqlite v1.48.0

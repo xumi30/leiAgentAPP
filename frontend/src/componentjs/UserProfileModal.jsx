@@ -170,6 +170,11 @@ export default function UserProfileModal({ open, onClose, chatId = '' }) {
     return Array.isArray(list) ? list : [];
   }, [profile]);
 
+  const evidenceWindow = useMemo(() => {
+    const list = profile?.source_meta?.evidence_window;
+    return Array.isArray(list) ? list : [];
+  }, [profile]);
+
   if (!open) return null;
 
   return (
@@ -181,7 +186,7 @@ export default function UserProfileModal({ open, onClose, chatId = '' }) {
               用户画像
             </h2>
             <p className="uprof-sub">
-              chatID: <code>{cid || '(未选择对话)'}</code>
+              这是这台应用长期沉淀的用户画像，当前会话只作为最新补充证据。
             </p>
           </div>
           <div className="uprof-actions">
@@ -213,43 +218,46 @@ export default function UserProfileModal({ open, onClose, chatId = '' }) {
               <section className="uprof-card uprof-card--summary">
                 <p className="uprof-summary">{String(profile.summary || '')}</p>
                 <div className="uprof-meta">
+                  <span>人物画像</span>
                   <span>更新时间: {String(profile.updated_at || '-')}</span>
-                  <span>Schema: {String(profile.schema_version || '-')}</span>
+                  <span>当前会话: {cid || '(未选择对话)'}</span>
                 </div>
               </section>
 
+              <section className="uprof-card uprof-card--source">
+                <h3>当前会话补充</h3>
+                <p className="uprof-source-copy">
+                  当前打开的对话会刷新这个人的长期画像，但不会把一次短期情绪直接当成永久特质。
+                </p>
+                {evidenceWindow.length ? (
+                  <div className="uprof-source-chips">{chips(evidenceWindow)}</div>
+                ) : (
+                  <p className="uprof-empty">暂无本轮补充摘要。</p>
+                )}
+              </section>
+
               <section className="uprof-card">
-                <h3>Identity</h3>
+                <h3>长期身份</h3>
                 {metricRows(profile.identity)}
               </section>
 
               <section className="uprof-card">
-                <h3>Preferences</h3>
+                <h3>长期偏好</h3>
                 {metricRows(profile.preferences)}
               </section>
 
               <section className="uprof-card">
-                <h3>Personality</h3>
-                {metricRows(profile.personality)}
+                <h3>心理画像</h3>
+                {metricRows(profile.psychology)}
               </section>
 
               <section className="uprof-card">
-                <h3>Behavior</h3>
-                {metricRows(profile.behavior)}
-              </section>
-
-              <section className="uprof-card">
-                <h3>State</h3>
-                {metricRows(profile.state)}
-              </section>
-
-              <section className="uprof-card">
-                <h3>Predictions</h3>
+                <h3>下一步推测</h3>
                 {metricRows(profile.predictions)}
               </section>
 
               <section className="uprof-card">
-                <h3>Memory Events</h3>
+                <h3>长期记忆事件</h3>
                 {memoryItems.length === 0 ? (
                   <p className="uprof-empty">暂无关键事件。</p>
                 ) : (

@@ -103,6 +103,10 @@
   grid-column: 1 / -1;
 }
 
+.uprof-card--source {
+  grid-column: 1 / -1;
+}
+
 .uprof-summary {
   margin: 0;
   font-size: 15px;
@@ -117,6 +121,18 @@
   gap: 10px;
   font-size: 12px;
   color: rgba(65, 43, 15, 0.62);
+}
+
+.uprof-source-copy {
+  margin: 0 0 10px;
+  color: #4e3412;
+  line-height: 1.6;
+}
+
+.uprof-source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .uprof-grid {

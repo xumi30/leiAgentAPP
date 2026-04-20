@@ -11,6 +11,7 @@ import DocLibraryModal from './componentjs/DocLibraryModal.jsx';
 import SettingsModal from './componentjs/SettingsModal.jsx';
 import LocalMemoryModal from './componentjs/LocalMemoryModal.jsx';
 import UserProfileModal from './componentjs/UserProfileModal.jsx';
+import ScheduledTasksModal from './componentjs/ScheduledTasksModal.jsx';
 import {
   GetMemoCalendarDates,
   GetLLMConnectionStatus,
@@ -34,6 +35,7 @@ function App() {
   const [isDragging, setIsDragging] = useState(null);
 
   const [memoOpen, setMemoOpen] = useState(false);
+  const [scheduledTasksOpen, setScheduledTasksOpen] = useState(false);
   const [docLibOpen, setDocLibOpen] = useState(false);
   const [docLibFocusPath, setDocLibFocusPath] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -227,6 +229,7 @@ function App() {
     <div id="App" className="board-column">
       <Header
         onOpenMemo={() => setMemoOpen(true)}
+        onOpenScheduledTasks={() => setScheduledTasksOpen(true)}
         onOpenDocLibrary={() => {
           setDocLibFocusPath(null);
           setDocLibOpen(true);
@@ -246,6 +249,7 @@ function App() {
         onSaved={refreshConnection}
       />
       <MemoModal open={memoOpen} onClose={() => setMemoOpen(false)} onMemoSaved={refreshMemoDates} />
+      <ScheduledTasksModal open={scheduledTasksOpen} onClose={() => setScheduledTasksOpen(false)} />
       <DocLibraryModal
         open={docLibOpen}
         focusPath={docLibFocusPath}

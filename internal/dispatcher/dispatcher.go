@@ -13,6 +13,7 @@ import (
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
 	"leiAgent/internal/tools/bashfunction"
+	"leiAgent/internal/tools/crontab"
 	"leiAgent/internal/tools/mcptool"
 
 	fileFunctions "leiAgent/internal/tools/fileFunction"
@@ -69,6 +70,10 @@ func init() {
 	toolRegistry.Register(downloadBooks)
 	toolRegistry.Register(getTime)
 	toolRegistry.Register(calculateTimeTool)
+	toolRegistry.Register(crontab.NewCreateScheduledTaskTool())
+	toolRegistry.Register(crontab.NewUpdateScheduledTaskTool())
+	toolRegistry.Register(crontab.NewDeleteScheduledTaskTool())
+	toolRegistry.Register(crontab.NewListScheduledTasksTool())
 
 	memory.SetAutoCompressHook(func(ctx context.Context, chatID string) {
 		if _, err := memoryagent.Compress(ctx, chatID); err != nil {

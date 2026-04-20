@@ -21,6 +21,9 @@ import (
 const (
 	schemaVersion         = "psych-profile-v2"
 	profileDirName        = "profiles"
+	personFileName        = "person.json"
+	snapshotDirName       = "conversations"
+	defaultPersonID       = "local-user"
 	autoRefreshMinMsgs    = 2
 	maxMessagesForProfile = 36
 	maxMemoryEvents       = 8
@@ -29,6 +32,7 @@ const (
 
 type UserProfile struct {
 	SchemaVersion string             `json:"schema_version"`
+	PersonID      string             `json:"person_id"`
 	ChatID        string             `json:"chat_id"`
 	UpdatedAt     string             `json:"updated_at"`
 	Summary       string             `json:"summary"`
@@ -246,7 +250,7 @@ func Dir() (string, error) {
 	return dir, nil
 }
 
-func filePath(chatID string) (string, error) {
+func snapshotFilePath(chatID string) (string, error) {
 	cid := strings.TrimSpace(chatID)
 	if cid == "" {
 		return "", fmt.Errorf("chatID 为空")
@@ -255,11 +259,23 @@ func filePath(chatID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, cid+".json"), nil
+	snapshotDir := filepath.Join(dir, snapshotDirName)
+	if err := os.MkdirAll(snapshotDir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(snapshotDir, cid+".json"), nil
 }
 
-func Load(chatID string) (*UserProfile, error) {
-	path, err := filePath(chatID)
+func personFilePath() (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, personFileName), nil
+}
+
+func LoadSnapshot(chatID string) (*UserProfile, error) {
+	path, err := snapshotFilePath(chatID)
 	if err != nil {
 		return nil, err
 	}
@@ -271,12 +287,31 @@ func Load(chatID string) (*UserProfile, error) {
 	if err := json.Unmarshal(data, &profile); err != nil {
 		return nil, err
 	}
+	profile.PersonID = defaultPersonID
 	profile.ChatID = strings.TrimSpace(chatID)
 	return normalizeProfile(&profile), nil
 }
 
+func LoadPerson() (*UserProfile, error) {
+	path, err := personFilePath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var profile UserProfile
+	if err := json.Unmarshal(data, &profile); err != nil {
+		return nil, err
+	}
+	profile.PersonID = defaultPersonID
+	profile.ChatID = ""
+	return normalizeProfile(&profile), nil
+}
+
 func Delete(chatID string) error {
-	path, err := filePath(chatID)
+	path, err := snapshotFilePath(chatID)
 	if err != nil {
 		return err
 	}
@@ -290,10 +325,11 @@ func Save(chatID string, profile *UserProfile) error {
 	if profile == nil {
 		return fmt.Errorf("profile 不能为空")
 	}
-	path, err := filePath(chatID)
+	path, err := snapshotFilePath(chatID)
 	if err != nil {
 		return err
 	}
+	profile.PersonID = defaultPersonID
 	profile.ChatID = strings.TrimSpace(chatID)
 	profile.SchemaVersion = schemaVersion
 	profile.UpdatedAt = time.Now().Format(time.RFC3339)
@@ -313,15 +349,49 @@ func Save(chatID string, profile *UserProfile) error {
 	return nil
 }
 
-func Get(chatID string) *UserProfile {
-	profile, err := Load(chatID)
-	if err == nil {
-		return profile
+func savePerson(profile *UserProfile) error {
+	if profile == nil {
+		return fmt.Errorf("person profile 不能为空")
 	}
-	return normalizeProfile(&UserProfile{
-		SchemaVersion: schemaVersion,
-		ChatID:        strings.TrimSpace(chatID),
-	})
+	path, err := personFilePath()
+	if err != nil {
+		return err
+	}
+	profile.PersonID = defaultPersonID
+	profile.ChatID = ""
+	profile.SchemaVersion = schemaVersion
+	profile.UpdatedAt = time.Now().Format(time.RFC3339)
+	profile = normalizeProfile(profile)
+	data, err := json.MarshalIndent(profile, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+func Get(chatID string) *UserProfile {
+	person, err := LoadPerson()
+	if err != nil {
+		person = normalizeProfile(&UserProfile{
+			SchemaVersion: schemaVersion,
+			PersonID:      defaultPersonID,
+		})
+	}
+	if snap, err := LoadSnapshot(chatID); err == nil {
+		merged := mergeProfiles(person, snap)
+		merged.ChatID = strings.TrimSpace(chatID)
+		return normalizeProfile(merged)
+	}
+	person.ChatID = strings.TrimSpace(chatID)
+	return normalizeProfile(person)
 }
 
 func BuildSystemDirectives(ctx context.Context, chatID string) []string {
@@ -330,7 +400,7 @@ func BuildSystemDirectives(ctx context.Context, chatID string) []string {
 		return nil
 	}
 
-	profile, err := Load(cid)
+	profile, err := LoadPerson()
 	if err != nil && shouldAutoRefreshProfile(cid) {
 		profile, err = Refresh(ctx, cid)
 		if err != nil {
@@ -355,11 +425,15 @@ func Refresh(ctx context.Context, chatID string) (*UserProfile, error) {
 
 	dialogs := dataoperation.GetDialogs(cid)
 	if len(dialogs) == 0 {
-		profile := Get(cid)
-		if err := Save(cid, profile); err != nil {
-			return nil, err
-		}
-		return profile, nil
+		return Get(cid), nil
+	}
+
+	person, err := LoadPerson()
+	if err != nil {
+		person = normalizeProfile(&UserProfile{
+			SchemaVersion: schemaVersion,
+			PersonID:      defaultPersonID,
+		})
 	}
 
 	existing := Get(cid)
@@ -392,7 +466,10 @@ func Refresh(ctx context.Context, chatID string) (*UserProfile, error) {
 	if err != nil {
 		next := fallbackProfile(cid, existing, metrics, dialogs)
 		_ = Save(cid, next)
-		return next, nil
+		merged := mergeProfiles(person, next)
+		_ = savePerson(merged)
+		merged.ChatID = cid
+		return merged, nil
 	}
 
 	next := normalizeProfile(existing)
@@ -406,7 +483,12 @@ func Refresh(ctx context.Context, chatID string) (*UserProfile, error) {
 	if err := Save(cid, next); err != nil {
 		return nil, err
 	}
-	return next, nil
+	merged := mergeProfiles(person, next)
+	if err := savePerson(merged); err != nil {
+		return nil, err
+	}
+	merged.ChatID = cid
+	return merged, nil
 }
 
 func (p *UserProfile) SystemDirective() string {
@@ -582,6 +664,9 @@ func repairDerivedFields(profile *UserProfile, dialogs []map[string]interface{})
 func normalizeProfile(profile *UserProfile) *UserProfile {
 	if profile == nil {
 		profile = &UserProfile{}
+	}
+	if profile.PersonID == "" {
+		profile.PersonID = defaultPersonID
 	}
 	if profile.Identity.Language == nil {
 		profile.Identity.Language = []string{}
@@ -965,4 +1050,224 @@ func scoreByCount(v, low, high int) float64 {
 
 func signalHigh(sig Signal) bool {
 	return sig.Score >= 0.65 && sig.Confidence >= 0.35
+}
+
+func mergeProfiles(person, snapshot *UserProfile) *UserProfile {
+	base := normalizeProfile(person)
+	snap := normalizeProfile(snapshot)
+	merged := *base
+	merged.PersonID = defaultPersonID
+	merged.ChatID = snap.ChatID
+	merged.SchemaVersion = schemaVersion
+	merged.UpdatedAt = time.Now().Format(time.RFC3339)
+
+	if strings.TrimSpace(snap.Summary) != "" {
+		merged.Summary = snap.Summary
+	}
+
+	merged.Identity = mergeIdentity(base.Identity, snap.Identity)
+	merged.Preferences = mergePreferences(base.Preferences, snap.Preferences)
+	merged.Psychology = mergePsychology(base.Psychology, snap.Psychology)
+	merged.Memory = mergeMemory(base.Memory, snap.Memory)
+	merged.Predictions = mergePredictions(base.Predictions, snap.Predictions)
+	merged.SourceMeta = mergeSourceMeta(base.SourceMeta, snap.SourceMeta)
+	return normalizeProfile(&merged)
+}
+
+func mergeIdentity(a, b IdentityProfile) IdentityProfile {
+	out := a
+	out.AgeRange = preferNonEmpty(a.AgeRange, b.AgeRange)
+	out.Gender = preferNonEmpty(a.Gender, b.Gender)
+	out.Location = preferNonEmpty(a.Location, b.Location)
+	out.Occupation = preferNonEmpty(a.Occupation, b.Occupation)
+	out.Industry = preferNonEmpty(a.Industry, b.Industry)
+	out.Education = preferNonEmpty(a.Education, b.Education)
+	out.Language = unionStrings(a.Language, b.Language)
+	out.ActiveTimeRange = unionStrings(a.ActiveTimeRange, b.ActiveTimeRange)
+	out.TechnicalLevel = mergeTechnicalLevels(a.TechnicalLevel, b.TechnicalLevel)
+	return out
+}
+
+func mergePreferences(a, b PreferenceProfile) PreferenceProfile {
+	out := a
+	out.Interests = unionStrings(a.Interests, b.Interests)
+	out.DislikedTopics = unionStrings(a.DislikedTopics, b.DislikedTopics)
+	out.ContentPreference = mergeStringAnyMap(a.ContentPreference, b.ContentPreference)
+	out.InformationDensity = preferNonEmpty(a.InformationDensity, b.InformationDensity)
+	out.ReasoningDepthPreference = preferNonEmpty(a.ReasoningDepthPreference, b.ReasoningDepthPreference)
+	out.PreferredResponsePattern = unionStrings(a.PreferredResponsePattern, b.PreferredResponsePattern)
+	out.ToolUsageTendency = unionStrings(a.ToolUsageTendency, b.ToolUsageTendency)
+	out.ResponseSignals = mergeSignals(a.ResponseSignals, b.ResponseSignals)
+	return out
+}
+
+func mergePsychology(a, b PsychologyProfile) PsychologyProfile {
+	out := a
+	out.Traits = mergeSignals(a.Traits, b.Traits)
+	out.State = mergeSignals(a.State, b.State)
+	out.Motivations = mergeSignals(a.Motivations, b.Motivations)
+	out.BehaviorStyle = mergeSignals(a.BehaviorStyle, b.BehaviorStyle)
+	out.Observations = mergeObservations(a.Observations, b.Observations)
+	return out
+}
+
+func mergeObservations(a, b ObservationProfile) ObservationProfile {
+	out := a
+	out.RecurrentThemes = unionStrings(a.RecurrentThemes, b.RecurrentThemes)
+	out.UnresolvedConflicts = unionStrings(a.UnresolvedConflicts, b.UnresolvedConflicts)
+	out.EmotionalTriggers = unionStrings(a.EmotionalTriggers, b.EmotionalTriggers)
+	out.SoothingPatterns = unionStrings(a.SoothingPatterns, b.SoothingPatterns)
+	out.ResistancePatterns = unionStrings(a.ResistancePatterns, b.ResistancePatterns)
+	out.IdentityNarrative = preferNonEmpty(a.IdentityNarrative, b.IdentityNarrative)
+	return out
+}
+
+func mergePredictions(a, b PredictionsProfile) PredictionsProfile {
+	out := a
+	out.LikelyNextTopics = unionStrings(a.LikelyNextTopics, b.LikelyNextTopics)
+	out.LikelyNextAction = preferNonEmpty(a.LikelyNextAction, b.LikelyNextAction)
+	out.Signals = mergeSignals(a.Signals, b.Signals)
+	return out
+}
+
+func mergeMemory(a, b []MemoryEvent) []MemoryEvent {
+	out := append([]MemoryEvent{}, b...)
+	seen := map[string]struct{}{}
+	for _, item := range out {
+		key := item.Time + "|" + item.Type + "|" + item.Summary
+		seen[key] = struct{}{}
+	}
+	for _, item := range a {
+		key := item.Time + "|" + item.Type + "|" + item.Summary
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		out = append(out, item)
+		seen[key] = struct{}{}
+	}
+	if len(out) > maxMemoryEvents {
+		out = out[:maxMemoryEvents]
+	}
+	return out
+}
+
+func mergeSourceMeta(a, b SourceMeta) SourceMeta {
+	out := a
+	if b.UserMessageCountAnalyzed > 0 {
+		out.UserMessageCountAnalyzed += b.UserMessageCountAnalyzed
+	}
+	if b.AssistantMessageCount > 0 {
+		out.AssistantMessageCount += b.AssistantMessageCount
+	}
+	out.LastMessageAt = preferNonEmpty(a.LastMessageAt, b.LastMessageAt)
+	out.GeneratedFrom = preferNonEmpty(a.GeneratedFrom, b.GeneratedFrom)
+	out.EvidenceWindow = unionStrings(a.EvidenceWindow, b.EvidenceWindow)
+	return out
+}
+
+func mergeSignals(a, b map[string]Signal) map[string]Signal {
+	out := map[string]Signal{}
+	for k, v := range a {
+		out[k] = normalizeSignal(v)
+	}
+	for k, vb := range b {
+		if va, ok := out[k]; ok {
+			out[k] = mergeSignal(va, vb)
+		} else {
+			out[k] = normalizeSignal(vb)
+		}
+	}
+	return out
+}
+
+func mergeSignal(a, b Signal) Signal {
+	a = normalizeSignal(a)
+	b = normalizeSignal(b)
+	wa := a.Confidence
+	wb := b.Confidence
+	if wa == 0 && wb == 0 {
+		if b.Score != 0 {
+			return b
+		}
+		return a
+	}
+	total := wa + wb
+	out := Signal{
+		Score:      ((a.Score * wa) + (b.Score * wb)) / maxFloat(total, 0.0001),
+		Confidence: clamp01(total / 1.4),
+		Evidence:   unionStrings(a.Evidence, b.Evidence),
+		UpdatedAt:  preferNonEmpty(a.UpdatedAt, b.UpdatedAt),
+	}
+	if wb >= wa {
+		out.UpdatedAt = preferNonEmpty(out.UpdatedAt, b.UpdatedAt)
+	}
+	return normalizeSignal(out)
+}
+
+func mergeTechnicalLevels(a, b map[string]float64) map[string]float64 {
+	out := map[string]float64{}
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		if cur, ok := out[k]; ok {
+			out[k] = round1((cur + v) / 2)
+		} else {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func mergeStringAnyMap(a, b map[string]interface{}) map[string]interface{} {
+	out := map[string]interface{}{}
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		out[k] = v
+	}
+	return out
+}
+
+func unionStrings(a, b []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(a)+len(b))
+	for _, item := range append([]string{}, a...) {
+		s := strings.TrimSpace(item)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	for _, item := range b {
+		s := strings.TrimSpace(item)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func preferNonEmpty(a, b string) string {
+	if strings.TrimSpace(b) != "" {
+		return strings.TrimSpace(b)
+	}
+	return strings.TrimSpace(a)
+}
+
+func maxFloat(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
 }

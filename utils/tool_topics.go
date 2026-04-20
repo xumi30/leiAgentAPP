@@ -40,13 +40,40 @@ func parseNeedToolTopicsFromJSON(raw string) ([]string, bool) {
 }
 
 func extractNeedToolTopicsFromText(raw string) ([]string, bool) {
-	topics := make([]string, 0, len(ToolTopics))
-	for _, topic := range ToolTopics {
-		if strings.Contains(raw, topic) {
-			topics = append(topics, topic)
-		}
+	// Text fallback is intentionally strict to avoid false-positives.
+	// The previous implementation matched any topic word (e.g. "时间") anywhere in normal assistant replies,
+	// which accidentally triggered extra tool-loading loops and duplicated final responses.
+	if !strings.Contains(raw, "needToolToics") && !strings.Contains(raw, "needToolTopics") {
+		return nil, false
 	}
 
+	// Best-effort parse formats like:
+	// {needToolToics:[时间, 搜索], message:"..."}
+	// { "needToolTopics": ["时间","搜索"] }
+	lo := raw
+	start := strings.Index(lo, "[")
+	end := strings.Index(lo, "]")
+	if start < 0 || end < 0 || end <= start {
+		return nil, false
+	}
+	body := lo[start+1 : end]
+	parts := strings.FieldsFunc(body, func(r rune) bool {
+		switch r {
+		case ',', '，', ';', '；', '\n', '\r', '\t':
+			return true
+		default:
+			return false
+		}
+	})
+	topics := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.Trim(p, `"'`)
+		if p == "" {
+			continue
+		}
+		topics = append(topics, p)
+	}
 	return normalizeNeedToolTopics(topics)
 }
 

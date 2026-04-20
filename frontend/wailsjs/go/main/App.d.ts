@@ -15,6 +15,8 @@ export function ComposeMemoWithLLM(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteConversation(arg1:string):Promise<void>;
 
+export function DeleteScheduledTask(arg1:string):Promise<void>;
+
 export function GetConversation(arg1:string):Promise<void>;
 
 export function GetLLMConfigEditorState():Promise<Record<string, any>>;
@@ -71,6 +73,8 @@ export function ListDocumentLibrary():Promise<Array<Record<string, any>>>;
 
 export function ListLibraryWorkspaceDir(arg1:string):Promise<Record<string, any>>;
 
+export function ListScheduledTasks(arg1:string,arg2:boolean,arg3:number,arg4:number):Promise<Array<Record<string, any>>>;
+
 export function ReadDocumentForViewer(arg1:string):Promise<Record<string, any>>;
 
 export function RefreshUserProfile(arg1:string):Promise<Record<string, any>>;
@@ -97,10 +101,14 @@ export function SendUserDisplayOnly(arg1:string,arg2:string):Promise<void>;
 
 export function SetLLMThinkingDisabled(arg1:boolean):Promise<void>;
 
+export function SetScheduledTaskStatus(arg1:string,arg2:string):Promise<void>;
+
 export function StopChat(arg1:string):Promise<void>;
 
 export function SwitchChat(arg1:string):Promise<void>;
 
 export function UpdateConversationTitle(arg1:string,arg2:string):Promise<void>;
+
+export function UpdateScheduledTaskBasics(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ValidateMCPConfigRow(arg1:proxy.MCPConfigRow):Promise<proxy.MCPValidationResult>;

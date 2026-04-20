@@ -16,6 +16,7 @@ import (
 	"leiAgent/internal/dispatcher"
 	"leiAgent/internal/doclib"
 	"leiAgent/internal/globalchannel"
+	"leiAgent/internal/crontabthread"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/profile"
@@ -54,6 +55,8 @@ func (a *App) startup(ctx context.Context) {
 	if dataoperation.GetSqlInstance() == nil {
 		logging.Error("启动时未能打开对话数据库 data/memory.db")
 	}
+	// Start scheduled task runner (polls due tasks, claims with optimistic lock, executes).
+	_ = crontabthread.NewRunner(2*time.Second, 100, nil).Start(ctx)
 }
 func (a *App) ListConversation() []map[string]interface{} {
 	// 模拟对话数据
@@ -117,6 +120,33 @@ func (a *App) GetMessages(chatID string) []map[string]interface{} {
 	messages := dataoperation.GetDialogs(chatID)
 	//logging.Info("Getting messages for conversation with ID: %s %v", chatID, messages)
 	return messages
+}
+
+// ListScheduledTasks returns scheduled tasks stored in data/scheduled_tasks.db.
+// status can be: active/paused/deleted or empty for all (excluding deleted by default).
+func (a *App) ListScheduledTasks(status string, includeDeleted bool, limit int, offset int) ([]map[string]interface{}, error) {
+	logging.Info("[ui] ListScheduledTasks status=%q includeDeleted=%v limit=%d offset=%d", strings.TrimSpace(status), includeDeleted, limit, offset)
+	return crontabthread.ListTasks(crontabthread.ListOptions{
+		Status:         status,
+		IncludeDeleted: includeDeleted,
+		Limit:          limit,
+		Offset:         offset,
+	})
+}
+
+func (a *App) DeleteScheduledTask(id string) error {
+	logging.Info("[ui] DeleteScheduledTask id=%q", strings.TrimSpace(id))
+	return crontabthread.DeleteTask(id)
+}
+
+func (a *App) SetScheduledTaskStatus(id string, status string) error {
+	logging.Info("[ui] SetScheduledTaskStatus id=%q status=%q", strings.TrimSpace(id), strings.TrimSpace(status))
+	return crontabthread.SetTaskStatus(id, status)
+}
+
+func (a *App) UpdateScheduledTaskBasics(id string, title string, actionPayload string) error {
+	logging.Info("[ui] UpdateScheduledTaskBasics id=%q", strings.TrimSpace(id))
+	return crontabthread.UpdateTaskBasics(id, title, actionPayload)
 }
 
 // GetLocalMemoryMessages 返回当前 chat 的 localMemory（用于调试/查看 LLM 上下文）。

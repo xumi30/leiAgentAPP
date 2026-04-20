@@ -26,6 +26,10 @@ export function DeleteConversation(arg1) {
   return window['go']['main']['App']['DeleteConversation'](arg1);
 }
 
+export function DeleteScheduledTask(arg1) {
+  return window['go']['main']['App']['DeleteScheduledTask'](arg1);
+}
+
 export function GetConversation(arg1) {
   return window['go']['main']['App']['GetConversation'](arg1);
 }
@@ -138,6 +142,10 @@ export function ListLibraryWorkspaceDir(arg1) {
   return window['go']['main']['App']['ListLibraryWorkspaceDir'](arg1);
 }
 
+export function ListScheduledTasks(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ListScheduledTasks'](arg1, arg2, arg3, arg4);
+}
+
 export function ReadDocumentForViewer(arg1) {
   return window['go']['main']['App']['ReadDocumentForViewer'](arg1);
 }
@@ -190,6 +198,10 @@ export function SetLLMThinkingDisabled(arg1) {
   return window['go']['main']['App']['SetLLMThinkingDisabled'](arg1);
 }
 
+export function SetScheduledTaskStatus(arg1, arg2) {
+  return window['go']['main']['App']['SetScheduledTaskStatus'](arg1, arg2);
+}
+
 export function StopChat(arg1) {
   return window['go']['main']['App']['StopChat'](arg1);
 }
@@ -200,6 +212,10 @@ export function SwitchChat(arg1) {
 
 export function UpdateConversationTitle(arg1, arg2) {
   return window['go']['main']['App']['UpdateConversationTitle'](arg1, arg2);
+}
+
+export function UpdateScheduledTaskBasics(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateScheduledTaskBasics'](arg1, arg2, arg3);
 }
 
 export function ValidateMCPConfigRow(arg1) {

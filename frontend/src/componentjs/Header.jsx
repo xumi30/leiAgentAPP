@@ -13,6 +13,7 @@ function shortConnectionLabel(loading, status) {
 
 export default function Header({
   onOpenMemo,
+  onOpenScheduledTasks,
   onOpenDocLibrary,
   onOpenLocalMemory,
   onOpenUserProfile,
@@ -95,7 +96,7 @@ export default function Header({
             type="button"
             className="header-localmemory-btn clay-card"
             onClick={onOpenUserProfile}
-            title="查看当前对话的结构化用户画像"
+            title="查看这台应用长期沉淀的用户画像，以及当前会话带来的补充证据"
           >
             <span className="header-localmemory-btn__icon" aria-hidden>
               👤
@@ -110,6 +111,20 @@ export default function Header({
               📝
             </span>
             <span className="header-memo-btn__text">备忘录</span>
+          </button>
+        ) : null}
+
+        {typeof onOpenScheduledTasks === 'function' ? (
+          <button
+            type="button"
+            className="header-memo-btn clay-card"
+            onClick={onOpenScheduledTasks}
+            title="查看定时任务列表"
+          >
+            <span className="header-memo-btn__icon" aria-hidden>
+              ⏰
+            </span>
+            <span className="header-memo-btn__text">定时任务</span>
           </button>
         ) : null}
 
