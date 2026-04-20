@@ -102,6 +102,116 @@ function splitMarkdownSegmentForJson(text) {
   return parts;
 }
 
+function isMarkdownTableSeparatorLine(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed) return false;
+  const normalized = trimmed.replace(/\|/g, '').trim();
+  return normalized !== '' && /^:?-{3,}:?(?:\s+:?-{3,}:?)*$/.test(normalized.replace(/\s+/g, ' '));
+}
+
+function splitPipeColumns(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed.includes('|')) return [];
+  const body = trimmed.replace(/^\|/, '').replace(/\|$/, '');
+  return body.split('|').map((cell) => cell.trim()).filter((cell, idx, arr) => !(cell === '' && arr.length === 1));
+}
+
+function splitTabColumns(line) {
+  if (!String(line || '').includes('\t')) return [];
+  return String(line).split('\t').map((cell) => cell.trim());
+}
+
+function parseSimpleTableLine(line) {
+  const pipeCols = splitPipeColumns(line);
+  if (pipeCols.length >= 2) {
+    return { kind: 'pipe', cells: pipeCols };
+  }
+  const tabCols = splitTabColumns(line);
+  if (tabCols.length >= 2) {
+    return { kind: 'tab', cells: tabCols };
+  }
+  return null;
+}
+
+function normalizeSimpleTableRows(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return null;
+  const width = rows.reduce((max, row) => Math.max(max, row.cells.length), 0);
+  if (width < 2) return null;
+  const normalized = rows.map((row) => ({
+    ...row,
+    cells: [...row.cells, ...Array(Math.max(0, width - row.cells.length)).fill('')],
+  }));
+  const hasSeparator = normalized.length >= 2 && isMarkdownTableSeparatorLine(normalized[1].cells.join(' | '));
+  return {
+    header: hasSeparator ? normalized[0].cells : null,
+    rows: hasSeparator ? normalized.slice(2).map((row) => row.cells) : normalized.map((row) => row.cells),
+  };
+}
+
+function splitMarkdownSegmentForSimpleTables(text) {
+  const lines = String(text || '').split('\n');
+  /** @type {{ type: 'md' | 'table', value?: string, table?: { header: string[] | null, rows: string[][] } }[]} */
+  const parts = [];
+  let mdBuffer = [];
+  let tableBuffer = [];
+  let tableKind = '';
+
+  const flushMarkdown = () => {
+    if (!mdBuffer.length) return;
+    parts.push({ type: 'md', value: mdBuffer.join('\n') });
+    mdBuffer = [];
+  };
+
+  const flushTable = () => {
+    if (tableBuffer.length < 2) {
+      mdBuffer.push(...tableBuffer.map((row) => row.raw));
+      tableBuffer = [];
+      tableKind = '';
+      return;
+    }
+    const table = normalizeSimpleTableRows(tableBuffer);
+    if (table && table.rows.length > 0) {
+      parts.push({ type: 'table', table });
+    } else {
+      mdBuffer.push(...tableBuffer.map((row) => row.raw));
+    }
+    tableBuffer = [];
+    tableKind = '';
+  };
+
+  for (const line of lines) {
+    const parsed = parseSimpleTableLine(line);
+    if (parsed) {
+      if (!tableBuffer.length) {
+        flushMarkdown();
+        tableKind = parsed.kind;
+        tableBuffer.push({ ...parsed, raw: line });
+        continue;
+      }
+      if (parsed.kind === tableKind) {
+        tableBuffer.push({ ...parsed, raw: line });
+        continue;
+      }
+      flushTable();
+      flushMarkdown();
+      tableKind = parsed.kind;
+      tableBuffer.push({ ...parsed, raw: line });
+      continue;
+    }
+
+    if (tableBuffer.length) {
+      flushTable();
+    }
+    mdBuffer.push(line);
+  }
+
+  if (tableBuffer.length) {
+    flushTable();
+  }
+  flushMarkdown();
+  return parts;
+}
+
 /** @param {string} text */
 function splitByCodeFences(text) {
   /** @type {{ kind: 'md' | 'json' | 'code', lang?: string, raw: string }[]} */
@@ -132,7 +242,7 @@ function splitByCodeFences(text) {
 
 /** @param {string} fullText */
 function buildRenderableParts(fullText) {
-  /** @type {{ type: 'md' | 'json' | 'code', value: string, lang?: string }[]} */
+  /** @type {{ type: 'md' | 'json' | 'code' | 'table', value?: string, lang?: string, table?: { header: string[] | null, rows: string[][] } }[]} */
   const out = [];
   const chunks = splitByCodeFences(fullText);
   for (const ch of chunks) {
@@ -147,7 +257,10 @@ function buildRenderableParts(fullText) {
     const sub = splitMarkdownSegmentForJson(ch.raw);
     for (const p of sub) {
       if (p.type === 'md') {
-        out.push({ type: 'md', value: p.value });
+        const mdParts = splitMarkdownSegmentForSimpleTables(p.value);
+        for (const mdPart of mdParts) {
+          out.push(mdPart);
+        }
       } else {
         out.push({ type: 'json', value: p.value });
       }
@@ -305,6 +418,36 @@ function JsonFullModal({ text, onClose }) {
   );
 }
 
+function SimpleTableBlock({ table }) {
+  const header = Array.isArray(table?.header) ? table.header : null;
+  const rows = Array.isArray(table?.rows) ? table.rows : [];
+  if (!rows.length) return null;
+  return (
+    <div className="msg-simple-table-wrap">
+      <table className="msg-simple-table">
+        {header ? (
+          <thead>
+            <tr>
+              {header.map((cell, idx) => (
+                <th key={`h-${idx}`}>{highlightKeywordChildren(cell)}</th>
+              ))}
+            </tr>
+          </thead>
+        ) : null}
+        <tbody>
+          {rows.map((row, ridx) => (
+            <tr key={`r-${ridx}`}>
+              {row.map((cell, cidx) => (
+                <td key={`c-${ridx}-${cidx}`}>{highlightKeywordChildren(cell)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** @param {any} props */
 function MarkdownAnchor({ href, children, node: _n, inline: _i, ...rest }) {
   const inner = highlightKeywordChildren(children);
@@ -381,6 +524,13 @@ export default function MessageContent({ content, variant = 'assistant', isStrea
         {parts.map((p, idx) => {
           if (p.type === 'json') {
             return <JsonSnippetCard key={`j-${idx}`} raw={p.value} onOpen={openJson} />;
+          }
+          if (p.type === 'table') {
+            return (
+              <div key={`t-${idx}`} className="message-markdown message-markdown--in-flow">
+                <SimpleTableBlock table={p.table} />
+              </div>
+            );
           }
           if (p.type === 'code') {
             return (

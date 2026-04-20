@@ -131,11 +131,14 @@ function buildMemoMarkdownFromMarked(orderedMarked) {
 }
 
 export default function Dialog() {
+    const QUEUE_HINT_MS = 2200;
     // 获取对话列表
     const [chatId, setChatId] = useState('');
     const [messages, setMessages] = useState([]);
     const [stopVisible, setStopVisible] = useState(false);
+    const [taskBusy, setTaskBusy] = useState(false);
     const [streamPulse, setStreamPulse] = useState(null);
+    const [queuedInputs, setQueuedInputs] = useState([]);
     /** @type {[{ id: string, title: string, startIdx: number }]} */
     const [sheets, setSheets] = useState([
         { id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 },
@@ -162,6 +165,10 @@ export default function Dialog() {
     const hintTimerRef = useRef(null);
     const chatIdRef = useRef(chatId);
     chatIdRef.current = chatId;
+    const stopVisibleRef = useRef(stopVisible);
+    stopVisibleRef.current = stopVisible;
+    const taskBusyRef = useRef(taskBusy);
+    taskBusyRef.current = taskBusy;
 
     const sortedSheets = useMemo(
         () => [...sheets].sort((a, b) => a.startIdx - b.startIdx),
@@ -255,6 +262,35 @@ export default function Dialog() {
         });
     }, []);
 
+    const showTransientHint = useCallback((text, ms = QUEUE_HINT_MS) => {
+        setClassifyHint(text);
+        if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+        hintTimerRef.current = setTimeout(() => {
+            setClassifyHint('');
+            hintTimerRef.current = null;
+        }, ms);
+    }, []);
+
+    const enqueueInput = useCallback((content) => {
+        const text = String(content ?? '').trim();
+        if (!text) return;
+        setQueuedInputs((prev) => [
+            ...prev,
+            {
+                id: `queued_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                content: text,
+            },
+        ]);
+    }, []);
+
+    const dispatchUserMessage = useCallback((targetChatId, content) => {
+        const text = String(content ?? '').trim();
+        if (!text) return;
+        SendMessage(targetChatId, text, "user");
+        setTaskBusy(true);
+        setStopVisible(true);
+    }, []);
+
     const showClassifyHint = useCallback((kind) => {
         const label = classifyUserMessageLabel(kind);
         setClassifyHint(`已归类为「${label}」`);
@@ -321,9 +357,16 @@ export default function Dialog() {
     useEffect(() => {
         const handleConversationChange = (event) => {
             const { conversationId } = event.detail;
-            setChatId(conversationId);
+            const nextChatId = String(conversationId ?? '');
+            const preservePendingStop =
+                !chatIdRef.current &&
+                !!nextChatId &&
+                stopVisibleRef.current;
+            setChatId(nextChatId);
             setStreamPulse(null);
-            setStopVisible(false);
+            setTaskBusy(false);
+            setQueuedInputs([]);
+            setStopVisible(preservePendingStop);
             setPinnedToBottom(true);
             setSheets([{ id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 }]);
             setActiveSheetId(MAIN_SHEET_ID);
@@ -418,6 +461,7 @@ export default function Dialog() {
         const handleSenderror = (error) => {
             alert("发送消息失败: " + error);
             console.log("发送消息失败: ", error);
+            setTaskBusy(false);
             setStopVisible(false);
             setStreamPulse(null);
         }
@@ -425,6 +469,7 @@ export default function Dialog() {
         const handleDispatcherError = (error) => {
             alert("无法启动对话引擎（Dispatcher）\n\n" + error);
             console.error("dispatcherError:", error);
+            setTaskBusy(false);
             setStopVisible(false);
             setStreamPulse(null);
         };
@@ -437,13 +482,19 @@ export default function Dialog() {
                 if (prev.chatID === cid && prev.messageID === mid) return null;
                 return prev;
             });
-            if (cid === chatIdRef.current) {
-                setStopVisible(false);
-            }
+        };
+
+        const handleChatTaskState = (payload) => {
+            const cid = String(payload?.chatID ?? '');
+            if (cid !== chatIdRef.current) return;
+            const busy = Boolean(payload?.busy);
+            setTaskBusy(busy);
+            setStopVisible(busy);
         };
 
         EventsOn("dialogAppend", appendMessage); // 监听对话追加事件
         EventsOn("dialogStreamEnd", handleDialogStreamEnd);
+        EventsOn("chatTaskState", handleChatTaskState);
         EventsOn("GetMessagesByMessageID", handleMessage); // 监听消息更新事件
         EventsOn("sendMessageError", handleSenderror); // 监听发送错误事件
         EventsOn("dispatcherError", handleDispatcherError);
@@ -451,13 +502,12 @@ export default function Dialog() {
         return () => {
             EventsOff("dialogAppend");
             EventsOff("dialogStreamEnd");
+            EventsOff("chatTaskState");
             EventsOff("GetMessagesByMessageID");
             EventsOff("sendMessageError");
             EventsOff("dispatcherError");
         };
     }, []);
-
-
 
     const sendMessage = async () => {
         const el = inputRef.current;
@@ -497,11 +547,38 @@ export default function Dialog() {
             void startIdx;
         }
 
-        SendMessage(chatId, content, "user");
+        if (taskBusyRef.current) {
+            enqueueInput(content);
+            showTransientHint(`已缓存到待发送队列（${queuedInputs.length + 1}）`);
+            el.value = '';
+            el.style.height = 'auto';
+            return;
+        }
+
+        dispatchUserMessage(chatId, content);
         el.value = '';
         el.style.height = 'auto';
-        setStopVisible(true);
     };
+
+    const dropQueuedInput = useCallback((id) => {
+        setQueuedInputs((prev) => prev.filter((item) => item.id !== id));
+    }, []);
+
+    const sendQueuedInput = useCallback((id) => {
+        if (taskBusyRef.current) return;
+        let picked = null;
+        setQueuedInputs((prev) => {
+            const idx = prev.findIndex((item) => item.id === id);
+            if (idx < 0) return prev;
+            picked = prev[idx];
+            const next = [...prev];
+            next.splice(idx, 1);
+            return next;
+        });
+        if (picked?.content) {
+            dispatchUserMessage(chatIdRef.current, picked.content);
+        }
+    }, [dispatchUserMessage]);
 
     const stopDialog = () => {
         StopChat(chatId);
@@ -711,6 +788,42 @@ export default function Dialog() {
             </div>
 
             <div className="dialog__input">
+                {queuedInputs.length > 0 ? (
+                    <div className="dialog__queued-strip" role="status" aria-live="polite">
+                        <div className="dialog__queued-strip-head">
+                            <span className="dialog__queued-strip-title">{queuedInputs.length} Queued</span>
+                        </div>
+                        <div className="dialog__queued-list">
+                            {queuedInputs.map((item, idx) => (
+                                <div key={item.id} className="dialog__queued-item">
+                                    <span className="dialog__queued-item-bullet" aria-hidden />
+                                    <span className="dialog__queued-item-text">{item.content}</span>
+                                    <div className="dialog__queued-item-actions">
+                                        <button
+                                            type="button"
+                                            className="dialog__queued-item-btn"
+                                            onClick={() => sendQueuedInput(item.id)}
+                                            aria-label={`发送待发送消息 ${idx + 1}`}
+                                            title={taskBusy ? '当前仍在处理中' : '发送这条'}
+                                            disabled={taskBusy}
+                                        >
+                                            ↑
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="dialog__queued-item-btn"
+                                            onClick={() => dropQueuedInput(item.id)}
+                                            aria-label={`移除待发送消息 ${idx + 1}`}
+                                            title="移除"
+                                        >
+                                            🗑
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
                 <div className="dialog__input-row">
                     <button
                         type="button"

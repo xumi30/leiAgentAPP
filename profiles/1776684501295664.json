@@ -1,0 +1,148 @@
+{
+  "schema_version": "kyc-profile-v1",
+  "chat_id": "1776684501295664",
+  "updated_at": "2026-04-20T19:36:30+08:00",
+  "summary": "用户展现出持续的哲学思辨能力，从AI存在意义追问至剥削转移与价值消失问题，呈现递进式深度对话模式。对话风格抽象、批判性强，关注结构性问题而非技术细节，对AI社会伦理有原生兴趣，倾向于通过悖论与对立概念推进思考，信息密度承受力高，偏好开放式反问结尾。",
+  "identity": {
+    "age_range": "",
+    "gender": "",
+    "location": "",
+    "occupation": "",
+    "industry": "",
+    "education": "",
+    "language": [
+      "zh"
+    ],
+    "technical_level": {},
+    "active_time_range": [
+      "11:00-14:00"
+    ]
+  },
+  "preferences": {
+    "interests": [
+      "人工智能哲学",
+      "技术与社会",
+      "存在意义探讨",
+      "劳动伦理",
+      "价值理论"
+    ],
+    "disliked_topics": [],
+    "content_preference": {
+      "domain": "philosophy_of_technology",
+      "type": "critical_conceptual"
+    },
+    "information_density_preference": "high",
+    "reasoning_depth_preference": "deep",
+    "need_for_structure": 0.3,
+    "ambiguity_tolerance": 0.8,
+    "preferred_response_pattern": [
+      "分析性",
+      "多角度",
+      "悖论揭示",
+      "反问启发",
+      "层级拆解"
+    ],
+    "tool_usage_tendency": []
+  },
+  "personality": {
+    "traits": {
+      "critical_thinking": 0.9,
+      "curiosity": 0.85,
+      "openness": 0.85,
+      "reflectiveness": 0.8,
+      "skepticism": 0.75
+    },
+    "motivations": [
+      "理解技术本质",
+      "探索人机关系",
+      "寻求意义框架",
+      "揭示结构性矛盾",
+      "追问价值根基"
+    ],
+    "fears": [
+      "价值虚无",
+      "人的异化"
+    ],
+    "decision_style": [
+      "审慎",
+      "概念优先",
+      "辩证"
+    ],
+    "trust_sources": [
+      "逻辑一致性",
+      "多元视角",
+      "悖论张力"
+    ],
+    "cognitive_style": [
+      "抽象思维",
+      "系统思考",
+      "对立统一",
+      "递归追问"
+    ],
+    "triggers": {
+      "avoidance": [],
+      "engagement": [
+        "哲学问题",
+        "技术伦理",
+        "未来展望",
+        "结构性批判",
+        "价值悖论"
+      ]
+    }
+  },
+  "behavior": {
+    "session_frequency": "weekly",
+    "avg_message_length": 29,
+    "avg_depth": 3.3,
+    "most_active_time": "11:00-14:00",
+    "decision_speed": "deliberate",
+    "likes_to_iterate": true,
+    "prefers_exploration_before_decision": false,
+    "user_message_count": 3,
+    "assistant_message_count": 7
+  },
+  "state": {
+    "mood": "思辨性焦虑",
+    "energy": 0.7,
+    "confidence": 0.6,
+    "stress": 0.4,
+    "focus_topic": "AI时代人的价值危机",
+    "urgency": 0.2
+  },
+  "memory": [
+    {
+      "time": "2026-04-20",
+      "type": "first_contact",
+      "importance": 0.8,
+      "summary": "用户首次提问：人类为什么需要AI，展现对AI哲学的原生兴趣"
+    },
+    {
+      "time": "2026-04-20",
+      "type": "depth_escalation",
+      "importance": 0.9,
+      "summary": "用户追问剥削转移问题，提出'剥削机器人是否替代剥削人'的批判性质疑，显示对权力结构的敏感"
+    },
+    {
+      "time": "2026-04-20",
+      "type": "value_crisis_inquiry",
+      "importance": 0.95,
+      "summary": "用户递进至价值本体论层面：剥削转移后人的价值是否消失，触及存在意义核心焦虑"
+    }
+  ],
+  "predictions": {
+    "likely_next_topics": [
+      "人的主体性定义",
+      "后工作社会的意义建构",
+      "AI意识与道德地位",
+      "技术决定论vs社会建构论"
+    ],
+    "likely_next_action": "提出第三种可能性或质疑既有框架的预设",
+    "likely_to_return_in_days": 1,
+    "churn_risk": 0.2
+  },
+  "source_meta": {
+    "user_message_count_analyzed": 3,
+    "last_message_at": "2026-04-20T11:35:07Z",
+    "generated_from": "conversation_history + llm_inference"
+  }
+}

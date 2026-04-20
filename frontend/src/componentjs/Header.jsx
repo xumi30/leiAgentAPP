@@ -1,3 +1,5 @@
+import appIcon from '../../../build/appicon.png';
+
 function shortConnectionLabel(loading, status) {
   if (loading) return '检测中…';
   if (!status) return '未知';
@@ -13,6 +15,7 @@ export default function Header({
   onOpenMemo,
   onOpenDocLibrary,
   onOpenLocalMemory,
+  onOpenUserProfile,
   connectionLoading,
   connectionStatus,
   onRefreshConnection,
@@ -28,12 +31,13 @@ export default function Header({
     <header className="app-header">
       <div className="header-logo">
         <div className="logo-icon clay-card">
-          <span className="logo-text">L</span>
+          <img src={appIcon} alt="" className="logo-img" width={40} height={40} />
         </div>
         <h1 className="logo-title">LeiAgent</h1>
       </div>
 
       <div className="header-controls">
+        {/* 暂时停用“关闭思考”开关，保留代码以便后续恢复。
         <label className="header-thinking-toggle clay-card" title="勾选后隐藏推理面板，且请求不再携带思考/推理参数">
           <input
             type="checkbox"
@@ -42,6 +46,7 @@ export default function Header({
           />
           <span className="header-thinking-toggle__text">关闭思考</span>
         </label>
+        */}
 
         {typeof onOpenSettings === 'function' ? (
           <button
@@ -82,6 +87,20 @@ export default function Header({
               🧠
             </span>
             <span className="header-localmemory-btn__text">本地记忆</span>
+          </button>
+        ) : null}
+
+        {typeof onOpenUserProfile === 'function' ? (
+          <button
+            type="button"
+            className="header-localmemory-btn clay-card"
+            onClick={onOpenUserProfile}
+            title="查看当前对话的结构化用户画像"
+          >
+            <span className="header-localmemory-btn__icon" aria-hidden>
+              👤
+            </span>
+            <span className="header-localmemory-btn__text">画像</span>
           </button>
         ) : null}
 

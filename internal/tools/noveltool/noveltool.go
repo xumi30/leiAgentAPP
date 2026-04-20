@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"leiAgent/internal/doclib"
-	"leiAgent/internal/memory"
+	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
@@ -199,8 +199,6 @@ func (t *LongFormNovelTool) Execute(ctx context.Context, args string) (string, e
 	if !ok || baseChatID == "" {
 		return "", fmt.Errorf("chatID missing in context")
 	}
-	ephemeral := baseChatID + "__novel_" + strconv.FormatInt(time.Now().UnixNano(), 10)
-
 	lastWritten := findLastChapterIndex(outAbs)
 	if params.Resume && lastWritten < 1 {
 		return "", fmt.Errorf("resume=true but no chapter_*.md found under %s", outRel)
@@ -236,7 +234,7 @@ func (t *LongFormNovelTool) Execute(ctx context.Context, args string) (string, e
 	}
 	if outline == "" {
 		logging.Info("novel_longform: generating outline (%d chapters span ending %d)", nThisRun, endCh)
-		outline, err = t.oneShotLLM(ctx, baseChatID, ephemeral+"_o", outlineSystemPrompt(params.Style, params.Language, nThisRun, endCh),
+		outline, err = t.oneShotLLM(ctx, baseChatID, outlineSystemPrompt(params.Style, params.Language, nThisRun, endCh),
 			outlineUserPrompt(params.Premise, nThisRun, startCh, endCh, params.Resume))
 		if err != nil {
 			return "", fmt.Errorf("outline generation: %w", err)
@@ -290,7 +288,7 @@ func (t *LongFormNovelTool) Execute(ctx context.Context, args string) (string, e
 			Lang:          params.Language,
 			Resume:        params.Resume,
 		})
-		raw, err := t.oneShotLLM(ctx, baseChatID, fmt.Sprintf("%s_c%d", ephemeral, ch),
+		raw, err := t.oneShotLLM(ctx, baseChatID,
 			chapterSystemPrompt(params.Style, params.Language, ch, outlineTotal), user)
 		if err != nil {
 			return "", fmt.Errorf("chapter %d: %w", ch, err)
@@ -337,7 +335,7 @@ func (t *LongFormNovelTool) Execute(ctx context.Context, args string) (string, e
 		}
 		files = append(files, filepath.ToSlash(filepath.Join(outRel, dirChapterMeta, filepath.Base(metaPath))))
 
-		bible, err = t.oneShotLLM(ctx, baseChatID, fmt.Sprintf("%s_b%d", ephemeral, ch),
+		bible, err = t.oneShotLLM(ctx, baseChatID,
 			bibleUpdateSystemPrompt(params.Language),
 			bibleUpdateUserPrompt(truncateRunes(bible, maxBibleRunes), ch, metaJSON, truncateRunes(body, 6000), params.Premise))
 		if err != nil {
@@ -353,7 +351,7 @@ func (t *LongFormNovelTool) Execute(ctx context.Context, args string) (string, e
 		prevMetaJSON = strings.TrimSpace(string(metaBytes))
 
 		if ch%milestoneEvery == 0 && !readerMilestoneExists(outAbs, ch) {
-			if err := t.appendReaderMilestone(ctx, baseChatID, ephemeral, outAbs, ch, bible); err != nil {
+			if err := t.appendReaderMilestone(ctx, baseChatID, outAbs, ch, bible); err != nil {
 				return "", err
 			}
 			files = append(files, filepath.ToSlash(filepath.Join(outRel, fileReaderNotes)))
@@ -372,7 +370,7 @@ func (t *LongFormNovelTool) Execute(ctx context.Context, args string) (string, e
 	return string(summary), nil
 }
 
-func (t *LongFormNovelTool) appendReaderMilestone(ctx context.Context, uiChatID, ephemeral, outAbs string, upToCh int, bible string) error {
+func (t *LongFormNovelTool) appendReaderMilestone(ctx context.Context, chatID, outAbs string, upToCh int, bible string) error {
 	from := upToCh - milestoneEvery + 1
 	var metas []string
 	for c := from; c <= upToCh; c++ {
@@ -380,7 +378,7 @@ func (t *LongFormNovelTool) appendReaderMilestone(ctx context.Context, uiChatID,
 			metas = append(metas, fmt.Sprintf("### Chapter %d meta\n%s", c, s))
 		}
 	}
-	text, err := t.oneShotLLM(ctx, uiChatID, ephemeral+fmt.Sprintf("_r%d", upToCh),
+	text, err := t.oneShotLLM(ctx, chatID,
 		readerMilestoneSystemPrompt(),
 		readerMilestoneUserPrompt(from, upToCh, truncateRunes(bible, maxBibleRunes), strings.Join(metas, "\n\n")))
 	if err != nil {
@@ -411,21 +409,16 @@ func readerMilestoneExists(outAbs string, upToCh int) bool {
 	return strings.Contains(string(b), marker)
 }
 
-func (t *LongFormNovelTool) oneShotLLM(ctx context.Context, uiChatID, memSuffix, system, user string) (string, error) {
-	memID := memSuffix
-	memory.GetLocalMemory().Clear(memID)
-	memory.SetSystemPrompt(memID, system)
-	memory.AddUserMessage(memID, user)
-
-	sub := context.WithValue(ctx, utils.ChatIDString, memID)
-	sub = context.WithValue(sub, utils.DialogOutChatIDString, uiChatID)
+func (t *LongFormNovelTool) oneShotLLM(ctx context.Context, chatID, system, user string) (string, error) {
+	sub := context.WithValue(ctx, utils.ChatIDString, chatID)
 	sub = context.WithValue(sub, utils.IsStreamString, true)
+	sub = context.WithValue(sub, utils.ToolsString, false)
 
 	p, err := proxy.NewProxy(nil)
 	if err != nil {
 		return "", err
 	}
-	tc, err := p.Communicate(sub)
+	tc, err := p.CommunicateWithMessages(sub, novelToolMessages(system, user))
 	if err != nil {
 		return "", err
 	}
@@ -433,6 +426,19 @@ func (t *LongFormNovelTool) oneShotLLM(ctx context.Context, uiChatID, memSuffix,
 		return "", fmt.Errorf("empty model response")
 	}
 	return tc.Content, nil
+}
+
+func novelToolMessages(system, user string) []openaistyle.ChatMessage {
+	return []openaistyle.ChatMessage{
+		{
+			Role:    openaistyle.RoleSystem,
+			Content: system,
+		},
+		{
+			Role:    openaistyle.RoleUser,
+			Content: user,
+		},
+	}
 }
 
 func outlineSystemPrompt(style, lang string, span, endCh int) string {

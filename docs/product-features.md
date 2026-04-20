@@ -1,7 +1,7 @@
 # LeiAgent 功能说明（项目总览）
 
-> 本文档汇总桌面端 **LeiAgent** 当前主要能力，含界面、Agent、LLM、文库、工具与**备忘录**专章，便于产品/开发对照与维护。  
-> **最后更新**：2026-04-06
+> 本文档汇总桌面端 **LeiAgent** 当前主要能力，含界面、Agent、LLM、文库、工具、**本地记忆 / 用户画像** 与**备忘录**专章，便于产品/开发对照与维护。  
+> **最后更新**：2026-04-20
 
 ---
 
@@ -18,6 +18,8 @@
 - **关闭思考**：勾选后隐藏右侧推理面板，且对 LLM 关闭思考/推理类参数（与 `localStorage` 同步并调用后端 `SetLLMThinkingDisabled`）。
 - **设置**：打开 **LLM 配置（YAML）** 编辑器模态框。
 - **文库**：打开文档库模态框（见 §7）。
+- **本地记忆**：打开当前会话的 `localMemory` 调试视图。
+- **画像**：打开当前会话的结构化用户画像面板，可手动刷新生成。
 - **备忘录**：打开备忘录窗口（见 §10、§11）。
 - **连接状态**：展示 `GetLLMConnectionStatus` 探测结果（如已连接 / 未配置 / 不可用）；支持手动刷新；启动后定时轮询。
 
@@ -101,6 +103,7 @@
 
 - **会话与消息**：`dataoperation` + SQLite（对话、消息、推理等，详见包内实现）。
 - **Agent 记忆**：`internal/memory` 等与 `chatID` 绑定的上下文。
+- **结构化画像**：`profiles/{chatID}.json`，保存 identity/preferences/personality/behavior/state/memory/predictions。
 - **备忘录主存**：`data/memo_notes.db`（§11 详述）；旧 `data/memo.md` 可导入。
 - **工作区文件**：`workspace/` 目录，与文库、工具写文件联动。
 - **日志**：`logging` / `logs/`（如 `default.log`）。
@@ -116,7 +119,17 @@
 
 ---
 
-## 12. 备忘录窗口（MemoModal）
+## 12. 本地记忆与用户画像
+
+- **本地记忆窗口（LocalMemoryModal）**：查看当前 `chatID` 的 `localMemory` 消息序列，便于调试 LLM 实际上下文。
+- **画像窗口（UserProfileModal）**：展示结构化 `identity / preferences / personality / behavior / state / memory / predictions`。
+- **画像生成**：`RefreshUserProfile(chatID)` 基于会话历史与 LLM 推断刷新 `profiles/{chatID}.json`。
+- **运行时注入**：Dispatcher 在处理新用户消息时，会把用户画像摘要作为额外 system directive 注入请求上下文，用作软性个性化，不覆盖当前显式需求。
+- **安全边界**：画像被当作“推测性记忆”使用；若和当前用户输入冲突，以当前输入为准。
+
+---
+
+## 13. 备忘录窗口（MemoModal）
 
 - **预览与列表**：摘要与 Markdown 预览**去掉**末尾 `<!--leiAgent-memo-src:...-->`；编辑区保留完整切片。
 - **窗口**：拖拽调整大小、最大化/还原。
@@ -125,7 +138,7 @@
 
 ---
 
-## 13. 对话区「生成备忘」
+## 14. 对话区「生成备忘」
 
 - **流程**：展开后在消息旁勾选（可多选）→ 直接写入或模型优化。
 - **标题**：优先勾选中的**用户**消息首行，否则助手，再否则第一条。
@@ -138,7 +151,7 @@
 
 ---
 
-## 14. 前端全局事件约定
+## 15. 前端全局事件约定
 
 | 事件 | 说明 |
 |------|------|
@@ -150,7 +163,7 @@ Wails 运行时事件（如 `dialogAppend`、`reasoningAppend`、`dialogStreamEn
 
 ---
 
-## 15. 维护建议
+## 16. 维护建议
 
 - 行为、API 或工具注册有变时，同步更新**对应小节**与文首 **最后更新**日期。
 - 新增模态入口、存储路径或自定义事件时，建议在本文件 **§14** 与相关功能节中写明，避免仅依赖代码检索。

@@ -254,6 +254,11 @@ func RegisterGlobalReasonOutChannel(chatID string) chan *Message {
 	return ch
 }
 
+func RegisterGlobalTaskStateChannel(chatID string) chan *Message {
+	ch, _ := RegisterChannel(chatID, "TaskState")
+	return ch
+}
+
 func GetGlobalInputChannel(chatID string) chan *Message {
 	ch, _ := GetChannel(chatID, "inputchannel")
 	logging.Info("GetGlobalInputChannel: %s", chatID)
@@ -267,6 +272,11 @@ func GetGlobalDialogOutChannel(chatID string) chan *Message {
 
 func GetGlobalReasonOutChannel(chatID string) chan *Message {
 	ch, _ := GetChannel(chatID, "ReasonOut")
+	return ch
+}
+
+func GetGlobalTaskStateChannel(chatID string) chan *Message {
+	ch, _ := GetChannel(chatID, "TaskState")
 	return ch
 }
 
@@ -322,4 +332,22 @@ func SendAReasonningMessageStream(ctx context.Context, msg string, messageid str
 		IsFinished: isFinish,
 	}
 
+}
+
+func SendTaskState(ctx context.Context, busy bool) {
+	chatID := ctx.Value(utils.ChatIDString).(string)
+	taskStateChan := GetGlobalTaskStateChannel(chatID)
+	if taskStateChan == nil {
+		return
+	}
+	content := "idle"
+	if busy {
+		content = "busy"
+	}
+	taskStateChan <- &Message{
+		MessageID:  utils.GenerateMessageID(),
+		Content:    content,
+		Role:       "task_state",
+		IsFinished: !busy,
+	}
 }

@@ -10,10 +10,10 @@ import MemoModal from './componentjs/MemoModal.jsx';
 import DocLibraryModal from './componentjs/DocLibraryModal.jsx';
 import SettingsModal from './componentjs/SettingsModal.jsx';
 import LocalMemoryModal from './componentjs/LocalMemoryModal.jsx';
+import UserProfileModal from './componentjs/UserProfileModal.jsx';
 import {
   GetMemoCalendarDates,
   GetLLMConnectionStatus,
-  GetLLMThinkingDisabled,
   SetLLMThinkingDisabled,
 } from '../wailsjs/go/main/App';
 import { EventsOff, EventsOn } from '../wailsjs/runtime/runtime';
@@ -38,16 +38,14 @@ function App() {
   const [docLibFocusPath, setDocLibFocusPath] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [localMemoryOpen, setLocalMemoryOpen] = useState(false);
+  const [userProfileOpen, setUserProfileOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState('');
   const [activeChatTitle, setActiveChatTitle] = useState('');
   /** 助手流式输出进行中（按 chatID），用于侧栏列表显示加载态 */
   const [streamingChatIds, setStreamingChatIds] = useState(() => new Set());
   const [memoDates, setMemoDates] = useState(() => new Set());
 
-  const [thinkingDisabled, setThinkingDisabled] = useState(() => {
-    const fromLs = readThinkingDisabledFromLS();
-    return fromLs === null ? false : fromLs;
-  });
+  const [thinkingDisabled, setThinkingDisabled] = useState(true);
 
   const [connectionLoading, setConnectionLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState(null);
@@ -97,23 +95,15 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const fromLs = readThinkingDisabledFromLS();
-      if (fromLs !== null) {
-        try {
-          await SetLLMThinkingDisabled(fromLs);
-        } catch (e) {
-          console.error('SetLLMThinkingDisabled:', e);
-        }
-        return;
-      }
       try {
-        const v = await GetLLMThinkingDisabled();
+        // 暂时停用“关闭思考”开关后，前端统一回落为默认关闭思考逻辑。
         if (!cancelled) {
-          setThinkingDisabled(!!v);
-          localStorage.setItem(THINKING_LS_KEY, String(!!v));
+          setThinkingDisabled(true);
+          localStorage.setItem(THINKING_LS_KEY, 'true');
         }
+        await SetLLMThinkingDisabled(true);
       } catch (e) {
-        console.error('GetLLMThinkingDisabled:', e);
+        console.error('SetLLMThinkingDisabled:', e);
       }
     })();
     return () => {
@@ -231,7 +221,7 @@ function App() {
     SetLLMThinkingDisabled(v).catch((e) => console.error('SetLLMThinkingDisabled:', e));
   }, []);
 
-  const showReasoningChrome = !thinkingDisabled;
+  const showReasoningChrome = false;
 
   return (
     <div id="App" className="board-column">
@@ -242,6 +232,7 @@ function App() {
           setDocLibOpen(true);
         }}
         onOpenLocalMemory={() => setLocalMemoryOpen(true)}
+        onOpenUserProfile={() => setUserProfileOpen(true)}
         connectionLoading={connectionLoading}
         connectionStatus={connectionStatus}
         onRefreshConnection={refreshConnection}
@@ -265,6 +256,7 @@ function App() {
         }}
       />
       <LocalMemoryModal open={localMemoryOpen} chatId={activeChatId} onClose={() => setLocalMemoryOpen(false)} />
+      <UserProfileModal open={userProfileOpen} chatId={activeChatId} onClose={() => setUserProfileOpen(false)} />
       <div className="main-content">
         <div
           className="main-content__sidebar-slot"

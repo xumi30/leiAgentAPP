@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/utils"
 	"sort"
 	"strings"
 )
 
-const dynamicToolPrefix = "mcp__"
+const (
+	dynamicToolPrefix    = "mcp_"
+	legacyToolPrefix     = "mcp__"
+	dynamicSegmentMaxLen = 12
+)
 
 type DynamicTool struct {
 	Server ServerConfig
@@ -57,7 +62,7 @@ func ListDynamicToolsByTopic(topic string) []DynamicTool {
 	out := make([]DynamicTool, 0)
 	for _, server := range servers {
 		cache, err := ReadToolCache(server.Label)
-		if err != nil || cache == nil || !cache.OK {
+		if err != nil || cache == nil || !cacheReadyForRuntime(cache) {
 			continue
 		}
 		serverTopic := inferServerTopic(server, cache.Tools)
@@ -85,36 +90,42 @@ func ListDynamicToolsByTopic(topic string) []DynamicTool {
 }
 
 func ResolveDynamicTool(name string) (*DynamicTool, bool) {
-	label, toolName, ok := parseDynamicToolName(name)
-	if !ok {
-		return nil, false
-	}
-	servers, err := LoadServerConfigs()
-	if err != nil {
-		return nil, false
-	}
-	var cfg *ServerConfig
-	for _, server := range servers {
-		if sanitizeSegment(server.Label) == label {
-			cp := server
-			cfg = &cp
-			break
+	if label, toolName, ok := parseLegacyDynamicToolName(name); ok {
+		servers, err := LoadServerConfigs()
+		if err != nil {
+			return nil, false
 		}
-	}
-	if cfg == nil {
+		var cfg *ServerConfig
+		for _, server := range servers {
+			if sanitizeSegment(server.Label) == label {
+				cp := server
+				cfg = &cp
+				break
+			}
+		}
+		if cfg == nil {
+			return nil, false
+		}
+		cache, err := ReadToolCache(cfg.Label)
+		if err != nil || cache == nil {
+			return nil, false
+		}
+		for _, tool := range cache.Tools {
+			if sanitizeSegment(tool.Name) == toolName {
+				return &DynamicTool{
+					Server: *cfg,
+					Tool:   tool,
+					Topic:  inferServerTopic(*cfg, cache.Tools),
+				}, true
+			}
+		}
 		return nil, false
 	}
-	cache, err := ReadToolCache(cfg.Label)
-	if err != nil || cache == nil {
-		return nil, false
-	}
-	for _, tool := range cache.Tools {
-		if sanitizeSegment(tool.Name) == toolName {
-			return &DynamicTool{
-				Server: *cfg,
-				Tool:   tool,
-				Topic:  inferServerTopic(*cfg, cache.Tools),
-			}, true
+
+	for _, item := range ListDynamicToolsByTopic("") {
+		if dynamicToolName(item.Server.Label, item.Tool.Name) == name {
+			cp := item
+			return &cp, true
 		}
 	}
 	return nil, false
@@ -156,7 +167,7 @@ func GetMCPSimpleInfos() []SimpleServerInfo {
 	out := make([]SimpleServerInfo, 0, len(servers))
 	for _, server := range servers {
 		cache, err := ReadToolCache(server.Label)
-		if err != nil || cache == nil || !cache.OK {
+		if err != nil || cache == nil || !cacheReadyForRuntime(cache) {
 			continue
 		}
 		names := make([]string, 0, len(cache.Tools))
@@ -180,14 +191,16 @@ func GetMCPSimpleInfos() []SimpleServerInfo {
 }
 
 func dynamicToolName(label, toolName string) string {
-	return dynamicToolPrefix + sanitizeSegment(label) + "__" + sanitizeSegment(toolName)
+	labelSeg := truncateSegment(sanitizeSegment(label), dynamicSegmentMaxLen)
+	toolSeg := truncateSegment(sanitizeSegment(toolName), dynamicSegmentMaxLen)
+	return fmt.Sprintf("%s%s_%s_%s_%s", dynamicToolPrefix, labelSeg, shortHash(label), toolSeg, shortHash(toolName))
 }
 
-func parseDynamicToolName(name string) (label, toolName string, ok bool) {
-	if !strings.HasPrefix(name, dynamicToolPrefix) {
+func parseLegacyDynamicToolName(name string) (label, toolName string, ok bool) {
+	if !strings.HasPrefix(name, legacyToolPrefix) {
 		return "", "", false
 	}
-	rest := strings.TrimPrefix(name, dynamicToolPrefix)
+	rest := strings.TrimPrefix(name, legacyToolPrefix)
 	parts := strings.SplitN(rest, "__", 2)
 	if len(parts) != 2 {
 		return "", "", false
@@ -206,6 +219,20 @@ func sanitizeSegment(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "_")
+}
+
+func truncateSegment(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if n <= 0 || len(s) <= n {
+		return s
+	}
+	return strings.Trim(s[:n], "_")
+}
+
+func shortHash(s string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(strings.TrimSpace(strings.ToLower(s))))
+	return fmt.Sprintf("%08x", h.Sum32())
 }
 
 func inferServerTopic(server ServerConfig, tools []ToolInfo) string {
@@ -260,4 +287,15 @@ func toolDescriptions(tools []ToolInfo) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func cacheReadyForRuntime(cache *ToolCache) bool {
+	if cache == nil {
+		return false
+	}
+	state := strings.TrimSpace(cache.State)
+	if state != "" {
+		return state == "ok"
+	}
+	return cache.OK
 }

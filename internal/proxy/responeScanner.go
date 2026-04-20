@@ -39,7 +39,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	d_mesageid := utils.GenerateMessageID()
 	r_message := utils.GenerateMessageID()
 	for scanner.Scan() {
-
+		// logging.Info("处理流式响应: %v", string(scanner.Bytes()))
 		var response openaistyle.ChatCompletionResponse
 
 		if err := json.Unmarshal(scanner.Bytes(), &response); err != nil {
@@ -101,7 +101,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		content, ok := delta.Content.(string)
 		if ok && content != "" {
 			fullContent.WriteString(content)
-
+			//logging.Info("为chatid %s 返回的内容:%s", ctx.Value(utils.ChatIDString).(string), content)
 			globalchannel.SendAssitantMessageStream(ctx, content, d_mesageid, false)
 
 		}

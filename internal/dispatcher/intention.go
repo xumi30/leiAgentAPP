@@ -154,7 +154,7 @@ If intent = TOOL:
 - Prefer TOOL over PLAN when no explicit staged execution is required
 - Prefer CHAT if no execution is needed
 - DO NOT output anything other than JSON
-`, strings.Join(utils.ToolTopics, ", "))
+`, utils.ToolTopicsPromptText())
 
 type Intention struct {
 	Goal                  string  `json:"maingoal"`

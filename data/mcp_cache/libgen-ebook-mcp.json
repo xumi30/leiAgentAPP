@@ -1,0 +1,6 @@
+{
+  "label": "libgen-ebook-mcp",
+  "ok": false,
+  "message": "invalid ndjson mcp message: invalid character 'L' looking for beginning of value",
+  "checked_at": "2026-04-19T15:14:28+08:00"
+}

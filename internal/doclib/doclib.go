@@ -1,6 +1,7 @@
 package doclib
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -245,6 +246,44 @@ func ReadText(abs string) (string, error) {
 		return s, nil
 	}
 	return string(b), nil
+}
+
+// ReadForViewer reads a local file for the document library preview: UTF-8 text or PDF as base64 (same size cap as ReadText).
+func ReadForViewer(abs string) (map[string]interface{}, error) {
+	abs = filepath.Clean(abs)
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return nil, err
+	}
+	if fi.IsDir() {
+		return nil, fmt.Errorf("path is a directory")
+	}
+	if fi.Size() > maxViewerBytes {
+		return nil, fmt.Errorf("file too large (max %d bytes)", maxViewerBytes)
+	}
+	b, err := os.ReadFile(abs)
+	if err != nil {
+		return nil, err
+	}
+	outPath := filepath.Clean(abs)
+	if strings.EqualFold(filepath.Ext(abs), ".pdf") {
+		return map[string]interface{}{
+			"path":          outPath,
+			"mode":          "pdf",
+			"contentBase64": base64.StdEncoding.EncodeToString(b),
+		}, nil
+	}
+	var text string
+	if !utf8.Valid(b) {
+		text = strings.ToValidUTF8(string(b), "\uFFFD")
+	} else {
+		text = string(b)
+	}
+	return map[string]interface{}{
+		"path":    outPath,
+		"mode":    "text",
+		"content": text,
+	}, nil
 }
 
 // RevealInFileManager opens Explorer / Finder at the file.

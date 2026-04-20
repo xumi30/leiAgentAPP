@@ -251,6 +251,21 @@
   color: #1d1d1f;
 }
 
+.doclib-preview__body--pdf {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.doclib-preview__pdf-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: none;
+  background: #f2f2f7;
+}
+
 .doclib-preview__body pre.doclib-raw {
   margin: 0;
   white-space: pre-wrap;

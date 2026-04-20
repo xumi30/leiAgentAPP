@@ -37,6 +37,11 @@ function isMarkdownPath(p) {
   return lower.endsWith('.md') || lower.endsWith('.markdown');
 }
 
+/** @param {string | undefined | null} p */
+function isPdfPath(p) {
+  return String(p || '').toLowerCase().endsWith('.pdf');
+}
+
 /** @param {string} a @param {string} b */
 function pathsEqualNorm(a, b) {
   return String(a || '').replace(/\\/g, '/').toLowerCase() === String(b || '').replace(/\\/g, '/').toLowerCase();
@@ -71,6 +76,8 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
 
   const [selectedPath, setSelectedPath] = useState('');
   const [viewContent, setViewContent] = useState('');
+  /** 非空时表示当前预览为 PDF（data URL 用） */
+  const [viewPdfBase64, setViewPdfBase64] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [viewErr, setViewErr] = useState('');
@@ -140,11 +147,20 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
     setEditMode(false);
     setSelectedPath(p);
     setSelectedEntry(null);
+    setViewPdfBase64('');
     try {
       const res = await ReadDocumentForViewer(p);
-      const text = String(res?.content ?? '');
-      setViewContent(text);
-      setDraftContent(text);
+      if (String(res?.mode ?? '') === 'pdf') {
+        const b64 = String(res?.contentBase64 ?? '');
+        if (!b64) setViewErr('无法读取 PDF 内容');
+        setViewPdfBase64(b64);
+        setViewContent('');
+        setDraftContent('');
+      } else {
+        const text = String(res?.content ?? '');
+        setViewContent(text);
+        setDraftContent(text);
+      }
       if (res?.path) setSelectedPath(String(res.path));
       if (relForSave) {
         setSelectedEntry({
@@ -157,6 +173,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
     } catch (e) {
       setViewContent('');
       setDraftContent('');
+      setViewPdfBase64('');
       setViewErr(String(e?.message || e));
     } finally {
       setViewLoading(false);
@@ -185,6 +202,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
       setSelectedPath('');
       setViewContent('');
       setDraftContent('');
+      setViewPdfBase64('');
       setEditMode(false);
       loadWorkspace(relPath);
     },
@@ -391,6 +409,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
         setSelectedPath('');
         setViewContent('');
         setDraftContent('');
+        setViewPdfBase64('');
         await loadWorkspace(currentRel);
       } catch (e) {
         setListErr(String(e?.message || e));
@@ -439,7 +458,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
   }, [activeChatId, novelResumeDir, novelPremise, novelAuthorNotes, novelChapterCount]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedEntry || selectedEntry.isDir) return;
+    if (!selectedEntry || selectedEntry.isDir || isPdfPath(selectedPath)) return;
     setSaveBusy(true);
     setViewErr('');
     try {
@@ -451,7 +470,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
     } finally {
       setSaveBusy(false);
     }
-  }, [selectedEntry, draftContent]);
+  }, [selectedEntry, draftContent, selectedPath]);
 
   useEffect(() => {
     if (open) return;
@@ -463,6 +482,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
     setSelectedPath('');
     setViewContent('');
     setDraftContent('');
+    setViewPdfBase64('');
     setEditMode(false);
     setListErr('');
     setViewErr('');
@@ -678,7 +698,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
                 {selectedPath || '未选择文件'}
               </p>
               <div className="doclib-preview__actions">
-                {tab === 'workspace' && selectedEntry && !selectedEntry.isDir ? (
+                {tab === 'workspace' && selectedEntry && !selectedEntry.isDir && !isPdfPath(selectedPath) ? (
                   <button
                     type="button"
                     className="doclib-btn doclib-btn--secondary"
@@ -694,7 +714,7 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
                     {editMode ? '取消编辑' : '编辑'}
                   </button>
                 ) : null}
-                {tab === 'workspace' && selectedEntry && !selectedEntry.isDir && editMode ? (
+                {tab === 'workspace' && selectedEntry && !selectedEntry.isDir && !isPdfPath(selectedPath) && editMode ? (
                   <button type="button" className="doclib-btn doclib-btn--primary" disabled={saveBusy} onClick={handleSave}>
                     {saveBusy ? '保存中…' : '保存'}
                   </button>
@@ -704,13 +724,19 @@ export default function DocLibraryModal({ open, onClose, focusPath = null, activ
                 </button>
               </div>
             </div>
-            <div className="doclib-preview__body">
+            <div className={`doclib-preview__body${viewPdfBase64 ? ' doclib-preview__body--pdf' : ''}`}>
               {viewLoading ? (
                 <p className="doclib-preview__placeholder">加载中…</p>
               ) : !selectedPath ? (
                 <p className="doclib-preview__placeholder">请选择文件预览；文件夹单击选中后可重命名或删除，双击进入。</p>
-              ) : editMode && tab === 'workspace' && selectedEntry && !selectedEntry.isDir ? (
+              ) : editMode && tab === 'workspace' && selectedEntry && !selectedEntry.isDir && !isPdfPath(selectedPath) ? (
                 <textarea className="doclib-editor" value={draftContent} onChange={(e) => setDraftContent(e.target.value)} spellCheck={false} />
+              ) : viewPdfBase64 ? (
+                <iframe
+                  className="doclib-preview__pdf-frame"
+                  title="PDF 预览"
+                  src={`data:application/pdf;base64,${viewPdfBase64}`}
+                />
               ) : isMarkdownPath(selectedPath) ? (
                 <div className="message-markdown">
                   <ReactMarkdown components={mdComponents}>{viewContent}</ReactMarkdown>

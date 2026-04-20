@@ -18,6 +18,7 @@ import (
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/memory"
+	"leiAgent/internal/profile"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools/noveltool"
 	"leiAgent/logging"
@@ -94,6 +95,9 @@ func (a *App) DeleteConversation(chatID string) error {
 		runtime.EventsEmit(a.ctx, "deleteConversationError", err.Error())
 		return err
 	}
+	if err := profile.Delete(chatID); err != nil {
+		logging.Warn("删除画像失败 chatID=%s: %v", chatID, err)
+	}
 	logging.Info("Conversation with ID: %s deleted successfully", chatID)
 	runtime.EventsEmit(a.ctx, "deleteConversationSuccess", chatID)
 	return nil
@@ -135,6 +139,28 @@ func (a *App) GetLocalMemoryMessages(chatID string) []map[string]interface{} {
 		out = append(out, item)
 	}
 	return out
+}
+
+// GetUserProfile 返回当前 chat 的结构化用户画像；不存在时返回空画像。
+func (a *App) GetUserProfile(chatID string) map[string]interface{} {
+	cid := strings.TrimSpace(chatID)
+	raw, _ := json.Marshal(profile.Get(cid))
+	out := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// RefreshUserProfile 基于会话历史刷新结构化用户画像。
+func (a *App) RefreshUserProfile(chatID string) (map[string]interface{}, error) {
+	cid := strings.TrimSpace(chatID)
+	p, err := profile.Refresh(a.ctx, cid)
+	if err != nil {
+		return nil, err
+	}
+	raw, _ := json.Marshal(p)
+	out := map[string]interface{}{}
+	_ = json.Unmarshal(raw, &out)
+	return out, nil
 }
 
 func (a *App) GetMessagesEvent(chatID string) {
@@ -329,6 +355,7 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		go dp.Run(ctx)
 		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
 		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
+		go a.AppendTaskStateToFront(ctx, chatID)
 	}
 
 	a.poolLastUsed[chatID] = time.Now()
@@ -347,7 +374,29 @@ func (a *App) restartDispatcherBackground(chatID string, dp *dispatcher.Dispatch
 	go dp.Run(ctx)
 	go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
 	go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
+	go a.AppendTaskStateToFront(ctx, chatID)
 	logging.Info("Dispatcher 已重新监听 input/output，chatID=%s（保留原 Dispatcher 与意图）", chatID)
+}
+
+func (a *App) AppendTaskStateToFront(ctx context.Context, chatID string) {
+	taskStateChan := globalchannel.GetGlobalTaskStateChannel(chatID)
+	for {
+		select {
+		case msg, ok := <-taskStateChan:
+			if !ok {
+				return
+			}
+			if msg == nil {
+				continue
+			}
+			runtime.EventsEmit(a.ctx, "chatTaskState", map[string]interface{}{
+				"chatID": chatID,
+				"busy":   strings.EqualFold(strings.TrimSpace(msg.Content), "busy"),
+			})
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID string) {
@@ -558,6 +607,26 @@ func (a *App) ValidateMCPConfigRow(row proxy.MCPConfigRow) (proxy.MCPValidationR
 	return proxy.ValidateMCPConfigRow(row)
 }
 
+// GetMCPHubStatus 返回 MCP Hub 注册状态。
+func (a *App) GetMCPHubStatus() (proxy.MCPHubStatus, error) {
+	return proxy.GetMCPHubStatus()
+}
+
+// RegisterMCPHub 在 LobeHub Marketplace 注册当前设备身份。
+func (a *App) RegisterMCPHub(name, description string) (proxy.MCPHubRegisterResult, error) {
+	return proxy.RegisterMCPHub(name, description)
+}
+
+// SearchMCPHub 搜索 LobeHub Marketplace 中的 MCP 服务。
+func (a *App) SearchMCPHub(query, category string, page, pageSize int) (proxy.MCPHubSearchResult, error) {
+	return proxy.SearchMCPHub(query, category, page, pageSize)
+}
+
+// GetMCPHubPluginDetail 获取指定 MCP Hub 条目的详情与部署方式。
+func (a *App) GetMCPHubPluginDetail(identifier string) (proxy.MCPHubPluginDetail, error) {
+	return proxy.GetMCPHubPluginDetail(identifier)
+}
+
 // GetMemoContent 读取备忘录全文（主存 SQLite；与 memo_write 工具共用同一存储）。
 func (a *App) GetMemoContent() (string, error) {
 	return memo.Read()
@@ -607,16 +676,9 @@ func (a *App) ListDocumentLibrary() ([]map[string]interface{}, error) {
 	return doclib.List(cwd, bodies)
 }
 
-// ReadDocumentForViewer 读取本地文本文件供文库/消息内链接预览（有大小上限）。
+// ReadDocumentForViewer 读取本地文件供文库/消息内链接预览（有大小上限）：文本为 UTF-8 字符串，PDF 为 base64。
 func (a *App) ReadDocumentForViewer(path string) (map[string]interface{}, error) {
-	text, err := doclib.ReadText(path)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{
-		"path":    filepath.Clean(path),
-		"content": text,
-	}, nil
+	return doclib.ReadForViewer(path)
 }
 
 // RevealDocumentInExplorer 在系统文件管理器中定位到该文件。

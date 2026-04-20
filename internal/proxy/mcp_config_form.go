@@ -51,6 +51,8 @@ type MCPValidationResult struct {
 	CheckedAt      string               `json:"checkedAt"`
 	ConfigValid    bool                 `json:"configValid"`
 	LastCheckState string               `json:"lastCheckState"`
+	MissingEnvKeys []string             `json:"missingEnvKeys"`
+	Warnings       []string             `json:"warnings"`
 }
 
 func (r *MCPConfigRow) UnmarshalJSON(data []byte) error {
@@ -98,7 +100,7 @@ func GetMCPConfigFormState() (MCPConfigFormState, error) {
 		if cache, err := mcpbridge.ReadToolCache(server.Label); err == nil && cache != nil {
 			row.CachedToolDetails = append([]mcpbridge.ToolInfo(nil), cache.Tools...)
 			row.CachedTools = toolNamesFromDetails(cache.Tools)
-			row.LastCheckState = ternary(cache.OK, "ok", "error")
+			row.LastCheckState = cacheState(cache)
 			row.LastCheckMessage = cache.Message
 			row.LastCheckedAt = cache.CheckedAt
 		}
@@ -221,11 +223,13 @@ func ValidateMCPConfigRow(row MCPConfigRow) (MCPValidationResult, error) {
 	}
 
 	manager := mcpbridge.NewManager(nil)
+	missingEnvKeys := mcpbridge.MissingRequiredEnvKeys(cfg)
 	tools, err := manager.ListTools(context.Background(), cfg)
 	if err != nil {
 		_ = mcpbridge.WriteToolCache(mcpbridge.ToolCache{
 			Label:     cfg.Label,
 			OK:        false,
+			State:     "error",
 			Message:   err.Error(),
 			CheckedAt: time.Now().Format(time.RFC3339),
 		})
@@ -236,15 +240,45 @@ func ValidateMCPConfigRow(row MCPConfigRow) (MCPValidationResult, error) {
 			ConfigValid:    true,
 			CheckedAt:      time.Now().Format(time.RFC3339),
 			LastCheckState: "error",
+			MissingEnvKeys: missingEnvKeys,
 		}, nil
 	}
 
 	names := toolNamesFromDetails(tools)
+	checkedAt := time.Now().Format(time.RFC3339)
+	if len(missingEnvKeys) > 0 {
+		warnings := []string{
+			fmt.Sprintf("已发现 %d 个工具，但缺少运行该 MCP 常用的环境变量：%s。tools/list 能通过，真实调用很可能失败。", len(names), strings.Join(missingEnvKeys, ", ")),
+		}
+		_ = mcpbridge.WriteToolCache(mcpbridge.ToolCache{
+			Label:     cfg.Label,
+			OK:        false,
+			State:     "warning",
+			Message:   warnings[0],
+			CheckedAt: checkedAt,
+			Tools:     tools,
+		})
+		return MCPValidationResult{
+			OK:             false,
+			Message:        warnings[0],
+			Tools:          names,
+			ToolDetails:    tools,
+			Label:          cfg.Label,
+			ToolCount:      len(names),
+			CheckedAt:      checkedAt,
+			ConfigValid:    true,
+			LastCheckState: "warning",
+			MissingEnvKeys: missingEnvKeys,
+			Warnings:       warnings,
+		}, nil
+	}
+
 	_ = mcpbridge.WriteToolCache(mcpbridge.ToolCache{
 		Label:     cfg.Label,
 		OK:        true,
+		State:     "ok",
 		Message:   fmt.Sprintf("发现 %d 个工具", len(names)),
-		CheckedAt: time.Now().Format(time.RFC3339),
+		CheckedAt: checkedAt,
 		Tools:     tools,
 	})
 	return MCPValidationResult{
@@ -254,10 +288,20 @@ func ValidateMCPConfigRow(row MCPConfigRow) (MCPValidationResult, error) {
 		ToolDetails:    tools,
 		Label:          cfg.Label,
 		ToolCount:      len(names),
-		CheckedAt:      time.Now().Format(time.RFC3339),
+		CheckedAt:      checkedAt,
 		ConfigValid:    true,
 		LastCheckState: "ok",
 	}, nil
+}
+
+func cacheState(cache *mcpbridge.ToolCache) string {
+	if cache == nil {
+		return ""
+	}
+	if state := strings.TrimSpace(cache.State); state != "" {
+		return state
+	}
+	return ternary(cache.OK, "ok", "error")
 }
 
 func toolNamesFromDetails(tools []mcpbridge.ToolInfo) []string {

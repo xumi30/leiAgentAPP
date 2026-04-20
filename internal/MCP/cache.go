@@ -11,6 +11,7 @@ import (
 type ToolCache struct {
 	Label     string     `json:"label"`
 	OK        bool       `json:"ok"`
+	State     string     `json:"state,omitempty"`
 	Message   string     `json:"message,omitempty"`
 	CheckedAt string     `json:"checked_at"`
 	Tools     []ToolInfo `json:"tools,omitempty"`

@@ -14,6 +14,10 @@ export function AppendMemoMarkdown(arg1) {
   return window['go']['main']['App']['AppendMemoMarkdown'](arg1);
 }
 
+export function AppendTaskStateToFront(arg1, arg2) {
+  return window['go']['main']['App']['AppendTaskStateToFront'](arg1, arg2);
+}
+
 export function ComposeMemoWithLLM(arg1, arg2) {
   return window['go']['main']['App']['ComposeMemoWithLLM'](arg1, arg2);
 }
@@ -58,6 +62,14 @@ export function GetMCPConfigFormState() {
   return window['go']['main']['App']['GetMCPConfigFormState']();
 }
 
+export function GetMCPHubPluginDetail(arg1) {
+  return window['go']['main']['App']['GetMCPHubPluginDetail'](arg1);
+}
+
+export function GetMCPHubStatus() {
+  return window['go']['main']['App']['GetMCPHubStatus']();
+}
+
 export function GetMemoCalendarDates() {
   return window['go']['main']['App']['GetMemoCalendarDates']();
 }
@@ -94,6 +106,10 @@ export function GetReasoningMessage(arg1) {
   return window['go']['main']['App']['GetReasoningMessage'](arg1);
 }
 
+export function GetUserProfile(arg1) {
+  return window['go']['main']['App']['GetUserProfile'](arg1);
+}
+
 export function LibraryWorkspaceDelete(arg1, arg2) {
   return window['go']['main']['App']['LibraryWorkspaceDelete'](arg1, arg2);
 }
@@ -126,6 +142,14 @@ export function ReadDocumentForViewer(arg1) {
   return window['go']['main']['App']['ReadDocumentForViewer'](arg1);
 }
 
+export function RefreshUserProfile(arg1) {
+  return window['go']['main']['App']['RefreshUserProfile'](arg1);
+}
+
+export function RegisterMCPHub(arg1, arg2) {
+  return window['go']['main']['App']['RegisterMCPHub'](arg1, arg2);
+}
+
 export function ResumeNovelLongform(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['ResumeNovelLongform'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -148,6 +172,10 @@ export function SaveMCPConfigForm(arg1) {
 
 export function SaveMemoContent(arg1) {
   return window['go']['main']['App']['SaveMemoContent'](arg1);
+}
+
+export function SearchMCPHub(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SearchMCPHub'](arg1, arg2, arg3, arg4);
 }
 
 export function SendMessage(arg1, arg2, arg3) {

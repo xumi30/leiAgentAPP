@@ -1,0 +1,6 @@
+{
+  "label": "paper-download",
+  "ok": false,
+  "message": "mcp command \"uvx\" not found in PATH. You can use the bash tool to install or fix it",
+  "checked_at": "2026-04-19T15:09:41+08:00"
+}

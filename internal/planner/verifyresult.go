@@ -68,6 +68,9 @@ CORE PRINCIPLES (CRITICAL):
 2. KEEP all successful steps unchanged
 3. ONLY fix failed steps and necessary downstream steps
 4. MINIMIZE changes
+5. If a failure is caused by local environment readiness (server not started, port not listening, command missing, dependency missing),
+   you SHOULD insert a repair step using the execute_command tool before retrying the failed tool step.
+6. After such a repair step, the failed tool step should usually be retried, not aborted.
 
 ----------------------------------------
 INPUT STRUCTURE (STRICT):

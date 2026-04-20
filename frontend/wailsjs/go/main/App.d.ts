@@ -9,6 +9,8 @@ export function AppenAgentMessageToFrontRole(arg1:context.Context,arg2:string,ar
 
 export function AppendMemoMarkdown(arg1:string):Promise<void>;
 
+export function AppendTaskStateToFront(arg1:context.Context,arg2:string):Promise<void>;
+
 export function ComposeMemoWithLLM(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteConversation(arg1:string):Promise<void>;
@@ -31,6 +33,10 @@ export function GetLocalMemoryMessages(arg1:string):Promise<Array<Record<string,
 
 export function GetMCPConfigFormState():Promise<proxy.MCPConfigFormState>;
 
+export function GetMCPHubPluginDetail(arg1:string):Promise<proxy.MCPHubPluginDetail>;
+
+export function GetMCPHubStatus():Promise<proxy.MCPHubStatus>;
+
 export function GetMemoCalendarDates():Promise<Array<string>>;
 
 export function GetMemoContent():Promise<string>;
@@ -49,6 +55,8 @@ export function GetNovelResumeOutputDir(arg1:string,arg2:boolean):Promise<string
 
 export function GetReasoningMessage(arg1:string):Promise<Array<Record<string, any>>>;
 
+export function GetUserProfile(arg1:string):Promise<Record<string, any>>;
+
 export function LibraryWorkspaceDelete(arg1:string,arg2:boolean):Promise<void>;
 
 export function LibraryWorkspaceMkdir(arg1:string):Promise<void>;
@@ -65,6 +73,10 @@ export function ListLibraryWorkspaceDir(arg1:string):Promise<Record<string, any>
 
 export function ReadDocumentForViewer(arg1:string):Promise<Record<string, any>>;
 
+export function RefreshUserProfile(arg1:string):Promise<Record<string, any>>;
+
+export function RegisterMCPHub(arg1:string,arg2:string):Promise<proxy.MCPHubRegisterResult>;
+
 export function ResumeNovelLongform(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number):Promise<void>;
 
 export function RevealDocumentInExplorer(arg1:string):Promise<void>;
@@ -76,6 +88,8 @@ export function SaveLLMConfigText(arg1:string):Promise<string>;
 export function SaveMCPConfigForm(arg1:Array<proxy.MCPConfigRow>):Promise<string>;
 
 export function SaveMemoContent(arg1:string):Promise<void>;
+
+export function SearchMCPHub(arg1:string,arg2:string,arg3:number,arg4:number):Promise<proxy.MCPHubSearchResult>;
 
 export function SendMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
 

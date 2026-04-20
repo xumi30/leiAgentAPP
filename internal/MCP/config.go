@@ -3,6 +3,7 @@ package mcpbridge
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"go.yaml.in/yaml/v2"
@@ -67,11 +68,52 @@ func GetServerConfig(label string) (*ServerConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	lowerLabel := strings.ToLower(label)
 	for _, server := range servers {
-		if server.Label == label {
+		if strings.EqualFold(server.Label, label) {
 			cp := server
 			return &cp, nil
 		}
 	}
-	return nil, fmt.Errorf("mcp server %q not found in config", label)
+
+	normalizedLabel := normalizeServerLabel(label)
+	var candidates []ServerConfig
+	for _, server := range servers {
+		serverLower := strings.ToLower(server.Label)
+		serverNormalized := normalizeServerLabel(server.Label)
+		if serverNormalized == normalizedLabel ||
+			strings.Contains(serverLower, lowerLabel) ||
+			strings.Contains(serverNormalized, normalizedLabel) ||
+			strings.Contains(normalizedLabel, serverNormalized) {
+			candidates = append(candidates, server)
+		}
+	}
+	if len(candidates) == 1 {
+		cp := candidates[0]
+		return &cp, nil
+	}
+
+	available := make([]string, 0, len(servers))
+	for _, server := range servers {
+		available = append(available, server.Label)
+	}
+	sort.Strings(available)
+
+	if len(candidates) > 1 {
+		names := make([]string, 0, len(candidates))
+		for _, server := range candidates {
+			names = append(names, server.Label)
+		}
+		sort.Strings(names)
+		return nil, fmt.Errorf("mcp server %q is ambiguous; possible matches: %s", label, strings.Join(names, ", "))
+	}
+
+	return nil, fmt.Errorf("mcp server %q not found in config; available servers: %s", label, strings.Join(available, ", "))
+}
+
+func normalizeServerLabel(label string) string {
+	label = strings.ToLower(strings.TrimSpace(label))
+	replacer := strings.NewReplacer("-", "", "_", "", " ", "", ".", "", ":", "", "/", "")
+	return replacer.Replace(label)
 }

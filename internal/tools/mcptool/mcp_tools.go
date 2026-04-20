@@ -35,6 +35,7 @@ func (t *ListMCPTools) Description() string {
 
 Use this before calling an unfamiliar MCP server so you can see available tool names and input schemas.
 The server is resolved from config/config.yaml -> mcp_servers, or from the inline server_url override if provided.
+You may omit server_label to list the configured MCP servers first.
 
 Recovery rule:
 - If this tool fails because the MCP environment is not ready yet, you MAY use execute_command to repair the local environment, then retry list_mcp_tools.
@@ -42,7 +43,7 @@ Recovery rule:
 }
 
 func (t *ListMCPTools) Parameters() map[string]interface{} {
-	return baseServerParameters([]string{"server_label"})
+	return baseServerParameters(nil)
 }
 
 func (t *ListMCPTools) Results() map[string]interface{} {
@@ -50,6 +51,7 @@ func (t *ListMCPTools) Results() map[string]interface{} {
 		"type": "object",
 		"properties": map[string]interface{}{
 			"server_label": map[string]interface{}{"type": "string"},
+			"servers":      map[string]interface{}{"type": "array"},
 			"tools":        map[string]interface{}{"type": "array"},
 		},
 	}
@@ -63,6 +65,27 @@ func (t *ListMCPTools) Execute(ctx context.Context, args string) (string, error)
 	params, err := parseToolArgs(args)
 	if err != nil {
 		return "", err
+	}
+	label, _ := params["server_label"].(string)
+	label = strings.TrimSpace(label)
+	if label == "" {
+		servers, err := mcpbridge.LoadServerConfigs()
+		if err != nil {
+			return "", err
+		}
+		labels := make([]map[string]interface{}, 0, len(servers))
+		for _, server := range servers {
+			labels = append(labels, map[string]interface{}{
+				"label":          server.Label,
+				"transport_type": server.TransportType,
+				"command":        server.Command,
+				"url":            server.URL,
+			})
+		}
+		out, _ := json.MarshalIndent(map[string]interface{}{
+			"servers": labels,
+		}, "", "  ")
+		return string(out), nil
 	}
 	cfg, err := resolveServerConfig(params)
 	if err != nil {

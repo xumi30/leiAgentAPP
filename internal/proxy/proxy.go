@@ -225,6 +225,21 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 	if val, ok := ctx.Value(utils.IsStreamString).(bool); ok {
 		isStream = val
 	}
+	if extraSystemMessages, ok := ctx.Value(utils.ExtraSystemMessagesString).([]string); ok && len(extraSystemMessages) > 0 {
+		prefixed := make([]openaistyle.ChatMessage, 0, len(extraSystemMessages)+len(chatMessages))
+		for _, msg := range extraSystemMessages {
+			msg = strings.TrimSpace(msg)
+			if msg == "" {
+				continue
+			}
+			prefixed = append(prefixed, openaistyle.ChatMessage{
+				Role:    openaistyle.RoleSystem,
+				Content: msg,
+			})
+		}
+		prefixed = append(prefixed, chatMessages...)
+		chatMessages = prefixed
+	}
 
 	tls := []openaistyle.Tool{}
 	var toolChoice *openaistyle.ToolChoice
@@ -239,17 +254,14 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		toolRegister := tools.Getregistry()
 		switch strings.TrimSpace(source) {
 		case utils.ToolSourceMCP:
+			logging.Info("正在加载 MCP 工具")
 			tls = mcpbridge.BuildDynamicToolsByTopic(topic)
 		case utils.ToolSourceMixed:
+			logging.Info("正在加载混合工具")
 			tls = append(tls, toolRegister.ConvertToolsByTopic(topic)...)
 			tls = append(tls, mcpbridge.BuildDynamicToolsByTopic(topic)...)
-		case utils.ToolSourceLocal, "":
-			if ok {
-				tls = toolRegister.ConvertToolsByTopic(topic)
-			} else {
-				tls = toolRegister.ConvertTools()
-			}
-		default:
+		case utils.ToolSourceLocal:
+			logging.Info("正在加载本地工具")
 			if ok {
 				tls = toolRegister.ConvertToolsByTopic(topic)
 			} else {
@@ -268,7 +280,7 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 			tls = toolRegister.ConvertTools()
 		}
 		for _, t := range tls {
-			logging.Info("加载完成的工具 %v", t)
+			logging.Info("加载完成的工具 %v", t.Function.Name)
 		}
 	}
 

@@ -13,7 +13,6 @@ import (
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
 	"leiAgent/internal/tools/bashfunction"
-	"leiAgent/internal/tools/browsertool"
 	"leiAgent/internal/tools/mcptool"
 
 	fileFunctions "leiAgent/internal/tools/fileFunction"
@@ -46,20 +45,19 @@ func init() {
 	financeMarket := searchFunctions.NewMarketTool()
 	getcurrenttime := timeFunctions.NewCurrentTimeTool()
 	wikiSearch := searchFunctions.NewWikipediaSearchTool()
+	downloadBooks := searchFunctions.NewDownloadBooksTool()
 	bashfunction := bashfunction.NewBashTool()
-	browser := browsertool.New()
-	baiduBrowserSearch := browsertool.NewBaiduBrowserSearchTool()
+
 	listMCPTools := mcptool.NewListMCPTools(nil)
 	callMCPTool := mcptool.NewCallMCPTool(nil)
 
 	toolRegistry.Register(bashfunction)
-	toolRegistry.Register(browser)
-	toolRegistry.Register(baiduBrowserSearch)
 	toolRegistry.Register(listMCPTools)
 	toolRegistry.Register(callMCPTool)
 
 	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
 	toolRegistry.Register(fileFunctions.GetFileWriteTool())
+	toolRegistry.Register(fileFunctions.NewFileDownloadTool())
 	toolRegistry.Register(libraryfs.New())
 	// toolRegistry.Register(memotool.NewMemoWriteTool())
 	toolRegistry.Register(noveltool.New())
@@ -68,6 +66,7 @@ func init() {
 	toolRegistry.Register(getLongitude)
 	toolRegistry.Register(getWheatherTool)
 	toolRegistry.Register(wikiSearch)
+	toolRegistry.Register(downloadBooks)
 	toolRegistry.Register(getTime)
 	toolRegistry.Register(calculateTimeTool)
 
@@ -99,6 +98,7 @@ func NewDispatcher(ctx context.Context, chatID string, cancel context.CancelFunc
 	globalchannel.RegisterGlobalInputChannel(chatID)
 	globalchannel.RegisterGlobalDialogOutChannel(chatID)
 	globalchannel.RegisterGlobalReasonOutChannel(chatID)
+	globalchannel.RegisterGlobalTaskStateChannel(chatID)
 
 	ag, err := agent.NewAgent(agent.WithCtx(ctx))
 	if err != nil {
@@ -126,7 +126,9 @@ func (d *Dispatcher) Run(ctx context.Context) {
 			}
 			logging.Info("Dispatcher 收到消息: %s", msg.Content)
 			// 同一 chatID 下严格串行处理，避免共享 agent / memory / intention 并发踩踏。
+			globalchannel.SendTaskState(ctx, true)
 			d.handleMessage(ctx, msg.Content)
+			globalchannel.SendTaskState(ctx, false)
 		}
 	}
 }
@@ -153,12 +155,23 @@ func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
 
 	logging.Info("Dispatcher 处理消息: %s", message)
 	memory.AddUserMessage(chatIDForPersist, fmt.Sprintf("用户请求: %s", message))
+	ctx = d.attachProfileContext(ctx)
 	intent, err := ConfirmIntention(ctx, message, d.Intention)
 	if err != nil {
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
 		return // 确认意图失败，直接返回
 	}
 	d.Intention = intent
+	taskProfile := AnalyzeTask(message, d.Intention)
+	executionBlueprint := BuildExecutionBlueprint(taskProfile, d.Intention)
+	ctx = context.WithValue(ctx, utils.TaskProfileString, taskProfile)
+	ctx = context.WithValue(ctx, utils.ExecutionBlueprintString, executionBlueprint)
+	if strings.TrimSpace(executionBlueprint.ToolSource) != "" {
+		d.Intention.ToolSource = executionBlueprint.ToolSource
+	}
+	if strings.TrimSpace(executionBlueprint.ToolTopic) != "" {
+		d.Intention.ToolTopic = executionBlueprint.ToolTopic
+	}
 
 	logging.Info("意图: %s", d.Intention.Intent)
 
@@ -275,6 +288,11 @@ func (d *Dispatcher) handleChat(ctx context.Context, intent *Intention) {
 }
 
 func (d *Dispatcher) handleTool(ctx context.Context, intent *Intention) {
+	if blueprint, ok := ctx.Value(utils.ExecutionBlueprintString).(ExecutionBlueprint); ok {
+		if strings.EqualFold(strings.TrimSpace(blueprint.Mode), utils.ToolModeString) {
+			ctx = d.prepareToolExecutionContext(ctx, blueprint)
+		}
+	}
 	ctx = context.WithValue(ctx, utils.ToolTopicToLoad, intent.ToolTopic)
 	ctx = context.WithValue(ctx, utils.ToolSourceToLoad, intent.ToolSource)
 	ctx = context.WithValue(ctx, utils.ToolsString, true)

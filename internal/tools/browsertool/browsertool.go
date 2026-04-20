@@ -8,10 +8,15 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"leiAgent/internal/tools"
+	"leiAgent/logging"
 	"leiAgent/utils"
 )
 
@@ -21,6 +26,8 @@ type BrowserPlaywrightTool struct {
 	baseURL string
 	client  *http.Client
 }
+
+var playwrightAutoStartMu sync.Mutex
 
 func New() tools.Tool {
 	baseURL := os.Getenv("PW_SERVER_URL")
@@ -41,10 +48,12 @@ func (t *BrowserPlaywrightTool) Description() string {
 	return `Control a real browser via a local Node.js Playwright server (HTTP JSON). This tool is for REAL browser automation (not just opening a link).
 
 Important:
-- You MUST start the Playwright server first (once per machine):
-  cd frontend && npm install && npm run playwright:server
 - Default server URL: http://127.0.0.1:3111 (override with env PW_SERVER_URL)
-- If the health check fails, stop and ask the user to start the Playwright server before retrying.
+- When using the default local server, this tool will auto-start or repair the Playwright server if it is not running yet.
+- Recommended repair command:
+  cd frontend && npm install && npm run playwright:server
+- For generic search-engine browsing, prefer opening a Baidu search results URL directly unless the user explicitly asks for Google.
+- For ordinary search tasks, stop after the results page is open. Do not inspect links, buttons, or page structure unless the user explicitly asks for analysis.
 
 Core workflow (always do this):
 1) operation=create_session  -> get sessionId
@@ -307,6 +316,22 @@ func shouldKeepSessionOpen(ctx context.Context) bool {
 }
 
 func (t *BrowserPlaywrightTool) ensureServerHealthy(ctx context.Context) error {
+	if err := t.checkServerHealthy(ctx); err == nil {
+		return nil
+	}
+
+	if !t.canAutoStartLocalServer() {
+		return t.checkServerHealthy(ctx)
+	}
+
+	if err := t.autoStartServer(ctx); err != nil {
+		return err
+	}
+
+	return t.checkServerHealthy(ctx)
+}
+
+func (t *BrowserPlaywrightTool) checkServerHealthy(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.baseURL+"/health", nil)
 	if err != nil {
 		return fmt.Errorf("%w: failed to create browser health-check request: %v", tools.ErrExecutionFailed, err)
@@ -314,7 +339,7 @@ func (t *BrowserPlaywrightTool) ensureServerHealthy(ctx context.Context) error {
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: Playwright server is not reachable at %s. Start it with: cd frontend && npm install && npm run playwright:server", tools.ErrExecutionFailed, t.baseURL)
+		return fmt.Errorf("%w: Playwright server is not reachable at %s", tools.ErrExecutionFailed, t.baseURL)
 	}
 	defer resp.Body.Close()
 
@@ -330,20 +355,102 @@ func (t *BrowserPlaywrightTool) ensureServerHealthy(ctx context.Context) error {
 	return nil
 }
 
+func (t *BrowserPlaywrightTool) canAutoStartLocalServer() bool {
+	return strings.HasPrefix(t.baseURL, "http://127.0.0.1:3111") || strings.HasPrefix(t.baseURL, "http://localhost:3111")
+}
+
+func (t *BrowserPlaywrightTool) autoStartServer(ctx context.Context) error {
+	playwrightAutoStartMu.Lock()
+	defer playwrightAutoStartMu.Unlock()
+
+	healthCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer cancel()
+	if err := t.checkServerHealthy(healthCtx); err == nil {
+		return nil
+	}
+
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("%w: Playwright server is not reachable at %s and auto-start failed to resolve working directory: %v", tools.ErrExecutionFailed, t.baseURL, err)
+	}
+
+	frontendDir := filepath.Join(projectRoot, "frontend")
+	if stat, statErr := os.Stat(frontendDir); statErr != nil || !stat.IsDir() {
+		return fmt.Errorf("%w: Playwright server is not reachable at %s and auto-start could not find frontend directory at %s", tools.ErrExecutionFailed, t.baseURL, frontendDir)
+	}
+
+	logDir := filepath.Join(projectRoot, "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return fmt.Errorf("%w: Playwright server is not reachable at %s and auto-start failed to create log directory: %v", tools.ErrExecutionFailed, t.baseURL, err)
+	}
+	logPath := filepath.Join(logDir, "playwright-server.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("%w: Playwright server is not reachable at %s and auto-start failed to open log file %s: %v", tools.ErrExecutionFailed, t.baseURL, logPath, err)
+	}
+	defer logFile.Close()
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", "npm install && npm run playwright:server")
+	} else {
+		cmd = exec.Command("bash", "-lc", "npm install && npm run playwright:server")
+	}
+	cmd.Dir = frontendDir
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	logging.Info("browser_playwright auto-starting Playwright server in %s", frontendDir)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("%w: Playwright server is not reachable at %s and auto-start failed to launch server: %v", tools.ErrExecutionFailed, t.baseURL, err)
+	}
+	if cmd.Process != nil {
+		_ = cmd.Process.Release()
+	}
+
+	deadline := time.Now().Add(60 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		probeCtx, probeCancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+		lastErr = t.checkServerHealthy(probeCtx)
+		probeCancel()
+		if lastErr == nil {
+			logging.Info("browser_playwright Playwright server became healthy after auto-start")
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%w: Playwright server auto-start was interrupted: %v", tools.ErrExecutionFailed, ctx.Err())
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+
+	return fmt.Errorf("%w: Playwright server is still unavailable at %s after auto-start attempt. Check %s. Last error: %v", tools.ErrExecutionFailed, t.baseURL, logPath, lastErr)
+}
+
 func (t *BrowserPlaywrightTool) postJSON(ctx context.Context, path string, body any) (string, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("%w: failed to marshal request body: %v", tools.ErrInvalidParams, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+path, bytes.NewReader(b))
-	if err != nil {
-		return "", fmt.Errorf("%w: failed to create request: %v", tools.ErrExecutionFailed, err)
-	}
-	req.Header.Set("content-type", "application/json")
+	var resp *http.Response
+	for attempt := 0; attempt < 2; attempt++ {
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL+path, bytes.NewReader(b))
+		if reqErr != nil {
+			return "", fmt.Errorf("%w: failed to create request: %v", tools.ErrExecutionFailed, reqErr)
+		}
+		req.Header.Set("content-type", "application/json")
 
-	resp, err := t.client.Do(req)
-	if err != nil {
+		resp, err = t.client.Do(req)
+		if err == nil {
+			break
+		}
+		if attempt == 0 && t.canAutoStartLocalServer() {
+			if recoverErr := t.ensureServerHealthy(ctx); recoverErr == nil {
+				continue
+			}
+		}
 		return "", fmt.Errorf("%w: request failed: %v", tools.ErrExecutionFailed, err)
 	}
 	defer resp.Body.Close()
@@ -360,12 +467,24 @@ func (t *BrowserPlaywrightTool) postJSON(ctx context.Context, path string, body 
 }
 
 func (t *BrowserPlaywrightTool) delete(ctx context.Context, path string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, t.baseURL+path, nil)
-	if err != nil {
-		return "", fmt.Errorf("%w: failed to create request: %v", tools.ErrExecutionFailed, err)
-	}
-	resp, err := t.client.Do(req)
-	if err != nil {
+	var (
+		resp *http.Response
+		err  error
+	)
+	for attempt := 0; attempt < 2; attempt++ {
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodDelete, t.baseURL+path, nil)
+		if reqErr != nil {
+			return "", fmt.Errorf("%w: failed to create request: %v", tools.ErrExecutionFailed, reqErr)
+		}
+		resp, err = t.client.Do(req)
+		if err == nil {
+			break
+		}
+		if attempt == 0 && t.canAutoStartLocalServer() {
+			if recoverErr := t.ensureServerHealthy(ctx); recoverErr == nil {
+				continue
+			}
+		}
 		return "", fmt.Errorf("%w: request failed: %v", tools.ErrExecutionFailed, err)
 	}
 	defer resp.Body.Close()

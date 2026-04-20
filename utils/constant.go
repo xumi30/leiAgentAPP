@@ -9,15 +9,19 @@ const (
 ║                              Version %s                                   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 `
-	ChatIDString     = "chatID"
-	Channelstring    = "channel"
-	Clientstring     = "httpClient"
-	IsStreamString   = "IsStreamString"
-	ToolsString      = "tools"
-	IsPlanningString = "isPlanning"
-	ToolTopicToLoad  = "toolTopicToLoad"
-	ToolSourceToLoad = "toolSourceToLoad"
-	UserGoalString   = "userGoal"
+	ChatIDString              = "chatID"
+	Channelstring             = "channel"
+	Clientstring              = "httpClient"
+	IsStreamString            = "IsStreamString"
+	ToolsString               = "tools"
+	IsPlanningString          = "isPlanning"
+	ToolTopicToLoad           = "toolTopicToLoad"
+	ToolSourceToLoad          = "toolSourceToLoad"
+	UserGoalString            = "userGoal"
+	TaskProfileString         = "taskProfile"
+	ExecutionBlueprintString  = "executionBlueprint"
+	ExtraSystemMessagesString = "extraSystemMessages"
+	FreshnessTimeAnchorString = "freshnessTimeAnchor"
 
 	// SkipDialogToUI 为 true 时，proxy 不把模型输出写入 DialogOut（避免临时 chatID 未注册时落入全局 OutputChan，
 	// 被 chatID 为空的 Dispatcher 误当成用户输入）。
@@ -70,15 +74,19 @@ When a tool is needed, you must use the model's native tool-calling interface.
 Do not describe a tool call in plain text, JSON, or markdown.
 
 # Rules
+- Try your best to use the tool to complete user requests.
 - If a tool is needed, emit a native tool call instead of text.
 - Do NOT output fake tool-call JSON such as {"tool": "..."}.
 - Do NOT output code snippets, shell commands, or Python examples when a tool is available for the task.
-- Respond with natural language only when the user is chatting, asking for a summary, or no tool is needed anymore.
+- ONLY when the user is chatting, asking for a summary, or no tool is needed anymore, you can respond in plain text.
 
 # Tool Selection
 - Choose the most appropriate tool based on user intent
 - Do NOT guess missing parameters
 - If required information is missing, ask for clarification
+- For generic web search in a real browser, prefer directly opening the search results page in Baidu before Google-related pages.
+- For ordinary browser search, use the fewest browser steps needed: create/open session, goto the results page, then stop.
+- Do NOT call list_links, list_inputs, or observe after the results page is already open unless the user explicitly asks you to inspect or analyze the page.
 `
 )
 

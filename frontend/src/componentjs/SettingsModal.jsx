@@ -1,6 +1,47 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GetLLMConfigFormState, GetMCPConfigFormState, SaveLLMConfigForm, SaveMCPConfigForm, ValidateMCPConfigRow } from '../../wailsjs/go/main/App';
+import {
+  GetLLMConfigFormState,
+  GetMCPConfigFormState,
+  GetMCPHubPluginDetail,
+  GetMCPHubStatus,
+  RegisterMCPHub,
+  SaveLLMConfigForm,
+  SaveMCPConfigForm,
+  SearchMCPHub,
+  ValidateMCPConfigRow,
+} from '../../wailsjs/go/main/App';
 import '../componentcss/SettingsModal.css';
+
+const FALLBACK_HUB_CATEGORIES = [
+  'business',
+  'cloud',
+  'communication',
+  'developer',
+  'education',
+  'education-science',
+  'finance',
+  'gaming-entertainment',
+  'government',
+  'hardware',
+  'health-wellness',
+  'home-assistant',
+  'home-automation',
+  'lifestyle',
+  'media-generate',
+  'news',
+  'productivity',
+  'science-education',
+  'security',
+  'services',
+  'shopping',
+  'social',
+  'sports',
+  'tools',
+  'travel-transport',
+  'utility',
+  'weather',
+  'web-search',
+];
 
 function emptyRow() {
   return {
@@ -26,6 +67,10 @@ function emptyMcpRow() {
     headersText: '',
     envText: '',
     cachedTools: [],
+    cachedToolDetails: [],
+    lastCheckState: '',
+    lastCheckMessage: '',
+    lastCheckedAt: '',
   };
 }
 
@@ -36,6 +81,14 @@ function emptyMcpStatus() {
     tools: [],
     toolCount: 0,
     checkedAt: '',
+  };
+}
+
+function emptyHubStatus() {
+  return {
+    registered: false,
+    credentialsPath: '',
+    message: '',
   };
 }
 
@@ -90,7 +143,6 @@ function parseMcpImportText(rawText) {
         envText: Object.entries(env)
           .map(([k, v]) => `${k}: ${String(v)}`)
           .join('\n'),
-        cachedTools: [],
       },
     ];
   });
@@ -118,7 +170,16 @@ function sameToolList(a, b) {
   return true;
 }
 
-/** 与 mergeLLMYAML 一致：未配置时非 gemini 为 both，gemini 为 nonstream */
+function mcpToolsForDisplay(status, row) {
+  const source =
+    status?.state === 'ok' || status?.state === 'warning'
+      ? status?.tools
+      : status?.state === 'idle'
+        ? row?.cachedTools
+        : [];
+  return Array.isArray(source) ? source : [];
+}
+
 function effectiveStreamMode(raw, provider) {
   const s = String(raw ?? '').trim();
   if (s) return s;
@@ -143,28 +204,101 @@ function mapBackendRow(r) {
   };
 }
 
+function mapToText(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return '';
+  return Object.entries(obj)
+    .map(([k, v]) => `${k}: ${String(v)}`)
+    .join('\n');
+}
+
+function formatCount(value) {
+  if (!value) return '0';
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
+  return String(value);
+}
+
+function uniqueMcpLabel(rows, desired) {
+  const base = String(desired ?? '').trim() || 'mcp-service';
+  const labels = new Set(rows.map((row) => String(row?.label ?? '').trim()).filter(Boolean));
+  if (!labels.has(base)) return base;
+  let index = 2;
+  while (labels.has(`${base}-${index}`)) {
+    index += 1;
+  }
+  return `${base}-${index}`;
+}
+
+function rowFromHubDeployment(detail, option, existingRows) {
+  const connection = option?.connection ?? {};
+  const command = String(connection.command ?? '').trim();
+  const url = String(connection.url ?? '').trim();
+  const rawType = String(connection.type ?? '').trim().toLowerCase();
+  const transportType = command ? 'stdio' : rawType === 'sse' ? 'sse' : 'streamable_http';
+  return {
+    ...emptyMcpRow(),
+    label: uniqueMcpLabel(existingRows, detail?.identifier || detail?.name || 'mcp-service'),
+    transportType,
+    url,
+    command,
+    argsText: Array.isArray(connection.args) ? connection.args.map((v) => String(v)).join('\n') : '',
+    headersText: mapToText(connection.headers),
+    envText: mapToText(connection.env),
+  };
+}
+
+function hubRatingText(item) {
+  const rating = typeof item?.ratingAverage === 'number' ? item.ratingAverage : 0;
+  if (!rating) return '暂无评分';
+  return `${rating.toFixed(1)} / 5`;
+}
+
 export default function SettingsModal({ open, onClose, onSaved }) {
   const [activeTab, setActiveTab] = useState('llm');
   const [backends, setBackends] = useState(() => []);
   const [mcpServers, setMcpServers] = useState(() => []);
   const [mcpStatuses, setMcpStatuses] = useState(() => []);
+  const [selectedMcpIndex, setSelectedMcpIndex] = useState(null);
   const [mcpImportText, setMcpImportText] = useState('');
   const [savePath, setSavePath] = useState('');
   const [usingExample, setUsingExample] = useState(false);
   const [loadErr, setLoadErr] = useState('');
   const [saveErr, setSaveErr] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const [hubStatus, setHubStatus] = useState(() => emptyHubStatus());
+  const [hubRegisterName, setHubRegisterName] = useState('leiagentapp');
+  const [hubRegisterDesc, setHubRegisterDesc] = useState('A desktop AI assistant that manages MCP services for local workflows.');
+  const [registeringHub, setRegisteringHub] = useState(false);
+  const [hubQuery, setHubQuery] = useState('');
+  const [hubCategory, setHubCategory] = useState('');
+  const [hubCategoryMenuOpen, setHubCategoryMenuOpen] = useState(false);
+  const [hubLoading, setHubLoading] = useState(false);
+  const [hubSearchErr, setHubSearchErr] = useState('');
+  const [hubResults, setHubResults] = useState(() => []);
+  const [hubCategories, setHubCategories] = useState(() => []);
+  const [hubSelectedIdentifier, setHubSelectedIdentifier] = useState('');
+  const [hubSelectedDetail, setHubSelectedDetail] = useState(null);
+  const [hubDetailLoading, setHubDetailLoading] = useState(false);
+  const [hubDetailErr, setHubDetailErr] = useState('');
+  const [hubNotice, setHubNotice] = useState('');
+  const [hubInstallStates, setHubInstallStates] = useState({});
+
   const lastValidatedRef = useRef([]);
 
   const load = useCallback(async () => {
     setLoadErr('');
     try {
-      const [llmState, mcpState] = await Promise.all([GetLLMConfigFormState(), GetMCPConfigFormState()]);
+      const [llmState, mcpState, nextHubStatus] = await Promise.all([
+        GetLLMConfigFormState(),
+        GetMCPConfigFormState(),
+        GetMCPHubStatus(),
+      ]);
       const llmList = Array.isArray(llmState.backends) ? llmState.backends : [];
       const mcpList = Array.isArray(mcpState.servers) ? mcpState.servers : [];
       setBackends(llmList.length > 0 ? llmList.map(mapBackendRow) : []);
       const nextMcp = mcpList.length > 0 ? mcpList.map((row) => ({ ...emptyMcpRow(), ...row })) : [];
       setMcpServers(nextMcp);
+      setSelectedMcpIndex(null);
       setMcpStatuses(
         nextMcp.map((row) =>
           row.lastCheckState
@@ -181,6 +315,10 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       lastValidatedRef.current = nextMcp.map(() => '');
       setSavePath(llmState.path ?? mcpState.path ?? '');
       setUsingExample(!!(llmState.usingExample || mcpState.usingExample));
+      setHubStatus({ ...emptyHubStatus(), ...(nextHubStatus ?? {}) });
+      setHubNotice('');
+      setHubSearchErr('');
+      setHubDetailErr('');
     } catch (e) {
       setLoadErr(String(e?.message || e));
     }
@@ -191,6 +329,21 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       load();
     }
   }, [open, load]);
+
+  useEffect(() => {
+    if (open) return;
+    setHubQuery('');
+    setHubCategory('');
+    setHubResults([]);
+    setHubCategories([]);
+    setHubSelectedIdentifier('');
+    setHubSelectedDetail(null);
+    setHubCategoryMenuOpen(false);
+    setHubDetailErr('');
+    setHubNotice('');
+    setHubSearchErr('');
+    setHubInstallStates({});
+  }, [open]);
 
   const updateBackend = (index, field, value) => {
     setBackends((prev) => {
@@ -217,15 +370,22 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   };
 
   const addMcpServerRow = () => {
+    const nextIndex = mcpServers.length;
     setMcpServers((prev) => [...prev, emptyMcpRow()]);
     setMcpStatuses((prev) => [...prev, emptyMcpStatus()]);
     lastValidatedRef.current = [...lastValidatedRef.current, ''];
+    setSelectedMcpIndex(nextIndex);
   };
 
   const removeMcpServerRow = (index) => {
     setMcpServers((prev) => prev.filter((_, i) => i !== index));
     setMcpStatuses((prev) => prev.filter((_, i) => i !== index));
     lastValidatedRef.current = lastValidatedRef.current.filter((_, i) => i !== index);
+    setSelectedMcpIndex((prev) => {
+      if (prev == null) return prev;
+      if (prev === index) return null;
+      return prev > index ? prev - 1 : prev;
+    });
   };
 
   const handleImportMcp = () => {
@@ -236,6 +396,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       setMcpStatuses((prev) => [...prev, ...rows.map(() => emptyMcpStatus())]);
       lastValidatedRef.current = [...lastValidatedRef.current, ...rows.map(() => '')];
       setMcpImportText('');
+      setHubNotice(`已导入 ${rows.length} 个 MCP 服务`);
     } catch (e) {
       setSaveErr(String(e?.message || e));
     }
@@ -258,29 +419,32 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     try {
       const result = await ValidateMCPConfigRow(row);
       const tools = Array.isArray(result?.tools) ? result.tools : [];
-        setMcpStatusAt(index, {
+      setMcpStatusAt(index, {
         state: result?.lastCheckState || (result?.ok ? 'ok' : 'error'),
         message: String(result?.message ?? ''),
         tools,
         toolCount: typeof result?.toolCount === 'number' ? result.toolCount : tools.length,
         checkedAt: result?.checkedAt ?? '',
       });
-      if (result?.ok) {
+      if (result?.ok || result?.lastCheckState === 'warning') {
         setMcpServers((prev) => {
           const next = [...prev];
           const current = next[index];
-          if (!current) {
-            return prev;
-          }
+          if (!current) return prev;
           const nextDetails = Array.isArray(result?.toolDetails) ? result.toolDetails : [];
-          if (sameToolList(current.cachedTools, tools) && current.lastCheckState === 'ok' && current.lastCheckMessage === String(result?.message ?? '') && current.lastCheckedAt === (result?.checkedAt ?? '')) {
+          if (
+            sameToolList(current.cachedTools, tools) &&
+            current.lastCheckState === (result?.lastCheckState || (result?.ok ? 'ok' : 'error')) &&
+            current.lastCheckMessage === String(result?.message ?? '') &&
+            current.lastCheckedAt === (result?.checkedAt ?? '')
+          ) {
             return prev;
           }
           next[index] = {
             ...current,
             cachedTools: tools,
             cachedToolDetails: nextDetails,
-            lastCheckState: result?.lastCheckState || 'ok',
+            lastCheckState: result?.lastCheckState || (result?.ok ? 'ok' : 'error'),
             lastCheckMessage: String(result?.message ?? ''),
             lastCheckedAt: result?.checkedAt ?? '',
           };
@@ -290,9 +454,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         setMcpServers((prev) => {
           const next = [...prev];
           const current = next[index];
-          if (!current) {
-            return prev;
-          }
+          if (!current) return prev;
           next[index] = {
             ...current,
             cachedTools: [],
@@ -318,7 +480,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       const row = nextRows[i];
       if (!isMcpRowReady(row)) continue;
       const result = await validateMcpRow(i, row);
-      if (result?.ok && Array.isArray(result.tools)) {
+      if ((result?.ok || result?.lastCheckState === 'warning') && Array.isArray(result.tools)) {
         nextRows[i] = { ...nextRows[i], cachedTools: result.tools };
       }
     }
@@ -352,9 +514,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
           setMcpStatusAt(index, emptyMcpStatus());
           return;
         }
-        if (lastValidatedRef.current[index] === sig) {
-          return;
-        }
+        if (lastValidatedRef.current[index] === sig) return;
         lastValidatedRef.current[index] = sig;
         void validateMcpRow(index, row);
       });
@@ -382,9 +542,145 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     }
   };
 
+  const handleRegisterHub = async () => {
+    setHubSearchErr('');
+    setHubNotice('');
+    setRegisteringHub(true);
+    try {
+      const result = await RegisterMCPHub(hubRegisterName, hubRegisterDesc);
+      setHubStatus({
+        registered: !!result?.registered,
+        credentialsPath: result?.credentialsPath ?? '',
+        message: result?.message ?? 'MCP Hub 注册完成',
+      });
+      setHubNotice(result?.message || 'MCP Hub 注册完成');
+    } catch (e) {
+      setHubSearchErr(String(e?.message || e));
+    } finally {
+      setRegisteringHub(false);
+    }
+  };
+
+  const handleSearchHub = useCallback(async () => {
+    if (!hubStatus.registered) {
+      setHubSearchErr('请先完成 MCP Hub 注册');
+      return;
+    }
+    if (!String(hubQuery).trim()) {
+      setHubSearchErr('请输入搜索关键词');
+      return;
+    }
+    setHubLoading(true);
+    setHubSearchErr('');
+    setHubNotice('');
+    try {
+      const result = await SearchMCPHub(hubQuery, hubCategory, 1, 12);
+      setHubResults(Array.isArray(result?.items) ? result.items : []);
+      setHubCategories(Array.isArray(result?.categories) ? result.categories : []);
+      if (Array.isArray(result?.items) && result.items[0]?.identifier) {
+        setHubSelectedIdentifier(result.items[0].identifier);
+      } else {
+        setHubSelectedIdentifier('');
+        setHubSelectedDetail(null);
+      }
+    } catch (e) {
+      setHubSearchErr(String(e?.message || e));
+    } finally {
+      setHubLoading(false);
+    }
+  }, [hubCategory, hubQuery, hubStatus.registered]);
+
+  const handleSelectHubItem = useCallback(async (identifier) => {
+    if (!identifier) return;
+    setHubSelectedIdentifier(identifier);
+    setHubSelectedDetail(null);
+    setHubDetailErr('');
+    setHubDetailLoading(true);
+    try {
+      const detail = await GetMCPHubPluginDetail(identifier);
+      setHubSelectedDetail(detail ?? null);
+    } catch (e) {
+      setHubDetailErr(String(e?.message || e));
+    } finally {
+      setHubDetailLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open || activeTab !== 'mcp' || !hubSelectedIdentifier) return;
+    void handleSelectHubItem(hubSelectedIdentifier);
+  }, [activeTab, handleSelectHubItem, hubSelectedIdentifier, open]);
+
+  useEffect(() => {
+    if (String(hubQuery).trim()) return;
+    setHubResults([]);
+    setHubSelectedIdentifier('');
+    setHubSelectedDetail(null);
+    setHubCategoryMenuOpen(false);
+    setHubDetailErr('');
+    setHubNotice('');
+    setHubSearchErr('');
+    setHubInstallStates({});
+  }, [hubQuery]);
+
+  const hubInstallKey = (detailIdentifier, option, index) =>
+    `${String(detailIdentifier || 'unknown')}::${String(option?.installationMethod || 'manual')}::${String(option?.connection?.type || 'unknown')}::${index}`;
+
+  const installHubOption = async (option, installKey) => {
+    const nextRow = rowFromHubDeployment(hubSelectedDetail, option, mcpServers);
+    const nextIndex = mcpServers.length;
+    const nextRows = [...mcpServers, nextRow];
+    setHubInstallStates((prev) => ({
+      ...prev,
+      [installKey]: { state: 'installing', message: '安装中…' },
+    }));
+    setMcpServers(nextRows);
+    setMcpStatuses((prev) => [...prev, emptyMcpStatus()]);
+    lastValidatedRef.current = [...lastValidatedRef.current, ''];
+    try {
+      const result = await validateMcpRow(nextIndex, nextRow);
+      if (result?.ok) {
+        const persistedRows = [...nextRows];
+        persistedRows[nextIndex] = {
+          ...persistedRows[nextIndex],
+          cachedTools: Array.isArray(result?.tools) ? result.tools : [],
+          cachedToolDetails: Array.isArray(result?.toolDetails) ? result.toolDetails : [],
+          lastCheckState: result?.lastCheckState || 'ok',
+          lastCheckMessage: String(result?.message ?? ''),
+          lastCheckedAt: result?.checkedAt ?? '',
+        };
+        await SaveMCPConfigForm(persistedRows);
+        setMcpServers(persistedRows);
+        setHubInstallStates((prev) => ({
+          ...prev,
+          [installKey]: { state: 'installed', message: '已安装' },
+        }));
+        setHubNotice(`已将 ${nextRow.label} 安装到配置文件`);
+        return;
+      }
+      setHubInstallStates((prev) => ({
+        ...prev,
+        [installKey]: { state: 'failed', message: `失败：${String(result?.message || '重试？')}` },
+      }));
+    } catch (e) {
+      setMcpServers((prev) => prev.filter((_, index) => index !== nextIndex));
+      setMcpStatuses((prev) => prev.filter((_, index) => index !== nextIndex));
+      lastValidatedRef.current = lastValidatedRef.current.filter((_, index) => index !== nextIndex);
+      setHubInstallStates((prev) => ({
+        ...prev,
+        [installKey]: { state: 'failed', message: `失败：${String(e?.message || e || '重试？')}` },
+      }));
+    }
+  };
+
   if (!open) return null;
 
   const statusClassName = (state) => `settings-status-dot settings-status-dot--${state || 'idle'}`;
+  const selectedMcpRow = selectedMcpIndex != null ? mcpServers[selectedMcpIndex] ?? null : null;
+  const selectedMcpStatus = selectedMcpIndex != null ? mcpStatuses[selectedMcpIndex] ?? emptyMcpStatus() : emptyMcpStatus();
+  const selectedMcpTools = mcpToolsForDisplay(selectedMcpStatus, selectedMcpRow);
+  const hubDeploymentOptions = Array.isArray(hubSelectedDetail?.deploymentOptions) ? hubSelectedDetail.deploymentOptions : [];
+  const availableHubCategories = hubCategories.length > 0 ? hubCategories : FALLBACK_HUB_CATEGORIES;
 
   const colInputs = (row, index) => (
     <>
@@ -399,65 +695,22 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         />
       </td>
       <td>
-        <input
-          className="settings-table__input"
-          value={row.name}
-          onChange={(e) => updateBackend(index, 'name', e.target.value)}
-          placeholder="标识"
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <input className="settings-table__input" value={row.name} onChange={(e) => updateBackend(index, 'name', e.target.value)} placeholder="标识" spellCheck={false} autoComplete="off" />
       </td>
       <td>
-        <input
-          className="settings-table__input"
-          type="password"
-          value={row.apiKey}
-          onChange={(e) => updateBackend(index, 'apiKey', e.target.value)}
-          placeholder="api_key"
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <input className="settings-table__input" type="password" value={row.apiKey} onChange={(e) => updateBackend(index, 'apiKey', e.target.value)} placeholder="api_key" spellCheck={false} autoComplete="off" />
       </td>
       <td>
-        <input
-          className="settings-table__input"
-          value={row.baseUrl}
-          onChange={(e) => updateBackend(index, 'baseUrl', e.target.value)}
-          placeholder="base_url"
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <input className="settings-table__input" value={row.baseUrl} onChange={(e) => updateBackend(index, 'baseUrl', e.target.value)} placeholder="base_url" spellCheck={false} autoComplete="off" />
       </td>
       <td>
-        <input
-          className="settings-table__input"
-          value={row.model}
-          onChange={(e) => updateBackend(index, 'model', e.target.value)}
-          placeholder="model"
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <input className="settings-table__input" value={row.model} onChange={(e) => updateBackend(index, 'model', e.target.value)} placeholder="model" spellCheck={false} autoComplete="off" />
       </td>
       <td>
-        <input
-          className="settings-table__input"
-          value={row.provider}
-          onChange={(e) => updateBackend(index, 'provider', e.target.value)}
-          placeholder="留空 / gemini"
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <input className="settings-table__input" value={row.provider} onChange={(e) => updateBackend(index, 'provider', e.target.value)} placeholder="留空 / gemini" spellCheck={false} autoComplete="off" />
       </td>
       <td>
-        <input
-          className="settings-table__input"
-          value={row.streamMode}
-          onChange={(e) => updateBackend(index, 'streamMode', e.target.value)}
-          placeholder="nonstream | stream | both"
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <input className="settings-table__input" value={row.streamMode} onChange={(e) => updateBackend(index, 'streamMode', e.target.value)} placeholder="nonstream | stream | both" spellCheck={false} autoComplete="off" />
       </td>
       <td>
         <input
@@ -477,36 +730,15 @@ export default function SettingsModal({ open, onClose, onSaved }) {
 
   return (
     <div className="settings-overlay" role="presentation" onMouseDown={onClose}>
-      <div
-        className="settings-sheet settings-sheet--wide"
-        role="dialog"
-        aria-labelledby="settings-title"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="settings-sheet settings-sheet--wide" role="dialog" aria-labelledby="settings-title" onMouseDown={(e) => e.stopPropagation()}>
         <div className="settings-sheet__header">
-          <h2 id="settings-title" className="settings-sheet__title">
-            设置
-          </h2>
-          <button type="button" className="settings-sheet__close" onClick={onClose} aria-label="关闭">
-            完成
-          </button>
+          <h2 id="settings-title" className="settings-sheet__title">设置</h2>
+          <button type="button" className="settings-sheet__close" onClick={onClose} aria-label="关闭">完成</button>
         </div>
 
         <div className="settings-tabs" role="tablist" aria-label="设置分组">
-          <button
-            type="button"
-            className={`settings-tabs__btn ${activeTab === 'llm' ? 'settings-tabs__btn--active' : ''}`}
-            onClick={() => setActiveTab('llm')}
-          >
-            LLM
-          </button>
-          <button
-            type="button"
-            className={`settings-tabs__btn ${activeTab === 'mcp' ? 'settings-tabs__btn--active' : ''}`}
-            onClick={() => setActiveTab('mcp')}
-          >
-            MCP
-          </button>
+          <button type="button" className={`settings-tabs__btn ${activeTab === 'llm' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('llm')}>LLM</button>
+          <button type="button" className={`settings-tabs__btn ${activeTab === 'mcp' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('mcp')}>MCP</button>
         </div>
 
         <p className="settings-sheet__path">
@@ -516,27 +748,31 @@ export default function SettingsModal({ open, onClose, onSaved }) {
               <code className="settings-sheet__path-value">{savePath}</code>
             </>
           ) : null}
-          {usingExample ? (
-            <span className="settings-sheet__hint">尚未有配置文件，保存后将创建 config.yaml</span>
+          {usingExample ? <span className="settings-sheet__hint">尚未有配置文件，保存后将创建 config.yaml</span> : null}
+          {activeTab === 'mcp' && hubStatus.credentialsPath ? (
+            <>
+              <span className="settings-sheet__path-label">Hub 凭据</span>
+              <code className="settings-sheet__path-value">{hubStatus.credentialsPath}</code>
+            </>
           ) : null}
         </p>
 
         <p className="settings-sheet__note">
           {activeTab === 'mcp'
-            ? '每行对应一个 MCP 服务。stdio 模式填写 command 与 args；HTTP 模式填写 url。多值字段按行输入，headers/env 使用 key: value。'
+            ? 'MCP 页支持从 LobeHub MCP Hub 搜索并安装配置，也保留手动 JSON 导入与表单编辑。安装后可直接点击服务进入详情页进行测试、修改和删除。'
             : '按顺序故障转移；仅勾选启用的行会参与。每行须填写 base_url、model。某行未填 API Key 时，若文件中 llm.api_key 已填写会回退使用该 Key，否则用环境变量。'}
         </p>
 
         {loadErr ? <div className="settings-sheet__error">{loadErr}</div> : null}
         {saveErr ? <div className="settings-sheet__error">{saveErr}</div> : null}
+        {hubSearchErr ? <div className="settings-sheet__error">{hubSearchErr}</div> : null}
+        {hubNotice ? <div className="settings-sheet__notice">{hubNotice}</div> : null}
 
         {activeTab === 'llm' ? (
           <div className="settings-sheet__scroll">
             <div className="settings-list-block">
               <div className="settings-list-block__toolbar">
-                <button type="button" className="settings-btn settings-btn--secondary settings-btn--small" onClick={addBackendRow}>
-                  添加一行
-                </button>
+                <button type="button" className="settings-btn settings-btn--secondary settings-btn--small" onClick={addBackendRow}>添加一行</button>
               </div>
               <table className="settings-table settings-table--wide">
                 <thead>
@@ -554,24 +790,13 @@ export default function SettingsModal({ open, onClose, onSaved }) {
                 </thead>
                 <tbody>
                   {backends.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="settings-table__empty">
-                        暂无行，点击「添加一行」配置多后端。
-                      </td>
-                    </tr>
+                    <tr><td colSpan={9} className="settings-table__empty">暂无行，点击「添加一行」配置多后端。</td></tr>
                   ) : (
                     backends.map((row, i) => (
                       <tr key={i}>
                         {colInputs(row, i)}
                         <td className="settings-table__actions">
-                          <button
-                            type="button"
-                            className="settings-table__remove"
-                            onClick={() => removeBackendRow(i)}
-                            aria-label="删除此行"
-                          >
-                            删除
-                          </button>
+                          <button type="button" className="settings-table__remove" onClick={() => removeBackendRow(i)} aria-label="删除此行">删除</button>
                         </td>
                       </tr>
                     ))
@@ -581,9 +806,200 @@ export default function SettingsModal({ open, onClose, onSaved }) {
             </div>
           </div>
         ) : (
-          <div className="settings-sheet__scroll">
+          <div className="settings-sheet__scroll settings-sheet__scroll--mcp">
             <div className="settings-list-block">
-              <div className="settings-list-block__toolbar">
+              <div className="settings-list-block__toolbar settings-list-block__toolbar--stack">
+                {!hubStatus.registered ? (
+                  <div className="settings-hub-register">
+                    <div className="settings-hub-register__title">连接 MCP Hub</div>
+                    <div className="settings-hub-register__desc">{hubStatus.message || '使用 LobeHub 官方 marketplace CLI 前需要先完成一次身份注册。'}</div>
+                    <div className="settings-hub-register__grid">
+                      <label className="settings-mcp-field">
+                        <span className="settings-mcp-field__label">显示名称</span>
+                        <input className="settings-table__input" value={hubRegisterName} onChange={(e) => setHubRegisterName(e.target.value)} placeholder="leiagentapp" spellCheck={false} />
+                      </label>
+                      <label className="settings-mcp-field">
+                        <span className="settings-mcp-field__label">描述</span>
+                        <input className="settings-table__input" value={hubRegisterDesc} onChange={(e) => setHubRegisterDesc(e.target.value)} placeholder="Describe this client" spellCheck={false} />
+                      </label>
+                    </div>
+                    <div className="settings-import__actions">
+                      <button type="button" className="settings-btn settings-btn--primary settings-btn--small" onClick={handleRegisterHub} disabled={registeringHub}>
+                        {registeringHub ? '注册中…' : '注册 Hub'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="settings-hub">
+                    <div className="settings-hub__search">
+                      <input
+                        className="settings-table__input"
+                        value={hubQuery}
+                        onChange={(e) => setHubQuery(e.target.value)}
+                        placeholder="搜索 MCP Hub，例如 filesystem、postgres、github"
+                        spellCheck={false}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void handleSearchHub();
+                          }
+                        }}
+                      />
+                      <div className="settings-select">
+                        <button
+                          type="button"
+                          className="settings-table__input settings-select__trigger"
+                          onClick={() => {
+                            if (availableHubCategories.length === 0) return;
+                            setHubCategoryMenuOpen((prev) => !prev);
+                          }}
+                        >
+                          <span>{hubCategory || '全部分类'}</span>
+                          <span className="settings-select__arrow">{hubCategoryMenuOpen ? '▲' : '▼'}</span>
+                        </button>
+                        {hubCategoryMenuOpen ? (
+                          <div className="settings-select__menu">
+                            <button
+                              type="button"
+                              className={`settings-select__option${hubCategory === '' ? ' settings-select__option--active' : ''}`}
+                              onClick={() => {
+                                setHubCategory('');
+                                setHubCategoryMenuOpen(false);
+                              }}
+                            >
+                              全部分类
+                            </button>
+                            {availableHubCategories.map((category) => (
+                              <button
+                                key={category}
+                                type="button"
+                                className={`settings-select__option${hubCategory === category ? ' settings-select__option--active' : ''}`}
+                                onClick={() => {
+                                  setHubCategory(category);
+                                  setHubCategoryMenuOpen(false);
+                                }}
+                              >
+                                {category}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <button type="button" className="settings-btn settings-btn--primary settings-btn--small" onClick={() => void handleSearchHub()} disabled={hubLoading}>
+                        {hubLoading ? '搜索中…' : '搜索 Hub'}
+                      </button>
+                    </div>
+
+                    <div className="settings-hub__results">
+                      {hubResults.length === 0 ? (
+                        <div className="settings-table__empty">输入关键词后可从 MCP Hub 搜索并查看安装方案。</div>
+                      ) : (
+                        hubResults.map((item) => (
+                          <div key={item.identifier} className={`settings-hub-card-wrap${hubSelectedIdentifier === item.identifier ? ' settings-hub-card-wrap--active' : ''}`}>
+                            <button
+                              type="button"
+                              className={`settings-hub-card${hubSelectedIdentifier === item.identifier ? ' settings-hub-card--active' : ''}`}
+                              onClick={() => void handleSelectHubItem(item.identifier)}
+                            >
+                              <div className="settings-hub-card__title-row">
+                                <div className="settings-hub-card__title">{item.name || item.identifier}</div>
+                                <div className="settings-hub-card__badges">
+                                  {item.isValidated ? <span className="settings-chip settings-chip--ok">Validated</span> : null}
+                                  {item.isOfficial ? <span className="settings-chip">Official</span> : null}
+                                </div>
+                              </div>
+                              <div className="settings-hub-card__meta">{item.author || 'Unknown'} · {item.category || 'uncategorized'} · {item.connectionType || 'local'}</div>
+                              <div className="settings-hub-card__desc">{item.description || '暂无描述'}</div>
+                              <div className="settings-hub-card__stats">
+                                <span>安装 {formatCount(item.installCount)}</span>
+                                <span>评分 {hubRatingText(item)}</span>
+                                <span>版本 {item.version || '-'}</span>
+                              </div>
+                            </button>
+
+                            {hubSelectedIdentifier === item.identifier ? (
+                              <div className="settings-hub-card__detail">
+                                {hubDetailLoading ? (
+                                  <div className="settings-table__empty">正在加载安装详情…</div>
+                                ) : hubDetailErr ? (
+                                  <div className="settings-sheet__error">{hubDetailErr}</div>
+                                ) : hubSelectedDetail ? (
+                                  <>
+                                    <div className="settings-hub-detail__header">
+                                      <div>
+                                        <h3 className="settings-hub-detail__title">{hubSelectedDetail.name || hubSelectedDetail.identifier}</h3>
+                                        <div className="settings-hub-detail__meta">
+                                          {hubSelectedDetail.author?.name || 'Unknown'} · {hubSelectedDetail.category || 'uncategorized'} · 安装 {formatCount(hubSelectedDetail.installCount)}
+                                        </div>
+                                      </div>
+                                      {hubSelectedDetail.homepage ? (
+                                        <a className="settings-btn settings-btn--secondary settings-btn--small" href={hubSelectedDetail.homepage} target="_blank" rel="noreferrer">主页</a>
+                                      ) : null}
+                                    </div>
+                                    <p className="settings-hub-detail__desc">{hubSelectedDetail.description || '暂无描述'}</p>
+
+                                    <div className="settings-hub-deployments">
+                                      {hubDeploymentOptions.length === 0 ? (
+                                        <div className="settings-table__empty">该 MCP 未提供可解析的部署方式，暂时无法一键安装。</div>
+                                      ) : (
+                                        hubDeploymentOptions.map((option, index) => {
+                                          const installKey = hubInstallKey(hubSelectedDetail?.identifier, option, index);
+                                          const installState = hubInstallStates[installKey] ?? { state: 'idle', message: '' };
+                                          let installLabel = '安装到配置';
+                                          if (installState.state === 'installing') installLabel = '安装中…';
+                                          if (installState.state === 'installed') installLabel = '已安装';
+                                          if (installState.state === 'failed') installLabel = '失败：重试？';
+
+                                          return (
+                                          <div key={`${option.installationMethod}-${index}`} className="settings-hub-deployment">
+                                            <div className="settings-hub-deployment__title-row">
+                                              <div className="settings-hub-deployment__title">
+                                                {option.installationMethod || 'manual'} · {option.connection?.type || 'unknown'}
+                                              </div>
+                                              {option.isRecommended ? <span className="settings-chip settings-chip--ok">推荐</span> : null}
+                                            </div>
+                                            <div className="settings-hub-deployment__desc">{option.description || '暂无说明'}</div>
+                                            <div className="settings-hub-deployment__command">
+                                              <code>{option.connection?.command || option.connection?.url || '未提供 command/url'}</code>
+                                            </div>
+                                            {Array.isArray(option.connection?.args) && option.connection.args.length > 0 ? (
+                                              <div className="settings-hub-deployment__args">{option.connection.args.join(' ')}</div>
+                                            ) : null}
+                                            {Array.isArray(option.systemDependencies) && option.systemDependencies.length > 0 ? (
+                                              <div className="settings-hub-deployment__deps">
+                                                依赖: {option.systemDependencies.map((dep) => dep.name).filter(Boolean).join(', ')}
+                                              </div>
+                                            ) : null}
+                                            {installState.state === 'failed' && installState.message ? (
+                                              <div className="settings-hub-deployment__error" title={installState.message}>
+                                                {installState.message}
+                                              </div>
+                                            ) : null}
+                                            <div className="settings-import__actions">
+                                              <button
+                                                type="button"
+                                                className={`settings-btn settings-btn--small ${installState.state === 'installed' ? 'settings-btn--secondary' : 'settings-btn--primary'}`}
+                                                onClick={() => void installHubOption(option, installKey)}
+                                                disabled={installState.state === 'installing' || installState.state === 'installed'}
+                                              >
+                                                {installLabel}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )})
+                                      )}
+                                    </div>
+                                  </>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="settings-import">
                   <textarea
                     className="settings-import__textarea"
@@ -593,130 +1009,122 @@ export default function SettingsModal({ open, onClose, onSaved }) {
                     spellCheck={false}
                   />
                   <div className="settings-import__actions">
-                    <button type="button" className="settings-btn settings-btn--secondary settings-btn--small" onClick={addMcpServerRow}>
-                      添加服务
-                    </button>
-                    <button type="button" className="settings-btn settings-btn--primary settings-btn--small" onClick={handleImportMcp}>
-                      粘贴解析
-                    </button>
+                    <button type="button" className="settings-btn settings-btn--secondary settings-btn--small" onClick={addMcpServerRow}>添加空白服务</button>
+                    <button type="button" className="settings-btn settings-btn--primary settings-btn--small" onClick={handleImportMcp}>粘贴解析</button>
                   </div>
                 </div>
               </div>
-              <table className="settings-table settings-table--wide settings-table--mcp">
-                <thead>
-                  <tr>
-                    <th className="settings-table__th-status">状态</th>
-                    <th>Label</th>
-                    <th>Transport</th>
-                    <th>URL</th>
-                    <th>Command</th>
-                    <th>Args</th>
-                    <th>Allowed Tools</th>
-                    <th>Headers</th>
-                    <th>Env</th>
-                    <th className="settings-table__th-actions" />
-                  </tr>
-                </thead>
-                <tbody>
+
+              <div className="settings-installed">
+                <div className="settings-installed__title">已安装到当前配置</div>
+                <div className="settings-mcp-list">
                   {mcpServers.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="settings-table__empty">
-                        暂无 MCP 服务，点击「添加服务」开始配置。
-                      </td>
-                    </tr>
+                    <div className="settings-table__empty">暂无 MCP 服务，先从 Hub 安装或手动添加。</div>
                   ) : (
-                    mcpServers.map((row, i) => (
-                      <tr key={i}>
-                        <td className="settings-table__status-cell">
-                          <span className={statusClassName(mcpStatuses[i]?.state)} title={mcpStatuses[i]?.message || '未校验'} />
-                        </td>
-                        <td>
-                          <input className="settings-table__input" value={row.label} onChange={(e) => updateMcpServer(i, 'label', e.target.value)} placeholder="chrome-devtools" spellCheck={false} autoComplete="off" />
-                          <div className="settings-mcp-meta">
-                            <div className="settings-mcp-meta__text">{mcpStatuses[i]?.message || '等待配置完成后自动校验'}</div>
-                            {Array.isArray(
-                              mcpStatuses[i]?.state === 'ok'
-                                ? mcpStatuses[i]?.tools
-                                : mcpStatuses[i]?.state === 'idle'
-                                  ? row.cachedTools
-                                  : []
-                            ) &&
-                            (mcpStatuses[i]?.state === 'ok' ? mcpStatuses[i]?.tools?.length : mcpStatuses[i]?.state === 'idle' ? row.cachedTools?.length : 0) ? (
-                              <div className="settings-mcp-tools">
-                                {(mcpStatuses[i]?.state === 'ok' ? mcpStatuses[i]?.tools : row.cachedTools).slice(0, 6).map((tool) => (
-                                  <span key={tool} className="settings-mcp-tool-chip">
-                                    {tool}
-                                  </span>
-                                ))}
-                                {(mcpStatuses[i]?.state === 'ok' ? mcpStatuses[i]?.toolCount : row.cachedTools?.length || 0) > 6 ? (
-                                  <span className="settings-mcp-tool-chip settings-mcp-tool-chip--muted">+更多</span>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td>
-                          <input className="settings-table__input" value={row.transportType} onChange={(e) => updateMcpServer(i, 'transportType', e.target.value)} placeholder="stdio | streamable_http" spellCheck={false} autoComplete="off" />
-                        </td>
-                        <td>
-                          <input className="settings-table__input" value={row.url} onChange={(e) => updateMcpServer(i, 'url', e.target.value)} placeholder="http://127.0.0.1:3001" spellCheck={false} autoComplete="off" />
-                        </td>
-                        <td>
-                          <input className="settings-table__input" value={row.command} onChange={(e) => updateMcpServer(i, 'command', e.target.value)} placeholder="/abs/path/to/bin 或 npx" spellCheck={false} autoComplete="off" />
-                        </td>
-                        <td>
-                          <textarea className="settings-table__textarea" value={row.argsText} onChange={(e) => updateMcpServer(i, 'argsText', e.target.value)} placeholder="每行一个参数" spellCheck={false} />
-                        </td>
-                        <td>
-                          <textarea className="settings-table__textarea" value={row.allowedTools} onChange={(e) => updateMcpServer(i, 'allowedTools', e.target.value)} placeholder="每行一个工具名" spellCheck={false} />
-                        </td>
-                        <td>
-                          <textarea className="settings-table__textarea" value={row.headersText} onChange={(e) => updateMcpServer(i, 'headersText', e.target.value)} placeholder="Authorization: Bearer xxx" spellCheck={false} />
-                        </td>
-                        <td>
-                          <textarea className="settings-table__textarea" value={row.envText} onChange={(e) => updateMcpServer(i, 'envText', e.target.value)} placeholder="KEY: value" spellCheck={false} />
-                        </td>
-                        <td className="settings-table__actions">
-                          <button
-                            type="button"
-                            className="settings-table__validate"
-                            onClick={() => validateMcpRow(i, row)}
-                            aria-label="校验此服务"
-                          >
-                            校验
-                          </button>
-                          <button
-                            type="button"
-                            className="settings-table__remove"
-                            onClick={() => removeMcpServerRow(i)}
-                            aria-label="删除此服务"
-                          >
-                            删除
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    mcpServers.map((row, i) => {
+                      const status = mcpStatuses[i] ?? emptyMcpStatus();
+                      const tools = mcpToolsForDisplay(status, row);
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          className={`settings-mcp-pill${selectedMcpIndex === i ? ' settings-mcp-pill--active' : ''}`}
+                          onClick={() => setSelectedMcpIndex(i)}
+                          title={status.message || '点击查看和配置'}
+                        >
+                          <span className={statusClassName(status.state)} />
+                          <span className="settings-mcp-pill__label">{row.label || `未命名服务 ${i + 1}`}</span>
+                          <span className="settings-mcp-pill__meta">
+                            {row.transportType || '未设置 transport'}
+                            {tools.length ? ` · ${tools.length} tools` : ''}
+                          </span>
+                        </button>
+                      );
+                    })
                   )}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         <div className="settings-sheet__actions">
-          <button type="button" className="settings-btn settings-btn--secondary" onClick={onClose}>
-            取消
-          </button>
-          <button
-            type="button"
-            className="settings-btn settings-btn--primary"
-            onClick={handleSave}
-            disabled={saving}
-          >
+          <button type="button" className="settings-btn settings-btn--secondary" onClick={onClose}>取消</button>
+          <button type="button" className="settings-btn settings-btn--primary" onClick={handleSave} disabled={saving}>
             {saving ? '保存中…' : '保存并校验'}
           </button>
         </div>
       </div>
+
+      {activeTab === 'mcp' && selectedMcpRow ? (
+        <div className="settings-modal-layer" role="presentation" onMouseDown={(e) => { e.stopPropagation(); setSelectedMcpIndex(null); }}>
+          <div className="settings-mcp-editor" role="dialog" aria-label="MCP 服务配置" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="settings-mcp-editor__header">
+              <div className="settings-mcp-editor__title-wrap">
+                <span className={statusClassName(selectedMcpStatus?.state)} title={selectedMcpStatus?.message || '未校验'} />
+                <div>
+                  <h3 className="settings-mcp-editor__title">{selectedMcpRow.label || `未命名服务 ${selectedMcpIndex + 1}`}</h3>
+                  <div className="settings-mcp-editor__subtitle">{selectedMcpStatus?.message || '等待配置完成后自动校验'}</div>
+                </div>
+              </div>
+              <button type="button" className="settings-sheet__close" onClick={() => setSelectedMcpIndex(null)} aria-label="关闭 MCP 配置弹窗">关闭</button>
+            </div>
+
+            <div className="settings-mcp-editor__body">
+              <div className="settings-mcp-editor__grid">
+                <label className="settings-mcp-field">
+                  <span className="settings-mcp-field__label">Label</span>
+                  <input className="settings-table__input" value={selectedMcpRow.label} onChange={(e) => updateMcpServer(selectedMcpIndex, 'label', e.target.value)} placeholder="chrome-devtools" spellCheck={false} autoComplete="off" />
+                </label>
+                <label className="settings-mcp-field">
+                  <span className="settings-mcp-field__label">Transport</span>
+                  <input className="settings-table__input" value={selectedMcpRow.transportType} onChange={(e) => updateMcpServer(selectedMcpIndex, 'transportType', e.target.value)} placeholder="stdio | sse | streamable_http" spellCheck={false} autoComplete="off" />
+                </label>
+                <label className="settings-mcp-field settings-mcp-field--full">
+                  <span className="settings-mcp-field__label">URL</span>
+                  <input className="settings-table__input" value={selectedMcpRow.url} onChange={(e) => updateMcpServer(selectedMcpIndex, 'url', e.target.value)} placeholder="http://127.0.0.1:3001" spellCheck={false} autoComplete="off" />
+                </label>
+                <label className="settings-mcp-field settings-mcp-field--full">
+                  <span className="settings-mcp-field__label">Command</span>
+                  <input className="settings-table__input" value={selectedMcpRow.command} onChange={(e) => updateMcpServer(selectedMcpIndex, 'command', e.target.value)} placeholder="/abs/path/to/bin 或 npx" spellCheck={false} autoComplete="off" />
+                </label>
+                <label className="settings-mcp-field">
+                  <span className="settings-mcp-field__label">Args</span>
+                  <textarea className="settings-table__textarea" value={selectedMcpRow.argsText} onChange={(e) => updateMcpServer(selectedMcpIndex, 'argsText', e.target.value)} placeholder="每行一个参数" spellCheck={false} />
+                </label>
+                <label className="settings-mcp-field">
+                  <span className="settings-mcp-field__label">Allowed Tools</span>
+                  <textarea className="settings-table__textarea" value={selectedMcpRow.allowedTools} onChange={(e) => updateMcpServer(selectedMcpIndex, 'allowedTools', e.target.value)} placeholder="每行一个工具名" spellCheck={false} />
+                </label>
+                <label className="settings-mcp-field">
+                  <span className="settings-mcp-field__label">Headers</span>
+                  <textarea className="settings-table__textarea" value={selectedMcpRow.headersText} onChange={(e) => updateMcpServer(selectedMcpIndex, 'headersText', e.target.value)} placeholder="Authorization: Bearer xxx" spellCheck={false} />
+                </label>
+                <label className="settings-mcp-field">
+                  <span className="settings-mcp-field__label">Env</span>
+                  <textarea className="settings-table__textarea" value={selectedMcpRow.envText} onChange={(e) => updateMcpServer(selectedMcpIndex, 'envText', e.target.value)} placeholder="KEY: value" spellCheck={false} />
+                </label>
+              </div>
+
+              {selectedMcpTools.length ? (
+                <div className="settings-mcp-meta">
+                  <div className="settings-mcp-meta__text">已发现 {selectedMcpStatus?.toolCount || selectedMcpTools.length} 个工具</div>
+                  <div className="settings-mcp-tools">
+                    {selectedMcpTools.map((tool) => (
+                      <span key={tool} className="settings-mcp-tool-chip">{tool}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="settings-mcp-editor__actions">
+              <button type="button" className="settings-table__validate" onClick={() => validateMcpRow(selectedMcpIndex, selectedMcpRow)} aria-label="校验此服务">测试</button>
+              <button type="button" className="settings-table__remove" onClick={() => removeMcpServerRow(selectedMcpIndex)} aria-label="删除此服务">删除</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

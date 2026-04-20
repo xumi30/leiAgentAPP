@@ -187,8 +187,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 
 		functl, flag := tools.Getregistry().Get(toolname)
 
-		argsPreview := truncateForLog(tool.Function.Arguments, 800)
-		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, argsPreview)
+		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, tool.Function.Arguments)
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 		logging.Info("%s", outStr)
 
@@ -205,7 +204,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			outStr = fmt.Sprintf("工具%s不存在", toolname)
 			memory.AddToolMessage(chatId, tool.ID, outStr)
 			logging.Error("%s", outStr)
-			continue
+			break
 		}
 		elapsed := time.Since(start)
 		if err != nil {
@@ -214,11 +213,11 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			memory.AddToolMessage(chatId, tool.ID, outStr)
 			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 
-			continue
+			break
 		}
 
-		resultPreview := truncateForLog(str, 1200)
-		outStr = fmt.Sprintf("工具%s执行成功 (elapsed=%s): %s", toolname, elapsed, resultPreview)
+		// resultPreview := truncateForLog(str, 1200)
+		outStr = fmt.Sprintf("工具%s执行成功 (elapsed=%s): %s", toolname, elapsed, str)
 		logging.Info("%s", outStr)
 		memory.AddToolMessage(chatId, tool.ID, outStr)
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
@@ -228,7 +227,27 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		logging.Info("工具执行完成,继续请求模型生成最终回复")
 		a.taskLoopTimes--
 
-		a.HandleChat(ctx, "工具已经执行完成,请继续。如果需要调用工具，请继续调用。如果不需要调用工具了，请直接给出最终回复。")
+		backInfo, err := a.HandleChat(ctx, fmt.Sprintf("工具已经执行完成,请继续。如果需要调用工具，请继续调用,如果目前工具缺少请返回{needToolToics:[topic1,topic2,topic3],message:string,},可选的topic有 %s。needToolToics 里的值必须是精确的 topic 名称本身，而不是带描述的整句。如果不需要调用工具了，请直接给出最终回复。", utils.ToolTopicsPromptText()))
+		if err != nil {
+			logging.Error("继续请求模型生成最终回复失败: %v", err)
+			return
+		}
+
+		// 如果 backInfo 包含 needToolToics 字段，则按请求加载额外工具 topic 后继续对话。
+		if needToolTopics, ok := utils.GetNeedToolToics(backInfo); ok {
+			for _, topic := range needToolTopics {
+				logging.Info("模型请求补充工具话题: %s", topic)
+				nextCtx := context.WithValue(ctx, utils.ToolTopicToLoad, topic)
+
+				if _, err := a.HandleChat(nextCtx, fmt.Sprintf("已按你的要求加载%s相关工具，请继续。如果仍需调用工具，请直接调用；如果不需要调用工具了，请直接给出最终回复。", topic)); err != nil {
+					logging.Error("加载工具话题 %s 后继续请求失败: %v", topic, err)
+					continue
+				}
+				return
+			}
+
+			logging.Warn("模型请求了额外工具话题，但未解析出可用 topic: %s", backInfo)
+		}
 	}
 	logging.Info("工具执行完成,或者达到最大循环次数,结束工具执行")
 
