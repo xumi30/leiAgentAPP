@@ -16,3 +16,12 @@ wails build  # 发布构建
 ```
 
 具体依赖与输出以本仓库 `go.mod`、`wails.json` 为准。
+
+## 发布前检查
+
+```bash
+npm run release:check
+wails build
+```
+
+发布清单见 [docs/release-readiness.md](docs/release-readiness.md)。正式分发前请确认没有提交真实 API Key，并完成 macOS/Windows 签名与隐私说明。

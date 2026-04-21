@@ -30,6 +30,13 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	logging.Info("开始处理流式响应: %v", resp)
 	var fullContent strings.Builder
 	var fullReasoningContent strings.Builder
+	stripNeedActionHeader := false
+	if v, ok := ctx.Value(utils.NeedActionHeaderString).(bool); ok && v {
+		stripNeedActionHeader = true
+	}
+	var needAction bool
+	var needActionHeaderParsed bool
+	var needActionHeaderBuffer strings.Builder
 
 	scanner := NewStreamScanner(resp.Body)
 	tls := []openaistyle.ChatCompletionToolCall{}
@@ -100,9 +107,26 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		// 处理普通内容
 		content, ok := delta.Content.(string)
 		if ok && content != "" {
-			fullContent.WriteString(content)
-			//logging.Info("为chatid %s 返回的内容:%s", ctx.Value(utils.ChatIDString).(string), content)
-			globalchannel.SendAssitantMessageStream(ctx, content, d_mesageid, false)
+			outgoingContent := content
+			if stripNeedActionHeader && !needActionHeaderParsed {
+				needActionHeaderBuffer.WriteString(content)
+				parsed, parsedNeedAction, rest, flushRaw := consumeNeedActionHeader(needActionHeaderBuffer.String())
+				if !parsed && !flushRaw {
+					continue
+				}
+				needActionHeaderParsed = true
+				needAction = parsedNeedAction
+				if flushRaw {
+					outgoingContent = needActionHeaderBuffer.String()
+				} else {
+					outgoingContent = rest
+				}
+			}
+			if outgoingContent != "" {
+				fullContent.WriteString(outgoingContent)
+				//logging.Info("为chatid %s 返回的内容:%s", ctx.Value(utils.ChatIDString).(string), outgoingContent)
+				globalchannel.SendAssitantMessageStream(ctx, outgoingContent, d_mesageid, false)
+			}
 
 		}
 
@@ -116,6 +140,12 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("扫描流式响应失败: %w", err)
+	}
+
+	if stripNeedActionHeader && !needActionHeaderParsed && needActionHeaderBuffer.Len() > 0 {
+		bufferedContent := needActionHeaderBuffer.String()
+		fullContent.WriteString(bufferedContent)
+		globalchannel.SendAssitantMessageStream(ctx, bufferedContent, d_mesageid, false)
 	}
 
 	result := fullContent.String()
@@ -154,7 +184,31 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		ToolList:         tls,
 		Content:          result,
 		ReasoningContent: reasoningResult,
+		NeedAction:       needAction,
 	}, nil
+}
+
+func consumeNeedActionHeader(buffer string) (parsed bool, needAction bool, rest string, flushRaw bool) {
+	const trueHeader = "[needAction:true]"
+	const falseHeader = "[needAction:false]"
+
+	trimmed := strings.TrimLeft(buffer, " \t\r\n")
+	if strings.HasPrefix(trimmed, trueHeader) {
+		return true, true, trimmed[len(trueHeader):], false
+	}
+	if strings.HasPrefix(trimmed, falseHeader) {
+		return true, false, trimmed[len(falseHeader):], false
+	}
+	if strings.HasPrefix(trueHeader, trimmed) || strings.HasPrefix(falseHeader, trimmed) {
+		return false, false, "", false
+	}
+	if len([]rune(trimmed)) < len([]rune(falseHeader)) && strings.HasPrefix("[needAction:", trimmed) {
+		return false, false, "", false
+	}
+	if len([]rune(trimmed)) < 64 {
+		return false, false, "", false
+	}
+	return false, false, "", true
 }
 
 func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response, info *ModelAPIInfo) (*ToolAndContent, error) {
@@ -190,7 +244,6 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 		logging.Warn("模型因 max_tokens 上限结束（finish_reason=length），输出可能被截断；可调大 max_output_tokens 或 LEIAGENT_LLM_MAX_OUTPUT_TOKENS")
 	}
 	logging.Info("响应内容: %s", openaiResp.Choices[0].Message.Content)
-	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("响应内容: %s", openaiResp.Choices[0].Message.Content))
 	tools := openaiResp.Choices[0].Message.ToolCalls
 
 	var content string
@@ -200,6 +253,14 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	default:
 		if openaiResp.Choices[0].Message.Content != nil {
 			content = fmt.Sprint(openaiResp.Choices[0].Message.Content)
+		}
+	}
+	needAction := false
+	if v, ok := ctx.Value(utils.NeedActionHeaderString).(bool); ok && v {
+		parsed, parsedNeedAction, rest, flushRaw := consumeNeedActionHeader(content)
+		if parsed && !flushRaw {
+			needAction = parsedNeedAction
+			content = rest
 		}
 	}
 	if !skipDialog {
@@ -213,8 +274,9 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	}
 
 	return &ToolAndContent{
-		ToolList: tools,
-		Content:  content + "\n",
+		ToolList:   tools,
+		Content:    content + "\n",
+		NeedAction: needAction,
 	}, nil
 }
 
@@ -302,4 +364,5 @@ type ToolAndContent struct {
 	ToolList         []openaistyle.ChatCompletionToolCall
 	Content          string
 	ReasoningContent string
+	NeedAction       bool
 }

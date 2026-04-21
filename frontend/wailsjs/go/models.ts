@@ -19,6 +19,79 @@ export namespace mcpbridge {
 
 }
 
+export namespace openclawskill {
+	
+	export class Requires {
+	    bins: string[];
+	    env: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Requires(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bins = source["bins"];
+	        this.env = source["env"];
+	    }
+	}
+	export class SkillInfo {
+	    name: string;
+	    description: string;
+	    path: string;
+	    requires: Requires;
+	    pythonDeps: string[];
+	    primaryEnv: string;
+	    supported: boolean;
+	    ready: boolean;
+	    missingBins: string[];
+	    missingPython: string[];
+	    missingEnv: string[];
+	    status: string;
+	    statusDetail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.path = source["path"];
+	        this.requires = this.convertValues(source["requires"], Requires);
+	        this.pythonDeps = source["pythonDeps"];
+	        this.primaryEnv = source["primaryEnv"];
+	        this.supported = source["supported"];
+	        this.ready = source["ready"];
+	        this.missingBins = source["missingBins"];
+	        this.missingPython = source["missingPython"];
+	        this.missingEnv = source["missingEnv"];
+	        this.status = source["status"];
+	        this.statusDetail = source["statusDetail"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace proxy {
 	
 	export class LLMConfigRow {
@@ -512,6 +585,40 @@ export namespace proxy {
 	        this.lastCheckState = source["lastCheckState"];
 	        this.missingEnvKeys = source["missingEnvKeys"];
 	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class OpenClawSkillState {
+	    workspaceRoot: string;
+	    skillsRoot: string;
+	    skills: openclawskill.SkillInfo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenClawSkillState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspaceRoot = source["workspaceRoot"];
+	        this.skillsRoot = source["skillsRoot"];
+	        this.skills = this.convertValues(source["skills"], openclawskill.SkillInfo);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

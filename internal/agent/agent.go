@@ -22,7 +22,7 @@ type Agent struct {
 	ctx           context.Context
 }
 
-const defaultTaskLoopLimit = 4
+const defaultTaskLoopLimit = 8
 
 type options func(*Agent)
 

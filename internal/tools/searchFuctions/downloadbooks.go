@@ -159,7 +159,7 @@ func (t *DownloadBooksTool) Parameters() map[string]interface{} {
 			},
 			"output_dir": map[string]interface{}{
 				"type":        "string",
-				"description": "Optional output directory. Absolute paths are used directly; relative paths are created under the app workspace root.",
+				"description": "Optional base output directory for getgitfile.py result.json and downloaded files. Absolute paths are used directly; relative paths are created under the app workspace root. Each book gets a safe per-query subdirectory.",
 			},
 			"download_dir": map[string]interface{}{
 				"type":        "string",
@@ -236,8 +236,6 @@ func (t *DownloadBooksTool) Execute(ctx context.Context, args string) (string, e
 		return "", err
 	}
 
-	scriptDir := filepath.Dir(scriptAbs)
-
 	fileTypeHints := make([]string, 0, len(in.FileTypes))
 	for _, ft := range in.FileTypes {
 		ft = strings.TrimSpace(ft)
@@ -255,6 +253,7 @@ func (t *DownloadBooksTool) Execute(ctx context.Context, args string) (string, e
 		ResultPath   string `json:"result_path,omitempty"`
 		Downloaded   int    `json:"downloaded,omitempty"`
 		Copied       int    `json:"copied,omitempty"`
+		OutputDir    string `json:"output_dir,omitempty"`
 		DownloadDir  string `json:"download_dir,omitempty"`
 	}
 
@@ -274,11 +273,18 @@ func (t *DownloadBooksTool) Execute(ctx context.Context, args string) (string, e
 			query = strings.Join(append([]string{book}, fileTypeHints...), " ")
 		}
 
-		cmd := exec.CommandContext(ctx, py, scriptAbs, "--mode", downloadBooksScriptMode, query)
+		outDirName := downloadBooksSafeDirName(query)
+		scriptOutDir := filepath.Join(outRoot, outDirName)
+		if err := os.MkdirAll(scriptOutDir, 0755); err != nil {
+			runs = append(runs, bookRun{Book: book, ExitCode: -1, Error: fmt.Sprintf("create script output dir: %v", err)})
+			continue
+		}
+
+		cmd := exec.CommandContext(ctx, py, scriptAbs, "--mode", downloadBooksScriptMode, "--outputdir", scriptOutDir, query)
 		cmd.Dir = outRoot
 
 		out, runErr := cmd.CombinedOutput()
-		br := bookRun{Book: book, ScriptOutput: strings.TrimSpace(string(out))}
+		br := bookRun{Book: book, ScriptOutput: strings.TrimSpace(string(out)), OutputDir: scriptOutDir}
 		if query != book {
 			br.SearchQuery = query
 		}
@@ -292,8 +298,7 @@ func (t *DownloadBooksTool) Execute(ctx context.Context, args string) (string, e
 			br.Error = runErr.Error()
 		}
 
-		outDirName := downloadBooksSafeDirName(query)
-		manifestPath := filepath.Join(scriptDir, outDirName, "result.json")
+		manifestPath := filepath.Join(scriptOutDir, "result.json")
 		var downloadedFiles []string
 		if st, statErr := os.Stat(manifestPath); statErr == nil && !st.IsDir() {
 			br.ResultPath = manifestPath
@@ -330,7 +335,7 @@ func (t *DownloadBooksTool) Execute(ctx context.Context, args string) (string, e
 				if err := os.MkdirAll(destDir, 0755); err == nil {
 					br.DownloadDir = destDir
 					for _, name := range downloadedFiles {
-						src := filepath.Join(scriptDir, outDirName, name)
+						src := filepath.Join(scriptOutDir, name)
 						if _, err := os.Stat(src); err != nil {
 							continue
 						}

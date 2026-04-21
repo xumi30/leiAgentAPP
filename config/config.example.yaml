@@ -16,7 +16,8 @@
 # 可选：stream_mode 为 nonstream | stream | both（默认 both；Gemini 未指定时默认 nonstream）。
 
 llm:
-  api_key: "sk-da6d7a7da1914f6581d4825d7b790389"
+  # Do not commit real API keys. You can also leave this empty and set LEIAGENT_LLM_API_KEY.
+  api_key: "your-api-key"
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
   model: "qwen3.5-plus-2026-02-15"
   provider: ""
@@ -26,11 +27,11 @@ llm:
 # 与上方 llm 二选一示例：
 # llm_backends:
 #   - name: primary
-#     api_key: "sk-1"
+#     api_key: "your-primary-api-key"
 #     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 #     model: "qwen-turbo"
 #   - name: backup
-#     api_key: "sk-2"
+#     api_key: "your-backup-api-key"
 #     base_url: "https://api.deepseek.com/v1/chat/completions"
 #     model: "deepseek-chat"
 
@@ -51,3 +52,10 @@ llm:
 #     allowed_tools: ["search_docs", "lookup_user"]
 #     headers:
 #       Authorization: "Bearer your-token"
+
+# 可选：OpenClaw/ClawHub skill 运行环境变量。
+# 桌面应用从图标启动时通常不会继承 shell 里的 export，所以第三方 skill 的 API Key
+# 推荐写在这里，leiAgent 会在校验和执行 skill 脚本时注入。
+# openclaw:
+#   env:
+#     BAIDU_API_KEY: "your-baidu-ai-search-api-key"

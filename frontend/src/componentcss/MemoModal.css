@@ -1,9 +1,9 @@
-/* 备忘录：窄版双栏 + 与全站 --apple-* 配色一致，列表无层级缩进 */
+/* 备忘录：双栏笔记窗口，与全站 --apple-* 配色一致 */
 
 /* 备忘录窗口：宽度 + 高度按宽高比联动（可调 --memo-aspect） */
 .memo-overlay {
-  --memo-pad: 20px;
-  --memo-max-width: 1080px;
+  --memo-pad: 24px;
+  --memo-max-width: 1120px;
   /* 高度 = 宽度 × 比例，且不超过视口；约 1:0.68 接近 Notes 横屏比例 */
   --memo-aspect: 0.68;
   --memo-w: min(var(--memo-max-width), calc(100vw - var(--memo-pad)));
@@ -16,7 +16,7 @@
   justify-content: center;
   padding: calc(var(--memo-pad) / 2);
   box-sizing: border-box;
-  background: rgba(20, 24, 32, 0.38);
+  background: rgba(20, 24, 32, 0.36);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   animation: memo-fade-in 0.22s ease-out;
@@ -47,14 +47,14 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  border-radius: var(--border-radius-sm);
+  border-radius: 18px;
   overflow: hidden;
-  background: var(--apple-surface);
+  background: rgba(246, 247, 250, 0.94);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--apple-separator);
   box-shadow:
-    0 24px 80px rgba(15, 23, 42, 0.14),
+    0 28px 90px rgba(15, 23, 42, 0.18),
     0 0 0 0.5px rgba(255, 255, 255, 0.65) inset;
   animation: memo-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -86,12 +86,14 @@
 .memo-notes-titlebar {
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
   align-items: center;
-  min-height: 44px;
-  padding: 0 10px;
-  background: var(--apple-surface-solid);
+  min-height: 52px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.82);
   border-bottom: 1px solid var(--apple-separator);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
 }
 
 .memo-notes-traffic {
@@ -118,53 +120,60 @@
   background: #28c840;
 }
 
+.memo-notes-titlebar__heading {
+  min-width: 0;
+  text-align: center;
+}
+
 .memo-notes-titlebar__title {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+  color: var(--apple-label);
+}
+
+.memo-notes-titlebar__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.2;
   color: var(--apple-secondary);
-  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .memo-notes-titlebar__actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
   justify-self: end;
 }
 
-.memo-notes-titlebar__max {
+.memo-notes-iconbtn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--apple-secondary);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   cursor: pointer;
-  padding: 6px 8px;
-  border-radius: 8px;
+  border-radius: 7px;
   font-family: inherit;
+  line-height: 1;
 }
 
-.memo-notes-titlebar__max:hover {
+.memo-notes-iconbtn:hover:not(:disabled) {
   background: var(--apple-fill);
   color: var(--apple-label);
 }
 
-.memo-notes-titlebar__done {
-  border: none;
-  background: transparent;
-  color: var(--apple-blue);
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 6px 6px;
-  border-radius: 8px;
-  font-family: inherit;
-}
-
-.memo-notes-titlebar__done:hover {
-  background: var(--apple-tint);
+.memo-notes-iconbtn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .memo-notes-resize {
@@ -225,7 +234,7 @@
 }
 
 .memo-notes-path summary:hover {
-  color: var(--apple-blue);
+  color: var(--apple-label);
 }
 
 .memo-notes-path code {
@@ -243,28 +252,40 @@
   flex: 1;
   min-height: 0;
   display: flex;
-  border-top: 1px solid var(--apple-separator);
 }
 
 /* 侧栏：与主背景同系，略实一点 */
 .memo-notes-sidebar {
-  width: min(300px, 32%);
+  width: min(320px, 33%);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--apple-bg);
+  background: rgba(245, 245, 247, 0.9);
   border-right: 1px solid var(--apple-separator);
 }
 
-.memo-notes-sidebar__caption {
+.memo-notes-sidebar__header {
   flex-shrink: 0;
-  padding: 8px 12px 4px;
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 12px 8px;
+}
+
+.memo-notes-sidebar__caption {
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
+  color: var(--apple-label);
+}
+
+.memo-notes-sidebar__count {
+  margin-top: 2px;
+  font-size: 11px;
   color: var(--apple-secondary);
-  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
 }
 
 .memo-notes-search {
@@ -272,10 +293,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 8px 6px;
-  padding: 5px 9px;
-  border-radius: 8px;
-  background: var(--apple-surface-solid);
+  margin: 0 12px 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--apple-separator);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
@@ -288,6 +309,17 @@
   flex-shrink: 0;
   opacity: 0.7;
   box-sizing: border-box;
+}
+
+.memo-notes-search__icon::after {
+  content: '';
+  position: relative;
+  display: block;
+  width: 5px;
+  height: 2px;
+  background: var(--apple-tertiary);
+  transform: translate(7px, 7px) rotate(45deg);
+  border-radius: 999px;
 }
 
 .memo-notes-search__input {
@@ -307,36 +339,44 @@
 
 .memo-notes-compose {
   flex-shrink: 0;
-  margin: 0 8px 8px;
-  padding: 7px 10px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--apple-blue);
-  background: var(--apple-tint);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--apple-label);
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--apple-separator);
   cursor: pointer;
   font-family: inherit;
-  text-align: left;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
 .memo-notes-compose:hover {
-  background: rgba(0, 122, 255, 0.16);
+  background: var(--apple-bg);
 }
 
 .memo-notes-list {
   list-style: none;
   margin: 0;
-  padding: 0 6px 8px;
+  padding: 0 8px 10px;
   overflow-y: auto;
   flex: 1;
 }
 
 .memo-notes-list__empty {
-  padding: 14px 10px;
+  margin: 6px 4px;
+  padding: 18px 12px;
   font-size: 12px;
   line-height: 1.45;
   color: var(--apple-secondary);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .memo-notes-list__empty code {
@@ -351,24 +391,29 @@
   width: 100%;
   display: block;
   text-align: left;
-  padding: 8px 10px;
-  margin-bottom: 2px;
+  padding: 10px 11px;
+  margin-bottom: 5px;
   border: none;
   border-radius: var(--border-radius-sm);
   cursor: pointer;
   background: transparent;
   color: inherit;
   font-family: inherit;
-  transition: background var(--transition-smooth);
+  transition:
+    background var(--transition-smooth),
+    box-shadow var(--transition-smooth),
+    transform var(--transition-smooth);
 }
 
 .memo-notes-row:hover {
-  background: var(--apple-fill);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .memo-notes-row.is-selected {
-  background: var(--apple-surface-solid);
-  box-shadow: 0 0 0 1px var(--apple-separator);
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(60, 60, 67, 0.16),
+    0 8px 22px rgba(15, 23, 42, 0.08);
 }
 
 .memo-notes-row__top {
@@ -382,7 +427,7 @@
 .memo-notes-row__title {
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--apple-label);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -415,7 +460,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--apple-surface-solid);
+  background: #fff;
 }
 
 .memo-notes-detail-toolbar {
@@ -423,18 +468,49 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 9px 14px;
   border-bottom: 1px solid var(--apple-separator);
-  background: var(--apple-surface-solid);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.memo-notes-detail-toolbar__title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 6px;
+}
+
+.memo-notes-detail-toolbar__title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--apple-label);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.memo-notes-detail-toolbar__title small {
+  color: var(--apple-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-notes-mode-toggle {
+  display: flex;
+  align-items: center;
 }
 
 .memo-notes-toolbtn {
+  min-width: 52px;
+  height: 32px;
   border: 1px solid var(--apple-separator);
-  padding: 4px 10px;
+  padding: 0 12px;
   font-size: 12px;
   font-weight: 500;
-  border-radius: 6px;
-  background: var(--apple-surface-solid);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.86);
   color: var(--apple-label);
   cursor: pointer;
   font-family: inherit;
@@ -445,14 +521,18 @@
   background: var(--apple-bg);
 }
 
+.memo-notes-toolbtn--back {
+  display: none;
+}
+
 .memo-notes-toolbtn--strong {
-  background: var(--apple-blue);
-  color: #fff;
-  border-color: transparent;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--apple-label);
+  border-color: var(--apple-separator);
 }
 
 .memo-notes-toolbtn--strong:hover {
-  background: var(--apple-blue-hover);
+  background: var(--apple-bg);
 }
 
 .memo-notes-toolbtn--danger {
@@ -466,14 +546,14 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 14px 16px 20px;
+  padding: 26px min(8vw, 58px) 44px;
 }
 
 .memo-notes-detail-h1 {
-  margin: 0 0 4px;
-  font-size: 22px;
+  margin: 0 0 6px;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   line-height: 1.2;
   color: var(--apple-label);
 }
@@ -481,13 +561,14 @@
 .memo-notes-detail-meta {
   font-size: 12px;
   color: var(--apple-secondary);
-  margin-bottom: 14px;
+  margin-bottom: 20px;
   font-variant-numeric: tabular-nums;
 }
 
 .memo-notes-detail-prose {
-  font-size: 14px;
-  line-height: 1.55;
+  max-width: 760px;
+  font-size: 15px;
+  line-height: 1.68;
   color: var(--apple-label);
 }
 
@@ -496,7 +577,7 @@
 .memo-notes-detail-prose h3 {
   margin: 0.9em 0 0.35em;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   font-size: 1.04em;
 }
 
@@ -523,6 +604,48 @@
   background: var(--apple-fill);
 }
 
+.memo-simple-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 12px 0 16px;
+  border: 1px solid var(--apple-separator);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.memo-simple-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--apple-label);
+}
+
+.memo-simple-table th,
+.memo-simple-table td {
+  padding: 9px 11px;
+  border-right: 1px solid var(--apple-separator);
+  border-bottom: 1px solid var(--apple-separator);
+  text-align: left;
+  vertical-align: top;
+  white-space: normal;
+}
+
+.memo-simple-table th {
+  background: rgba(120, 120, 128, 0.08);
+  font-weight: 600;
+}
+
+.memo-simple-table tr:last-child td {
+  border-bottom: none;
+}
+
+.memo-simple-table th:last-child,
+.memo-simple-table td:last-child {
+  border-right: none;
+}
+
 .memo-notes-detail-emptybody {
   margin: 0;
   color: var(--apple-tertiary);
@@ -533,14 +656,14 @@
   flex: 1;
   min-height: 0;
   margin: 0;
-  padding: 12px 14px 18px;
+  padding: 24px min(8vw, 58px) 44px;
   border: none;
   resize: none;
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.62;
   color: var(--apple-label);
-  background: var(--apple-bg);
+  background: #fff;
   outline: none;
 }
 
@@ -568,6 +691,24 @@
   line-height: 1.45;
 }
 
+.memo-notes-detail-placeholder__btn {
+  margin-top: 16px;
+  border: 1px solid var(--apple-separator);
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: var(--apple-label);
+  background: rgba(255, 255, 255, 0.86);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.memo-notes-detail-placeholder__btn:hover {
+  background: var(--apple-bg);
+}
+
 .memo-notes-footer {
   flex-shrink: 0;
   display: flex;
@@ -575,9 +716,10 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 12px 10px;
+  min-height: 36px;
+  padding: 6px 12px;
   border-top: 1px solid var(--apple-separator);
-  background: var(--apple-bg);
+  background: rgba(245, 245, 247, 0.92);
 }
 
 .memo-notes-footer__hint {
@@ -592,44 +734,12 @@
   background: var(--apple-fill);
 }
 
-.memo-notes-footer__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.memo-notes-footer__status {
+  font-size: 11px;
+  color: var(--apple-tertiary);
 }
 
-.memo-notes-footer-btn {
-  border: 1px solid var(--apple-separator);
-  padding: 5px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 8px;
-  background: var(--apple-surface-solid);
-  color: var(--apple-label);
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.memo-notes-footer-btn:hover:not(:disabled) {
-  background: var(--apple-bg);
-}
-
-.memo-notes-footer-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.memo-notes-footer-btn--primary {
-  background: var(--apple-blue);
-  color: #fff;
-  border-color: transparent;
-}
-
-.memo-notes-footer-btn--primary:hover:not(:disabled) {
-  background: var(--apple-blue-hover);
-}
-
-@media (max-width: 560px) {
+@media (max-width: 700px) {
   .memo-overlay {
     --memo-max-width: 100vw;
     --memo-aspect: 1.05;
@@ -644,14 +754,53 @@
     min-height: 0;
   }
 
+  .memo-notes-titlebar {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    padding: 0 8px;
+  }
+
+  .memo-notes-traffic__dot {
+    width: 8px;
+    height: 8px;
+  }
+
   .memo-notes-split {
     flex-direction: column;
   }
 
   .memo-notes-sidebar {
     width: 100%;
-    max-height: 38vh;
+    flex: 1;
+    max-height: none;
     border-right: none;
     border-bottom: 1px solid var(--apple-separator);
   }
+
+  .memo-notes-split--detail .memo-notes-sidebar {
+    display: none;
+  }
+
+  .memo-notes-split--list .memo-notes-detail {
+    display: none;
+  }
+
+  .memo-notes-toolbtn--back {
+    display: inline-flex;
+  }
+
+  .memo-notes-detail-scroll,
+  .memo-notes-detail-editor {
+    padding: 20px 18px 34px;
+  }
+
+  .memo-notes-detail-h1 {
+    font-size: 24px;
+  }
+
+  .memo-notes-titlebar__meta,
+  .memo-notes-footer__status,
+  .memo-notes-iconbtn {
+    display: none;
+  }
+
 }

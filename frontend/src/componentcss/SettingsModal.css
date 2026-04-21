@@ -319,6 +319,47 @@
   white-space: nowrap;
 }
 
+.settings-table__actions--icons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.settings-icon-btn {
+  align-items: center;
+  background: rgba(0, 122, 255, 0.08);
+  border: none;
+  border-radius: 7px;
+  color: #007aff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 28px;
+}
+
+.settings-icon-btn:hover:not(:disabled) {
+  background: rgba(0, 122, 255, 0.16);
+}
+
+.settings-icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.settings-icon-btn--danger {
+  background: rgba(198, 40, 40, 0.08);
+  color: #c62828;
+}
+
+.settings-icon-btn--danger:hover:not(:disabled) {
+  background: rgba(198, 40, 40, 0.14);
+}
+
 .settings-table__validate {
   border: none;
   background: rgba(0, 122, 255, 0.1);
@@ -346,6 +387,21 @@
 
 .settings-table__remove:hover {
   background: rgba(198, 40, 40, 0.08);
+}
+
+.settings-table__title {
+  color: #1d1d1f;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.settings-table__sub {
+  color: #6e6e73;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
 }
 
 .settings-status-dot {

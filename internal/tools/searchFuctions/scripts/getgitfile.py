@@ -6,6 +6,7 @@ Usage:
   export GITHUB_TOKEN=ghp_...
   python tools/getgitfile/getgitfile.py "openai api key"
   python tools/getgitfile/getgitfile.py --mode engine "失控 凯文凯利"
+  python tools/getgitfile/getgitfile.py --mode engine --outputdir /tmp/books "西游记"
 
 The script can:
   * use GitHub code search API for small indexed files,
@@ -19,6 +20,7 @@ matching filenames such as:
 
 `api` mode requires GITHUB_TOKEN (classic PAT or fine-grained with Contents read + Search).
 `engine` mode supports one of:
+  * Baidu web search (no API key)
   * SERPAPI_KEY
   * BRAVE_SEARCH_API_KEY
 Uses GitHub raw downloads or blob-page extraction (no git clone).
@@ -108,19 +110,27 @@ def is_rate_limit_error(exc: Exception) -> bool:
     return "rate limit exceeded" in msg or "secondary rate limit" in msg
 
 
-def parse_args(argv: list[str]) -> tuple[str, str]:
+def parse_args(argv: list[str]) -> tuple[str, str, str]:
     mode = "auto"
+    output_dir = ""
     keyword_parts: list[str] = []
     i = 1
     while i < len(argv):
         arg = argv[i]
         if arg.startswith("--mode="):
             mode = arg.split("=", 1)[1].strip().lower()
+        elif arg.startswith("--outputdir="):
+            output_dir = arg.split("=", 1)[1].strip()
         elif arg == "--mode":
             i += 1
             if i >= len(argv):
                 raise ValueError("missing value for --mode")
             mode = argv[i].strip().lower()
+        elif arg == "--outputdir":
+            i += 1
+            if i >= len(argv):
+                raise ValueError("missing value for --outputdir")
+            output_dir = argv[i].strip()
         else:
             keyword_parts.append(arg)
         i += 1
@@ -130,8 +140,8 @@ def parse_args(argv: list[str]) -> tuple[str, str]:
 
     keyword = " ".join(keyword_parts).strip()
     if not keyword:
-        raise ValueError('Usage: python getgitfile.py [--mode auto|api|web|engine] "<search keyword>"')
-    return mode, keyword
+        raise ValueError('Usage: python getgitfile.py [--mode auto|api|web|engine] [--outputdir DIR] "<search keyword>"')
+    return mode, keyword, output_dir
 
 
 def safe_dir_name(keyword: str) -> str:
@@ -372,6 +382,8 @@ def extract_github_blob_url(url: str) -> str | None:
     if parsed.netloc not in {"github.com", "www.github.com"}:
         return None
     path = urllib.parse.unquote(parsed.path)
+    if "/raw/" in path:
+        path = path.replace("/raw/", "/blob/", 1)
     if "/blob/" not in path:
         return None
     parts = path.strip("/").split("/")
@@ -396,6 +408,120 @@ def item_from_blob_url(html_url: str) -> dict[str, Any] | None:
         "url": "",
         "score": 0.0,
     }
+
+
+def item_from_raw_github_url(raw_url: str) -> dict[str, Any] | None:
+    try:
+        parsed = urllib.parse.urlparse(raw_url)
+    except ValueError:
+        return None
+    if parsed.netloc != "raw.githubusercontent.com":
+        return None
+    parts = urllib.parse.unquote(parsed.path).strip("/").split("/")
+    if len(parts) < 4:
+        return None
+    owner, repo, ref = parts[0], parts[1], parts[2]
+    path = "/".join(parts[3:])
+    encoded_parts = [urllib.parse.quote(part, safe="") for part in [owner, repo, "blob", ref, *path.split("/")]]
+    html_url = "https://github.com/" + "/".join(encoded_parts)
+    return {
+        "repository": {"full_name": f"{owner}/{repo}"},
+        "path": path,
+        "html_url": html_url,
+        "url": "",
+        "score": 0.0,
+    }
+
+
+def item_from_github_url(url: str) -> dict[str, Any] | None:
+    return item_from_blob_url(url) or item_from_raw_github_url(url)
+
+
+def is_github_listing_url(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except ValueError:
+        return False
+    if parsed.netloc not in {"github.com", "www.github.com"}:
+        return False
+    parts = urllib.parse.unquote(parsed.path).strip("/").split("/")
+    if len(parts) < 2:
+        return False
+    if len(parts) == 2:
+        return True
+    return len(parts) >= 4 and parts[2] == "tree"
+
+
+def extract_github_file_links_from_html(base_url: str, html: str) -> list[str]:
+    try:
+        parsed = urllib.parse.urlparse(base_url)
+    except ValueError:
+        return []
+    base_parts = urllib.parse.unquote(parsed.path).strip("/").split("/")
+    if len(base_parts) < 2:
+        return []
+    owner, repo = base_parts[0], base_parts[1]
+    links: list[str] = []
+    for raw in re.findall(r'href=["\']([^"\']+)["\']', html, re.I):
+        href = unescape(raw).strip()
+        if not href:
+            continue
+        if href.startswith("//"):
+            href = "https:" + href
+        elif href.startswith("/"):
+            href = "https://github.com" + href
+        elif href.startswith("?") or href.startswith("#"):
+            continue
+        elif not href.startswith("http"):
+            href = urllib.parse.urljoin(base_url, href)
+        try:
+            href_parsed = urllib.parse.urlparse(href)
+        except ValueError:
+            continue
+        if href_parsed.netloc not in {"github.com", "www.github.com"}:
+            continue
+        href_path = urllib.parse.unquote(href_parsed.path)
+        if f"/{owner}/{repo}/blob/" in href_path or f"/{owner}/{repo}/raw/" in href_path:
+            links.append(href)
+
+    for raw in re.findall(r'https?://raw\.githubusercontent\.com/[^\s"\'<>\\]+', html, re.I):
+        links.append(unescape(raw).strip().rstrip(".,);]"))
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for link in links:
+        if link and link not in seen:
+            deduped.append(link)
+            seen.add(link)
+    return deduped
+
+
+def expand_github_listing_url(url: str) -> list[dict[str, Any]]:
+    if not is_github_listing_url(url):
+        return []
+    try:
+        html = generic_text_request(
+            url,
+            {
+                "User-Agent": USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+            timeout=30,
+        )
+    except Exception as e:
+        dprint("search_engine baidu github_listing_error", {"url": url, "error": str(e)})
+        return []
+    links = extract_github_file_links_from_html(url, html)
+    items: list[dict[str, Any]] = []
+    for link in links:
+        mapped = item_from_github_url(link)
+        if mapped:
+            items.append(mapped)
+    dprint(
+        "search_engine baidu github_listing",
+        {"url": url, "file_link_count": len(links), "mapped": len(items), "samples": links[:5]},
+    )
+    return items
 
 
 def normalize_request_url(url: str) -> str:
@@ -439,8 +565,183 @@ def generic_json_request(url: str, headers: dict[str, str] | None = None) -> dic
         return json.loads(resp.read().decode("utf-8"))
 
 
+def generic_text_request(url: str, headers: dict[str, str] | None = None, timeout: int = 30) -> str:
+    req = urllib.request.Request(url, headers=headers or {"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read()
+        content_type = resp.headers.get("Content-Type", "")
+        match = re.search(r"charset=([\w.-]+)", content_type, re.I)
+        encoding = match.group(1) if match else "utf-8"
+        return raw.decode(encoding, errors="ignore")
+
+
 def search_engine_query(keyword: str) -> str:
     return keyword
+
+
+def resolve_baidu_result_url(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT}, method="HEAD")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.geturl()
+    except Exception:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return resp.geturl()
+        except Exception as e:
+            dprint("search_engine baidu resolve_error", {"url": url, "error": str(e)})
+            return url
+
+
+def extract_baidu_result_links(html: str) -> list[str]:
+    links: list[str] = []
+    for raw in re.findall(r'href=["\']([^"\']+)["\']', html, re.I):
+        link = unescape(raw).strip()
+        if not link:
+            continue
+        if link.startswith("//"):
+            link = "https:" + link
+        elif link.startswith("/"):
+            link = "https://www.baidu.com" + link
+        if "baidu.com/link?" in link or "github.com/" in link:
+            links.append(link)
+
+    for raw in re.findall(r'"url"\s*:\s*"([^"]+)"', html, re.I):
+        link = unescape(raw).encode("utf-8").decode("unicode_escape", errors="ignore").strip()
+        if link and ("baidu.com/link?" in link or "github.com/" in link):
+            links.append(link)
+
+    for raw in re.findall(r'https?://(?:www\.)?github\.com/[^\s"\'<>\\]+', html, re.I):
+        link = unescape(raw).encode("utf-8").decode("unicode_escape", errors="ignore").strip()
+        link = link.rstrip(".,);]")
+        if link:
+            links.append(link)
+
+    for raw in re.findall(r'https?://raw\.githubusercontent\.com/[^\s"\'<>\\]+', html, re.I):
+        link = unescape(raw).encode("utf-8").decode("unicode_escape", errors="ignore").strip()
+        link = link.rstrip(".,);]")
+        if link:
+            links.append(link)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for link in links:
+        if link not in seen:
+            deduped.append(link)
+            seen.add(link)
+    return deduped
+
+
+def baidu_queries(query: str) -> list[str]:
+    candidates = [
+        f"site:github.com {query}",
+        f"site:github.com inurl:blob {query}",
+        f"site:github.com {query} pdf OR epub OR mobi OR txt",
+        f"{query} github.com/blob",
+        f"{query} raw.githubusercontent.com",
+    ]
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate = re.sub(r"\s+", " ", candidate).strip()
+        if candidate and candidate not in seen:
+            deduped.append(candidate)
+            seen.add(candidate)
+    return deduped
+
+
+def search_engine_baidu(query: str) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    query_summaries: list[str] = []
+    all_skipped_samples: list[dict[str, str]] = []
+    queries = baidu_queries(query)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Referer": "https://www.baidu.com/",
+    }
+    for query_index, baidu_query in enumerate(queries, start=1):
+        params = urllib.parse.urlencode({"wd": baidu_query, "rn": str(ENGINE_RESULTS)})
+        url = f"https://www.baidu.com/s?{params}"
+        dprint("search_engine baidu request", {"query_index": query_index, "query": baidu_query, "url": url})
+        html = generic_text_request(url, headers)
+        links = extract_baidu_result_links(html)
+        title_match = re.search(r"<title>(.*?)</title>", html, re.I | re.S)
+        title = unescape(re.sub(r"\s+", " ", title_match.group(1))).strip() if title_match else ""
+        dprint(
+            "search_engine baidu html",
+            {
+                "query_index": query_index,
+                "bytes": len(html.encode("utf-8", errors="ignore")),
+                "title": title[:120],
+                "raw_link_count": len(links),
+                "raw_link_samples": links[:5],
+            },
+        )
+        mapped_count = 0
+        expanded_count = 0
+        skipped_samples: list[dict[str, str]] = []
+        for index, link in enumerate(links, start=1):
+            resolved = resolve_baidu_result_url(link) if "baidu.com/link?" in link else link
+            mapped_items = []
+            mapped = item_from_github_url(resolved)
+            if mapped:
+                mapped_items = [mapped]
+            elif is_github_listing_url(resolved):
+                mapped_items = expand_github_listing_url(resolved)
+                expanded_count += len(mapped_items)
+
+            if not mapped_items:
+                if len(skipped_samples) < 5:
+                    skipped_samples.append({"link": link[:180], "resolved": resolved[:180], "reason": "not_github_blob_or_raw"})
+                continue
+            for mapped in mapped_items:
+                key = ((mapped.get("repository") or {}).get("full_name") or "", mapped.get("path") or "")
+                if key in seen:
+                    continue
+                seen.add(key)
+                mapped["score"] = float((len(queries) - query_index + 1) * 100 + (ENGINE_RESULTS - index + 1))
+                results.append(mapped)
+                mapped_count += 1
+                if len(results) >= ENGINE_RESULTS:
+                    break
+            if len(results) >= ENGINE_RESULTS:
+                break
+        query_summaries.append(
+            f"#{query_index} title={title[:40]!r} raw_links={len(links)} mapped={mapped_count} expanded={expanded_count}"
+        )
+        all_skipped_samples.extend(skipped_samples[:2])
+        dprint(
+            "search_engine baidu query_result",
+            {
+                "query_index": query_index,
+                "mapped": mapped_count,
+                "expanded": expanded_count,
+                "total_results": len(results),
+                "skipped_samples": skipped_samples,
+            },
+        )
+        if len(results) >= ENGINE_RESULTS:
+            break
+    dprint("search_engine baidu response", {"query": query, "items": len(results)})
+    if not results:
+        sample_text = "; ".join(
+            f"{s.get('reason')} resolved={s.get('resolved')}" for s in all_skipped_samples[:5]
+        )
+        raise RuntimeError(
+            "Baidu returned 0 GitHub file candidates. "
+            f"query_summaries={' | '.join(query_summaries)}. "
+            f"skipped_samples={sample_text or 'none'}. "
+            "Run with GETGITFILE_DEBUG=1 for full link samples."
+        )
+    return results
+
 
 def search_engine_serpapi(query: str) -> list[dict[str, Any]]:
     api_key = os.environ.get("SERPAPI_KEY", "").strip()
@@ -498,8 +799,9 @@ def search_engine_brave(query: str) -> list[dict[str, Any]]:
 def search_engine(keyword: str) -> tuple[str, list[dict[str, Any]]]:
     query = search_engine_query(keyword)
     providers = [
-        ("serpapi", search_engine_serpapi),
-        ("brave", search_engine_brave),
+        ("baidu", search_engine_baidu),
+        # ("serpapi", search_engine_serpapi),
+        # ("brave", search_engine_brave),
     ]
     errors: list[str] = []
     for provider_name, fn in providers:
@@ -514,7 +816,7 @@ def search_engine(keyword: str) -> tuple[str, list[dict[str, Any]]]:
     if errors:
         raise RuntimeError("; ".join(errors))
     raise RuntimeError(
-        "No search-engine provider configured. Set SERPAPI_KEY or BRAVE_SEARCH_API_KEY."
+        "No search-engine provider returned results. Baidu is tried first; optionally set SERPAPI_KEY or BRAVE_SEARCH_API_KEY."
     )
 
 
@@ -859,7 +1161,7 @@ def allocate_filename(used: set[str], desired: str) -> str:
 
 def main() -> int:
     try:
-        mode, keyword = parse_args(sys.argv)
+        mode, keyword, output_dir_arg = parse_args(sys.argv)
     except ValueError as e:
         eprint(str(e))
         return 2
@@ -893,8 +1195,11 @@ def main() -> int:
     )
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    out_dir_name = safe_dir_name(keyword)
-    out_root = os.path.join(script_dir, out_dir_name)
+    if output_dir_arg:
+        out_root = os.path.abspath(os.path.expanduser(output_dir_arg))
+    else:
+        out_dir_name = safe_dir_name(keyword)
+        out_root = os.path.join(script_dir, out_dir_name)
     os.makedirs(out_root, exist_ok=True)
 
     candidate_items, query_totals, attempted_modes = search_with_strategy(

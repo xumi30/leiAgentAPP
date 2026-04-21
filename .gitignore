@@ -46,8 +46,8 @@ localmemory/
 
 # 工具缓存
 frontend/.vite/
+.cache/
 
 # 用户画像
 /profiles/
-
 

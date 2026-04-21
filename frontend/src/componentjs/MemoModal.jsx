@@ -93,6 +93,158 @@ function extractDateFromSection(sectionText) {
   return m ? m[1] : null;
 }
 
+function basename(path) {
+  const p = String(path || '').trim();
+  if (!p) return '';
+  return p.split(/[\\/]/).filter(Boolean).pop() || p;
+}
+
+function isMarkdownTableSeparatorLine(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed) return false;
+  const normalized = trimmed.replace(/\|/g, '').trim();
+  return normalized !== '' && /^:?-{3,}:?(?:\s+:?-{3,}:?)*$/.test(normalized.replace(/\s+/g, ' '));
+}
+
+function splitPipeColumns(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed.includes('|')) return [];
+  const body = trimmed.replace(/^\|/, '').replace(/\|$/, '');
+  return body.split('|').map((cell) => cell.trim()).filter((cell, idx, arr) => !(cell === '' && arr.length === 1));
+}
+
+function splitTabColumns(line) {
+  if (!String(line || '').includes('\t')) return [];
+  return String(line).split('\t').map((cell) => cell.trim());
+}
+
+function parseSimpleTableLine(line) {
+  const pipeCols = splitPipeColumns(line);
+  if (pipeCols.length >= 2) return { kind: 'pipe', cells: pipeCols };
+  const tabCols = splitTabColumns(line);
+  if (tabCols.length >= 2) return { kind: 'tab', cells: tabCols };
+  return null;
+}
+
+function normalizeSimpleTableRows(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return null;
+  const width = rows.reduce((max, row) => Math.max(max, row.cells.length), 0);
+  if (width < 2) return null;
+  const normalized = rows.map((row) => ({
+    ...row,
+    cells: [...row.cells, ...Array(Math.max(0, width - row.cells.length)).fill('')],
+  }));
+  const hasSeparator = normalized.length >= 2 && isMarkdownTableSeparatorLine(normalized[1].cells.join(' | '));
+  return {
+    header: hasSeparator ? normalized[0].cells : normalized[0].cells,
+    rows: hasSeparator ? normalized.slice(2).map((row) => row.cells) : normalized.slice(1).map((row) => row.cells),
+  };
+}
+
+function splitMarkdownForSimpleTables(text) {
+  const lines = String(text || '').split('\n');
+  const parts = [];
+  let mdBuffer = [];
+  let tableBuffer = [];
+  let tableKind = '';
+
+  const flushMarkdown = () => {
+    if (!mdBuffer.length) return;
+    parts.push({ type: 'md', value: mdBuffer.join('\n') });
+    mdBuffer = [];
+  };
+
+  const flushTable = () => {
+    if (tableBuffer.length < 2) {
+      mdBuffer.push(...tableBuffer.map((row) => row.raw));
+      tableBuffer = [];
+      tableKind = '';
+      return;
+    }
+    const table = normalizeSimpleTableRows(tableBuffer);
+    if (table && table.rows.length > 0) {
+      parts.push({ type: 'table', table });
+    } else {
+      mdBuffer.push(...tableBuffer.map((row) => row.raw));
+    }
+    tableBuffer = [];
+    tableKind = '';
+  };
+
+  for (const line of lines) {
+    const parsed = parseSimpleTableLine(line);
+    if (parsed) {
+      if (!tableBuffer.length) {
+        flushMarkdown();
+        tableKind = parsed.kind;
+        tableBuffer.push({ ...parsed, raw: line });
+        continue;
+      }
+      if (parsed.kind === tableKind) {
+        tableBuffer.push({ ...parsed, raw: line });
+        continue;
+      }
+      flushTable();
+      flushMarkdown();
+      tableKind = parsed.kind;
+      tableBuffer.push({ ...parsed, raw: line });
+      continue;
+    }
+
+    if (tableBuffer.length) flushTable();
+    mdBuffer.push(line);
+  }
+
+  if (tableBuffer.length) flushTable();
+  flushMarkdown();
+  return parts;
+}
+
+function MemoSimpleTable({ table }) {
+  const header = Array.isArray(table?.header) ? table.header : null;
+  const rows = Array.isArray(table?.rows) ? table.rows : [];
+  if (!rows.length) return null;
+  return (
+    <div className="memo-simple-table-wrap">
+      <table className="memo-simple-table">
+        {header ? (
+          <thead>
+            <tr>
+              {header.map((cell, idx) => (
+                <th key={`h-${idx}`}>{cell}</th>
+              ))}
+            </tr>
+          </thead>
+        ) : null}
+        <tbody>
+          {rows.map((row, ridx) => (
+            <tr key={`r-${ridx}`}>
+              {row.map((cell, cidx) => (
+                <td key={`c-${ridx}-${cidx}`}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MemoMarkdownPreview({ markdown }) {
+  const parts = useMemo(() => splitMarkdownForSimpleTables(markdown), [markdown]);
+  return (
+    <>
+      {parts.map((part, idx) => {
+        if (part.type === 'table') {
+          return <MemoSimpleTable key={`table-${idx}`} table={part.table} />;
+        }
+        if (!part.value?.trim()) return null;
+        return <ReactMarkdown key={`md-${idx}`}>{part.value}</ReactMarkdown>;
+      })}
+    </>
+  );
+}
+
 /** @param {HTMLTextAreaElement | null} el */
 function focusTextareaEnd(el) {
   if (!el) return;
@@ -109,6 +261,8 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
   const [saving, setSaving] = useState(false);
   /** @type {'view' | 'edit'} */
   const [detailMode, setDetailMode] = useState('view');
+  /** @type {'list' | 'detail'} */
+  const [mobilePane, setMobilePane] = useState('list');
   const [listQuery, setListQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(null);
   const sectionEditorRef = useRef(null);
@@ -141,6 +295,18 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
     // 文档中越靠后的分节越新（新建 / memo_write 追加在末尾）；列表倒序，新的在上
     return rows.slice().reverse();
   }, [headings, text, listQuery]);
+
+  const memoStats = useMemo(() => {
+    const plain = stripLeiAgentMemoSource(text)
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/<!--leiAgent-memo-src:[^\n>]*-->/g, '')
+      .trim();
+    return {
+      notes: headings.length,
+      chars: plain.length,
+      fileName: basename(filePath),
+    };
+  }, [headings.length, text, filePath]);
 
   const activeSlice = useMemo(() => {
     if (activeIndex === null || activeIndex >= headings.length) return '';
@@ -198,7 +364,9 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
       return;
     }
     setDetailMode('view');
+    setMobilePane('list');
     setListQuery('');
+    setActiveIndex(null);
     setMaximized(false);
     setCustomSize(null);
     let cancelled = false;
@@ -207,8 +375,6 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
       if (cancelled) return;
       if (pendingFocusLatestRef.current) {
         applyFocusLatestAfterLoad(body);
-      } else {
-        setActiveIndex(null);
       }
     })();
     return () => {
@@ -333,6 +499,7 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
       return base ? `${base}\n\n# 新备忘录\n\n` : '# 新备忘录\n\n';
     });
     focusNewSectionRef.current = true;
+    setMobilePane('detail');
   }, []);
 
   const deleteActiveSection = useCallback(() => {
@@ -351,6 +518,7 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
   const onPickRow = useCallback((index) => {
     setActiveIndex(index);
     setDetailMode('view');
+    setMobilePane('detail');
   }, []);
 
   const onSectionEditorChange = useCallback(
@@ -388,20 +556,46 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
             <span className="memo-notes-traffic__dot memo-notes-traffic__dot--yellow" />
             <span className="memo-notes-traffic__dot memo-notes-traffic__dot--green" />
           </div>
-          <h2 id="memo-notes-title" className="memo-notes-titlebar__title">
-            备忘录
-          </h2>
+          <div className="memo-notes-titlebar__heading">
+            <h2 id="memo-notes-title" className="memo-notes-titlebar__title">
+              备忘录
+            </h2>
+            <span className="memo-notes-titlebar__meta">
+              {memoStats.notes} 条 · {memoStats.chars} 字
+            </span>
+          </div>
           <div className="memo-notes-titlebar__actions">
             <button
               type="button"
-              className="memo-notes-titlebar__max"
+              className="memo-notes-iconbtn"
+              onClick={load}
+              disabled={saving}
+              title="重新加载"
+              aria-label="重新加载"
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="memo-notes-iconbtn"
               onClick={() => setMaximized((m) => !m)}
               title={maximized ? '还原窗口' : '最大化'}
+              aria-label={maximized ? '还原窗口' : '最大化'}
             >
-              {maximized ? '还原' : '⛶'}
+              {maximized ? '↙' : '⛶'}
             </button>
-            <button type="button" className="memo-notes-titlebar__done" onClick={onClose}>
-              完成
+            <button
+              type="button"
+              className="memo-notes-iconbtn"
+              onClick={handleSave}
+              disabled={saving}
+              title={saving ? '保存中' : '保存'}
+              aria-label={saving ? '保存中' : '保存'}
+            >
+              ✓
+            </button>
+            <button type="button" className="memo-notes-iconbtn" onClick={onClose} title="关闭" aria-label="关闭">
+              ×
             </button>
           </div>
         </header>
@@ -409,16 +603,17 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
         {loadErr ? <div className="memo-notes-banner memo-notes-banner--error">{loadErr}</div> : null}
         {saveErr ? <div className="memo-notes-banner memo-notes-banner--error">{saveErr}</div> : null}
 
-        {filePath ? (
-          <details className="memo-notes-path">
-            <summary>存储路径</summary>
-            <code>{filePath}</code>
-          </details>
-        ) : null}
-
-        <div className="memo-notes-split">
+        <div className={`memo-notes-split memo-notes-split--${mobilePane}`}>
           <aside className="memo-notes-sidebar" aria-label="备忘录列表">
-            <div className="memo-notes-sidebar__caption">全部备忘录</div>
+            <div className="memo-notes-sidebar__header">
+              <div>
+                <div className="memo-notes-sidebar__caption">全部备忘录</div>
+                <div className="memo-notes-sidebar__count">{listRows.length} / {headings.length}</div>
+              </div>
+              <button type="button" className="memo-notes-compose" onClick={appendNewSection} title="新建备忘录" aria-label="新建备忘录">
+                +
+              </button>
+            </div>
             <label className="memo-notes-search">
               <span className="memo-notes-search__icon" aria-hidden />
               <input
@@ -430,13 +625,10 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
                 autoComplete="off"
               />
             </label>
-            <button type="button" className="memo-notes-compose" onClick={appendNewSection}>
-              ＋ 新建备忘录
-            </button>
             <ul className="memo-notes-list">
               {headings.length === 0 ? (
                 <li className="memo-notes-list__empty">
-                  暂无条目。每条以 <code># 标题</code> 开头（仅一级标题算一条）；可用新建或 <code>memo_write</code> 添加。
+                  暂无条目。
                 </li>
               ) : listRows.length === 0 ? (
                 <li className="memo-notes-list__empty">没有匹配的备忘录</li>
@@ -465,12 +657,27 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
               <div className="memo-notes-detail-placeholder">
                 <p className="memo-notes-detail-placeholder__line">未选择备忘录</p>
                 <p className="memo-notes-detail-placeholder__hint">在左侧列表中选择一条，或新建备忘录。</p>
+                <button type="button" className="memo-notes-detail-placeholder__btn" onClick={appendNewSection}>
+                  新建备忘录
+                </button>
               </div>
             ) : (
               <>
                 <div className="memo-notes-detail-toolbar">
+                  <button
+                    type="button"
+                    className="memo-notes-toolbtn memo-notes-toolbtn--back"
+                    onClick={() => setMobilePane('list')}
+                  >
+                    ← 列表
+                  </button>
+                  <div className="memo-notes-detail-toolbar__title">
+                    <span>{activeTitle}</span>
+                    {activeDateLabel ? <small>{activeDateLabel}</small> : null}
+                  </div>
+                  <div className="memo-notes-mode-toggle" role="group" aria-label="查看或编辑">
                   {detailMode === 'view' ? (
-                    <button type="button" className="memo-notes-toolbtn" onClick={() => setDetailMode('edit')}>
+                    <button type="button" className="memo-notes-toolbtn memo-notes-toolbtn--strong" onClick={() => setDetailMode('edit')}>
                       编辑
                     </button>
                   ) : (
@@ -478,6 +685,7 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
                       完成
                     </button>
                   )}
+                  </div>
                   <button type="button" className="memo-notes-toolbtn memo-notes-toolbtn--danger" onClick={deleteActiveSection}>
                     删除
                   </button>
@@ -489,7 +697,7 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
                     {activeDateLabel ? <div className="memo-notes-detail-meta">{activeDateLabel}</div> : null}
                     <div className="memo-notes-detail-prose">
                       {activeBodyMd.trim() ? (
-                        <ReactMarkdown>{activeBodyMd}</ReactMarkdown>
+                        <MemoMarkdownPreview markdown={activeBodyMd} />
                       ) : (
                         <p className="memo-notes-detail-emptybody">暂无正文</p>
                       )}
@@ -522,19 +730,9 @@ export default function MemoModal({ open, onClose, onMemoSaved }) {
 
         <footer className="memo-notes-footer">
           <span className="memo-notes-footer__hint">
-            主存储为 SQLite（<code>data/memo_notes.db</code>）；与 <code>memo_write</code> 共用。旧版 <code>data/memo.md</code> 会在首次打开时导入。
+            {memoStats.fileName ? <>存储于 <code title={filePath}>{memoStats.fileName}</code></> : '本地备忘录'}
           </span>
-          <div className="memo-notes-footer__actions">
-            <button type="button" className="memo-notes-footer-btn" onClick={load} disabled={saving}>
-              重新加载
-            </button>
-            <button type="button" className="memo-notes-footer-btn" onClick={onClose}>
-              取消
-            </button>
-            <button type="button" className="memo-notes-footer-btn memo-notes-footer-btn--primary" onClick={handleSave} disabled={saving}>
-              {saving ? '保存中…' : '保存'}
-            </button>
-          </div>
+          <span className="memo-notes-footer__status">本地保存</span>
         </footer>
       </div>
     </div>

@@ -22,6 +22,7 @@ const (
 	ExecutionBlueprintString  = "executionBlueprint"
 	ExtraSystemMessagesString = "extraSystemMessages"
 	FreshnessTimeAnchorString = "freshnessTimeAnchor"
+	NeedActionHeaderString    = "needActionHeader"
 
 	// SkipDialogToUI 为 true 时，proxy 不把模型输出写入 DialogOut（避免临时 chatID 未注册时落入全局 OutputChan，
 	// 被 chatID 为空的 Dispatcher 误当成用户输入）。
@@ -67,6 +68,38 @@ const (
 
 	ChatPromptTemplate = `You are an intelligent assistant capable of conducting natural conversations.`
 
+	ActionGateChatPromptTemplate = `Before any other content, you MUST output exactly one single line, no extra spaces, no blank lines, no leading text, no trailing spaces, only this exact format:
+[needAction:true]
+or
+[needAction:false]
+
+Definition rules strictly follow below:
+Set [needAction:false] ONLY for pure conversational content without any execution task:
+- casual chatting
+- expressing opinions & thoughts
+- simple explanation & discussion
+- emotional comfort / support
+- direct simple answers that do NOT require generation, creation, processing, execution or output artifacts
+
+Set [needAction:true] for ANY request that requires action, processing, output result or deliverable artifact, explicit OR implicit:
+- write, generate, rewrite, summarize, translate, polish, plan, analyze
+- search, check, verify, compare, research, calculate
+- code, design, organize, structure
+- create, modify, edit, save, remember, schedule, extract
+- any request expecting completed content, document, code, plan, output result
+
+Uncertain? Always use [needAction:true].
+
+After this single header line:
+- If [needAction:false], reply normally and fully to the user.
+- If [needAction:true], keep the visible reply extremely brief, preferably one short sentence.
+- If [needAction:true], do NOT answer the substantive request, do NOT gather/summarize information, and do NOT produce long explanations before action.
+- If [needAction:true], only say you will use available capabilities to handle it, or ask one concise clarification if required.
+- If [needAction:true], do not pretend the action is already completed.
+
+Never mention, explain, discuss or reference this header rule and decision logic in your reply.
+Never add any words before the header line.`
+
 	SingleToolPromptTemplate = `
 You are a tool-calling AI agent.
 
@@ -82,6 +115,7 @@ Do not describe a tool call in plain text, JSON, or markdown.
 
 # Tool Selection
 - Choose the most appropriate tool based on user intent
+- For fiction/novel/chapter/outline/long-form writing or continuation requests, prefer the novel_longform tool instead of replying with the full text directly.
 - Do NOT guess missing parameters
 - If required information is missing, ask for clarification
 - For generic web search in a real browser, prefer directly opening the search results page in Baidu before Google-related pages.

@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  DeleteOpenClawSkill,
   GetLLMConfigFormState,
   GetMCPConfigFormState,
   GetMCPHubPluginDetail,
   GetMCPHubStatus,
+  GetOpenClawSkillState,
+  InstallOpenClawSkill,
+  InstallOpenClawSkillDeps,
   RegisterMCPHub,
   SaveLLMConfigForm,
   SaveMCPConfigForm,
@@ -282,16 +286,23 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const [hubDetailErr, setHubDetailErr] = useState('');
   const [hubNotice, setHubNotice] = useState('');
   const [hubInstallStates, setHubInstallStates] = useState({});
+  const [skillState, setSkillState] = useState({ workspaceRoot: '', skillsRoot: '', skills: [] });
+  const [skillInstallText, setSkillInstallText] = useState('npx clawhub@latest install baidu-search');
+  const [skillInstalling, setSkillInstalling] = useState(false);
+  const [skillNotice, setSkillNotice] = useState('');
+  const [skillErr, setSkillErr] = useState('');
+  const [skillBusyPath, setSkillBusyPath] = useState('');
 
   const lastValidatedRef = useRef([]);
 
   const load = useCallback(async () => {
     setLoadErr('');
     try {
-      const [llmState, mcpState, nextHubStatus] = await Promise.all([
+      const [llmState, mcpState, nextHubStatus, nextSkillState] = await Promise.all([
         GetLLMConfigFormState(),
         GetMCPConfigFormState(),
         GetMCPHubStatus(),
+        GetOpenClawSkillState(),
       ]);
       const llmList = Array.isArray(llmState.backends) ? llmState.backends : [];
       const mcpList = Array.isArray(mcpState.servers) ? mcpState.servers : [];
@@ -319,6 +330,9 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       setHubNotice('');
       setHubSearchErr('');
       setHubDetailErr('');
+      setSkillState(nextSkillState ?? { workspaceRoot: '', skillsRoot: '', skills: [] });
+      setSkillNotice('');
+      setSkillErr('');
     } catch (e) {
       setLoadErr(String(e?.message || e));
     }
@@ -343,7 +357,80 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     setHubNotice('');
     setHubSearchErr('');
     setHubInstallStates({});
+    setSkillNotice('');
+    setSkillErr('');
+    setSkillBusyPath('');
   }, [open]);
+
+  const refreshSkills = useCallback(async () => {
+    const nextSkillState = await GetOpenClawSkillState();
+    setSkillState(nextSkillState ?? { workspaceRoot: '', skillsRoot: '', skills: [] });
+  }, []);
+
+  const handleInstallSkill = useCallback(async () => {
+    setSkillInstalling(true);
+    setSkillErr('');
+    setSkillNotice('');
+    try {
+      const result = await InstallOpenClawSkill(skillInstallText);
+      setSkillNotice(result?.ok ? `已安装 ${result.slug || 'skill'}` : '安装命令已执行');
+      await refreshSkills();
+    } catch (e) {
+      setSkillErr(String(e?.message || e));
+      await refreshSkills().catch(() => {});
+    } finally {
+      setSkillInstalling(false);
+    }
+  }, [refreshSkills, skillInstallText]);
+
+  const handleRecheckSkill = useCallback(async (skill) => {
+    if (!skill?.path) return;
+    setSkillBusyPath(skill.path);
+    setSkillErr('');
+    setSkillNotice('');
+    try {
+      await refreshSkills();
+      setSkillNotice(`已重新校验 ${skill.name || 'skill'}`);
+    } catch (e) {
+      setSkillErr(String(e?.message || e));
+    } finally {
+      setSkillBusyPath('');
+    }
+  }, [refreshSkills]);
+
+  const handleDeleteSkill = useCallback(async (skill) => {
+    if (!skill?.path) return;
+    setSkillBusyPath(skill.path);
+    setSkillErr('');
+    setSkillNotice('');
+    try {
+      const result = await DeleteOpenClawSkill(skill.path);
+      setSkillNotice(result?.message || `已删除 ${skill.name || 'skill'}`);
+      await refreshSkills();
+    } catch (e) {
+      setSkillErr(String(e?.message || e));
+      await refreshSkills().catch(() => {});
+    } finally {
+      setSkillBusyPath('');
+    }
+  }, [refreshSkills]);
+
+  const handleInstallSkillDeps = useCallback(async (skill) => {
+    if (!skill?.path) return;
+    setSkillBusyPath(skill.path);
+    setSkillErr('');
+    setSkillNotice('');
+    try {
+      const result = await InstallOpenClawSkillDeps(skill.path);
+      setSkillNotice(result?.message || `已安装 ${skill.name || 'skill'} 依赖`);
+      await refreshSkills();
+    } catch (e) {
+      setSkillErr(String(e?.message || e));
+      await refreshSkills().catch(() => {});
+    } finally {
+      setSkillBusyPath('');
+    }
+  }, [refreshSkills]);
 
   const updateBackend = (index, field, value) => {
     setBackends((prev) => {
@@ -739,6 +826,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         <div className="settings-tabs" role="tablist" aria-label="设置分组">
           <button type="button" className={`settings-tabs__btn ${activeTab === 'llm' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('llm')}>LLM</button>
           <button type="button" className={`settings-tabs__btn ${activeTab === 'mcp' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('mcp')}>MCP</button>
+          <button type="button" className={`settings-tabs__btn ${activeTab === 'skills' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('skills')}>Skills</button>
         </div>
 
         <p className="settings-sheet__path">
@@ -755,10 +843,18 @@ export default function SettingsModal({ open, onClose, onSaved }) {
               <code className="settings-sheet__path-value">{hubStatus.credentialsPath}</code>
             </>
           ) : null}
+          {activeTab === 'skills' && skillState.skillsRoot ? (
+            <>
+              <span className="settings-sheet__path-label">Skills</span>
+              <code className="settings-sheet__path-value">{skillState.skillsRoot}</code>
+            </>
+          ) : null}
         </p>
 
         <p className="settings-sheet__note">
-          {activeTab === 'mcp'
+          {activeTab === 'skills'
+            ? '支持粘贴 ClawHub 安装命令，安装后 leiAgent 会扫描 ./skills 并将已支持的 skill 映射为本地工具。当前竖切片支持 baidu-search。'
+            : activeTab === 'mcp'
             ? 'MCP 页支持从 LobeHub MCP Hub 搜索并安装配置，也保留手动 JSON 导入与表单编辑。安装后可直接点击服务进入详情页进行测试、修改和删除。'
             : '按顺序故障转移；仅勾选启用的行会参与。每行须填写 base_url、model。某行未填 API Key 时，若文件中 llm.api_key 已填写会回退使用该 Key，否则用环境变量。'}
         </p>
@@ -767,6 +863,8 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         {saveErr ? <div className="settings-sheet__error">{saveErr}</div> : null}
         {hubSearchErr ? <div className="settings-sheet__error">{hubSearchErr}</div> : null}
         {hubNotice ? <div className="settings-sheet__notice">{hubNotice}</div> : null}
+        {skillErr ? <div className="settings-sheet__error">{skillErr}</div> : null}
+        {skillNotice ? <div className="settings-sheet__notice">{skillNotice}</div> : null}
 
         {activeTab === 'llm' ? (
           <div className="settings-sheet__scroll">
@@ -800,6 +898,112 @@ export default function SettingsModal({ open, onClose, onSaved }) {
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : activeTab === 'skills' ? (
+          <div className="settings-sheet__scroll settings-sheet__scroll--mcp">
+            <div className="settings-list-block">
+              <div className="settings-list-block__toolbar settings-list-block__toolbar--stack">
+                <div className="settings-hub">
+                  <div className="settings-hub__search">
+                    <input
+                      className="settings-table__input"
+                      value={skillInstallText}
+                      onChange={(e) => setSkillInstallText(e.target.value)}
+                      placeholder="npx clawhub@latest install baidu-search"
+                      spellCheck={false}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleInstallSkill();
+                        }
+                      }}
+                    />
+                    <button type="button" className="settings-btn settings-btn--primary settings-btn--small" onClick={handleInstallSkill} disabled={skillInstalling}>
+                      {skillInstalling ? '安装中…' : '安装'}
+                    </button>
+                    <button type="button" className="settings-btn settings-btn--secondary settings-btn--small" onClick={() => void refreshSkills()} disabled={skillInstalling}>
+                      刷新
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <table className="settings-table settings-table--mcp">
+                <thead>
+                  <tr>
+                    <th>Skill</th>
+                    <th>状态</th>
+                    <th>依赖</th>
+                    <th>适配器</th>
+                    <th className="settings-table__th-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {!Array.isArray(skillState.skills) || skillState.skills.length === 0 ? (
+                    <tr><td colSpan={5} className="settings-table__empty">暂无已安装 skill。可以先安装 baidu-search 试跑。</td></tr>
+                  ) : (
+                    skillState.skills.map((skill) => {
+                      const busy = skillBusyPath === skill.path;
+                      return (
+                        <tr key={skill.path || skill.name}>
+                          <td>
+                            <div className="settings-table__title">{skill.name}</div>
+                            <div className="settings-table__sub">{skill.description || skill.path}</div>
+                          </td>
+                          <td>
+                            <span className={`settings-status-dot settings-status-dot--${skill.ready ? 'ok' : 'warning'}`} />
+                            {skill.statusDetail || skill.status || '未知'}
+                          </td>
+                          <td>
+                            <div className="settings-table__sub">
+                              bins: {(skill.requires?.bins || []).join(', ') || '无'}
+                            </div>
+                            <div className="settings-table__sub">
+                              pip: {(skill.pythonDeps || []).join(', ') || '无'}
+                            </div>
+                            <div className="settings-table__sub">
+                              env: {(skill.requires?.env || []).join(', ') || '无'}
+                            </div>
+                          </td>
+                          <td>{skill.supported ? '已支持' : '未适配'}</td>
+                          <td className="settings-table__actions settings-table__actions--icons">
+                            <button
+                              type="button"
+                              className="settings-icon-btn"
+                              onClick={() => void handleRecheckSkill(skill)}
+                              disabled={busy || skillInstalling}
+                              title="重新校验"
+                              aria-label={`重新校验 ${skill.name || 'skill'}`}
+                            >
+                              <span aria-hidden>↻</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="settings-icon-btn"
+                              onClick={() => void handleInstallSkillDeps(skill)}
+                              disabled={busy || skillInstalling || !Array.isArray(skill.pythonDeps) || skill.pythonDeps.length === 0}
+                              title="安装依赖"
+                              aria-label={`安装 ${skill.name || 'skill'} 依赖`}
+                            >
+                              <span aria-hidden>↓</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="settings-icon-btn settings-icon-btn--danger"
+                              onClick={() => void handleDeleteSkill(skill)}
+                              disabled={busy || skillInstalling}
+                              title="删除"
+                              aria-label={`删除 ${skill.name || 'skill'}`}
+                            >
+                              <span aria-hidden>×</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

@@ -15,6 +15,8 @@ export function ComposeMemoWithLLM(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteConversation(arg1:string):Promise<void>;
 
+export function DeleteOpenClawSkill(arg1:string):Promise<any>;
+
 export function DeleteScheduledTask(arg1:string):Promise<void>;
 
 export function GetConversation(arg1:string):Promise<void>;
@@ -55,9 +57,15 @@ export function GetMessagesEvent(arg1:string):Promise<void>;
 
 export function GetNovelResumeOutputDir(arg1:string,arg2:boolean):Promise<string>;
 
+export function GetOpenClawSkillState():Promise<proxy.OpenClawSkillState>;
+
 export function GetReasoningMessage(arg1:string):Promise<Array<Record<string, any>>>;
 
 export function GetUserProfile(arg1:string):Promise<Record<string, any>>;
+
+export function InstallOpenClawSkill(arg1:string):Promise<any>;
+
+export function InstallOpenClawSkillDeps(arg1:string):Promise<any>;
 
 export function LibraryWorkspaceDelete(arg1:string,arg2:boolean):Promise<void>;
 

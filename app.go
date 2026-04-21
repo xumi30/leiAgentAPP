@@ -13,10 +13,10 @@ import (
 
 	"leiAgent/dataoperation"
 
+	"leiAgent/internal/crontabthread"
 	"leiAgent/internal/dispatcher"
 	"leiAgent/internal/doclib"
 	"leiAgent/internal/globalchannel"
-	"leiAgent/internal/crontabthread"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/profile"
@@ -655,6 +655,26 @@ func (a *App) SearchMCPHub(query, category string, page, pageSize int) (proxy.MC
 // GetMCPHubPluginDetail 获取指定 MCP Hub 条目的详情与部署方式。
 func (a *App) GetMCPHubPluginDetail(identifier string) (proxy.MCPHubPluginDetail, error) {
 	return proxy.GetMCPHubPluginDetail(identifier)
+}
+
+// GetOpenClawSkillState 扫描当前工作区已安装的 OpenClaw/ClawHub skills。
+func (a *App) GetOpenClawSkillState() proxy.OpenClawSkillState {
+	return proxy.GetOpenClawSkillState()
+}
+
+// InstallOpenClawSkill 受控执行 ClawHub 安装命令，并将 skill 安装到当前工作区。
+func (a *App) InstallOpenClawSkill(input string) (interface{}, error) {
+	return proxy.InstallOpenClawSkill(context.Background(), input)
+}
+
+// DeleteOpenClawSkill 删除当前工作区 skills 目录下的指定 skill。
+func (a *App) DeleteOpenClawSkill(path string) (interface{}, error) {
+	return proxy.DeleteOpenClawSkill(path)
+}
+
+// InstallOpenClawSkillDeps 为指定 skill 创建隔离 Python venv 并安装依赖。
+func (a *App) InstallOpenClawSkillDeps(path string) (interface{}, error) {
+	return proxy.InstallOpenClawSkillDeps(path)
 }
 
 // GetMemoContent 读取备忘录全文（主存 SQLite；与 memo_write 工具共用同一存储）。

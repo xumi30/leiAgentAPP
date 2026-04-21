@@ -26,6 +26,10 @@ export function DeleteConversation(arg1) {
   return window['go']['main']['App']['DeleteConversation'](arg1);
 }
 
+export function DeleteOpenClawSkill(arg1) {
+  return window['go']['main']['App']['DeleteOpenClawSkill'](arg1);
+}
+
 export function DeleteScheduledTask(arg1) {
   return window['go']['main']['App']['DeleteScheduledTask'](arg1);
 }
@@ -106,12 +110,24 @@ export function GetNovelResumeOutputDir(arg1, arg2) {
   return window['go']['main']['App']['GetNovelResumeOutputDir'](arg1, arg2);
 }
 
+export function GetOpenClawSkillState() {
+  return window['go']['main']['App']['GetOpenClawSkillState']();
+}
+
 export function GetReasoningMessage(arg1) {
   return window['go']['main']['App']['GetReasoningMessage'](arg1);
 }
 
 export function GetUserProfile(arg1) {
   return window['go']['main']['App']['GetUserProfile'](arg1);
+}
+
+export function InstallOpenClawSkill(arg1) {
+  return window['go']['main']['App']['InstallOpenClawSkill'](arg1);
+}
+
+export function InstallOpenClawSkillDeps(arg1) {
+  return window['go']['main']['App']['InstallOpenClawSkillDeps'](arg1);
 }
 
 export function LibraryWorkspaceDelete(arg1, arg2) {

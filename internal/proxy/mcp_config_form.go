@@ -17,6 +17,11 @@ type mcpFileRoot struct {
 	LLM         llmYAML                  `yaml:"llm,omitempty"`
 	LLMBackends []llmYAML                `yaml:"llm_backends,omitempty"`
 	MCPServers  []mcpbridge.ServerConfig `yaml:"mcp_servers,omitempty"`
+	OpenClaw    openClawYAML             `yaml:"openclaw,omitempty"`
+}
+
+type openClawYAML struct {
+	Env map[string]string `yaml:"env,omitempty"`
 }
 
 type MCPConfigRow struct {
