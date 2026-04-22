@@ -1,6 +1,0 @@
-{
-  "label": "chrome-devtools",
-  "ok": false,
-  "message": "chrome remote debugging is not reachable at http://127.0.0.1:9222/json/version. On macOS, prefer launching a fresh instance with: open -na \"Google Chrome\" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-mcp . If an old Chrome process is blocking the args, first run: pkill -f \"Google Chrome\" . The agent can use the bash tool to run these commands",
-  "checked_at": "2026-04-12T21:15:48+08:00"
-}

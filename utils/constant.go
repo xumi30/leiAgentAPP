@@ -1,5 +1,7 @@
 package utils
 
+import "fmt"
+
 const (
 	VersionString = "0.0.1"
 	BannerString  = `
@@ -148,4 +150,22 @@ var (
 	MessageCompleteChan = make(chan string, 100)
 	// 全局输出通道
 	OutputChan = make(chan string, 100)
+
+	ToolCompletePromptTemplate = fmt.Sprintf(`工具已经执行完成，请继续推进任务。
+
+如果仍需要调用当前已经加载的工具：不要返回 JSON，直接使用模型原生 tool-call 调用工具。
+
+如果当前缺少必要工具，或者已经不需要再调用工具，必须只返回一个合法 JSON 对象，不要使用 Markdown，不要输出额外文字：
+{
+  "needToolToics": [],
+  "content": "给用户看的简略回复",
+  "summaryfornextllm": "供下一轮 LLM 使用的压缩摘要"
+}
+
+字段规则：
+- needToolToics：如果缺少工具，填入需要补充加载的 topic 数组；如果不缺工具或任务已完成，填 []。topic 必须是精确的 topic 名称本身。
+- content：给用户看的最终回复或缺少工具说明，尽量简略；不要把冗长工具原文全部复述给用户。
+- summaryfornextllm：必须填写，用不超过300字压缩本轮关键信息，保持对llm的可读性前提下,越精简越好.供下一轮继续使用。保留用户目标、已调用工具、关键结果、结论、待办和必要约束；去掉无用日志、重复内容和大段原始输出，避免下一轮 token 爆炸。
+
+可选的 topic 有：%s。`, ToolTopicsPromptText())
 )

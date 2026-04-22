@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+export GOCACHE="${GOCACHE:-$ROOT/.cache/go-build}"
+mkdir -p "$GOCACHE"
+
+echo "==> go mod download"
+go mod download
+
+echo "==> frontend dependencies"
+cd "$ROOT/frontend"
+if [[ -f package-lock.json ]]; then
+  npm ci
+else
+  npm install
+fi
+
+echo "==> install-deps done"

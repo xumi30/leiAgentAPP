@@ -1,6 +1,0 @@
-{
-  "label": "jackkuo666-sci-hub-mcp-server",
-  "ok": false,
-  "message": "mcp command \"python\" not found in PATH. You can use the bash tool to install or fix it",
-  "checked_at": "2026-04-19T17:05:18+08:00"
-}

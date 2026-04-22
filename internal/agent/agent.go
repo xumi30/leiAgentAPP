@@ -119,6 +119,54 @@ func (a *Agent) BeginTask(ctx context.Context, message string) (string, error) {
 	return a.HandleChat(ctx, message)
 }
 
+func (a *Agent) handleToolCompleteChat(ctx context.Context, message string) (utils.ToolCompletePayload, error) {
+	logging.Info("Agent begin to handle tool-complete chat")
+
+	chatId := ctx.Value(utils.ChatIDString).(string)
+	memory.AddUserMessage(chatId, message)
+
+	toolCtx := context.WithValue(ctx, utils.IsStreamString, false)
+	toolCtx = context.WithValue(toolCtx, utils.SkipDialogToUIString, true)
+
+	toolAndContent, err := a.proxy.Communicate(toolCtx)
+	logging.Info("工具完成后代理返回信息: %v", toolAndContent)
+	if err != nil {
+		return utils.ToolCompletePayload{}, fmt.Errorf("通信失败: %w", err)
+	}
+	if toolAndContent == nil {
+		return utils.ToolCompletePayload{}, fmt.Errorf("代理返回空内容")
+	}
+
+	if len(toolAndContent.ToolList) > 0 {
+		a.recordMeomoryFromResponse(toolCtx, toolAndContent)
+		return utils.ToolCompletePayload{}, nil
+	}
+
+	payload, ok := utils.ParseToolCompletePayload(toolAndContent.Content)
+	if !ok {
+		content := strings.TrimSpace(toolAndContent.Content)
+		if content != "" {
+			globalchannel.SendAssitantMessageOnce(ctx, content)
+			memory.AddAssistantContentMessage(chatId, content)
+		}
+		return utils.ToolCompletePayload{Content: content}, nil
+	}
+
+	if strings.TrimSpace(payload.Content) != "" {
+		globalchannel.SendAssitantMessageOnce(ctx, payload.Content)
+	}
+
+	compactSummary := strings.TrimSpace(payload.SummaryForNextLLM)
+	if compactSummary == "" {
+		compactSummary = strings.TrimSpace(payload.Content)
+	}
+	if compactSummary != "" {
+		memory.CompactLatestToolRun(chatId, "【工具执行结果压缩摘要，供下一轮使用】\n"+compactSummary)
+	}
+
+	return payload, nil
+}
+
 func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *proxy.ToolAndContent) {
 
 	logging.Info("开始记忆返回信息")
@@ -227,26 +275,26 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		logging.Info("工具执行完成,继续请求模型生成最终回复")
 		a.taskLoopTimes--
 
-		backInfo, err := a.HandleChat(ctx, fmt.Sprintf("工具已经执行完成,请继续。如果需要调用工具，请继续调用,如果目前工具缺少请返回{needToolToics:[topic1,topic2,topic3],message:string,},可选的topic有 %s。needToolToics 里的值必须是精确的 topic 名称本身，而不是带描述的整句。如果不需要调用工具了，请直接给出最终回复。", utils.ToolTopicsPromptText()))
+		backInfo, err := a.handleToolCompleteChat(ctx, utils.ToolCompletePromptTemplate)
 		if err != nil {
 			logging.Error("继续请求模型生成最终回复失败: %v", err)
 			return
 		}
 
 		// 如果 backInfo 包含 needToolToics 字段，则按请求加载额外工具 topic 后继续对话。
-		if needToolTopics, ok := utils.GetNeedToolToics(backInfo); ok {
+		if needToolTopics, ok := utils.GetNeedToolToicsFromPayload(backInfo); ok {
 			for _, topic := range needToolTopics {
 				logging.Info("模型请求补充工具话题: %s", topic)
 				nextCtx := context.WithValue(ctx, utils.ToolTopicToLoad, topic)
 
-				if _, err := a.HandleChat(nextCtx, fmt.Sprintf("已按你的要求加载%s相关工具，请继续。如果仍需调用工具，请直接调用；如果不需要调用工具了，请直接给出最终回复。", topic)); err != nil {
+				if _, err := a.handleToolCompleteChat(nextCtx, fmt.Sprintf("已按你的要求加载%s相关工具，请继续。返回规则保持不变：如果仍需要调用已加载工具，请直接使用原生 tool-call；如果缺少工具或不再需要工具，必须只返回包含 needToolToics、content、summaryfornextllm 的 JSON。", topic)); err != nil {
 					logging.Error("加载工具话题 %s 后继续请求失败: %v", topic, err)
 					continue
 				}
 				return
 			}
 
-			logging.Warn("模型请求了额外工具话题，但未解析出可用 topic: %s", backInfo)
+			logging.Warn("模型请求了额外工具话题，但未解析出可用 topic: %v", backInfo)
 		}
 	}
 	logging.Info("工具执行完成,或者达到最大循环次数,结束工具执行")

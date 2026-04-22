@@ -1,6 +1,0 @@
-{
-  "label": "yourusername-docsearch-mcp-3",
-  "ok": false,
-  "message": "mcp command \"pnpm\" not found in PATH. You can use the bash tool to install or fix it",
-  "checked_at": "2026-04-19T17:20:02+08:00"
-}

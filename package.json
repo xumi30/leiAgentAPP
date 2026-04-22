@@ -18,7 +18,9 @@
   },
   "scripts": {
     "test": "go test ./...",
-    "release:check": "./scripts/release-check.sh"
+    "release:check": "./scripts/release-check.sh",
+    "install:deps": "bash scripts/install-deps.sh",
+    "build:release": "bash scripts/build-release.sh"
   },
   "repository": {
     "type": "git",
