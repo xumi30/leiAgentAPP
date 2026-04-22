@@ -16,6 +16,80 @@ import (
 	"time"
 )
 
+func effectiveUsageTotal(u *openaistyle.TokenUsage) int {
+	if u == nil {
+		return 0
+	}
+	if u.TotalTokens > 0 {
+		return u.TotalTokens
+	}
+	if u.PromptTokens > 0 || u.CompletionTokens > 0 {
+		return u.PromptTokens + u.CompletionTokens
+	}
+	return 0
+}
+
+func intFromJSONAny(v interface{}) int {
+	switch t := v.(type) {
+	case float64:
+		return int(t)
+	case int:
+		return t
+	case int32:
+		return int(t)
+	case int64:
+		return int(t)
+	case json.Number:
+		n, err := t.Int64()
+		if err != nil {
+			return 0
+		}
+		return int(n)
+	default:
+		return 0
+	}
+}
+
+// extractUsageLoose 从原始 JSON 再抠一层 usage（兼容字段名差异、仅给 input/output 等）。
+func extractUsageLoose(raw []byte) *openaistyle.TokenUsage {
+	var top map[string]interface{}
+	if err := json.Unmarshal(raw, &top); err != nil {
+		return nil
+	}
+	v, ok := top["usage"]
+	if !ok || v == nil {
+		return nil
+	}
+	um, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	pt := intFromJSONAny(um["prompt_tokens"])
+	ct := intFromJSONAny(um["completion_tokens"])
+	tt := intFromJSONAny(um["total_tokens"])
+	if tt == 0 {
+		tt = intFromJSONAny(um["total"])
+	}
+	if tt == 0 {
+		it := intFromJSONAny(um["input_tokens"])
+		ot := intFromJSONAny(um["output_tokens"])
+		if it > 0 || ot > 0 {
+			tt = it + ot
+		}
+	}
+	if tt == 0 && (pt > 0 || ct > 0) {
+		tt = pt + ct
+	}
+	if tt <= 0 && pt <= 0 && ct <= 0 {
+		return nil
+	}
+	return &openaistyle.TokenUsage{
+		PromptTokens:     pt,
+		CompletionTokens: ct,
+		TotalTokens:      tt,
+	}
+}
+
 func (p *Proxy) handleResponse(ctx context.Context, resp *http.Response, isStream bool, info *ModelAPIInfo) (*ToolAndContent, error) {
 
 	if isStream {
@@ -45,13 +119,29 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 
 	d_mesageid := utils.GenerateMessageID()
 	r_message := utils.GenerateMessageID()
+	memChatID, _ := ctx.Value(utils.ChatIDString).(string)
 	for scanner.Scan() {
-		// logging.Info("处理流式响应: %v", string(scanner.Bytes()))
+		logging.Debug("处理流式响应: %v", string(scanner.Bytes()))
 		var response openaistyle.ChatCompletionResponse
+		raw := scanner.Bytes()
 
-		if err := json.Unmarshal(scanner.Bytes(), &response); err != nil {
+		if err := json.Unmarshal(raw, &response); err != nil {
 			logging.Error("解析流式JSON失败: %v", err)
 			continue
+		}
+
+		// 许多后端会在流末尾单独发一条仅含 usage、choices 为空的 SSE；
+		// 若先判断 choices==0 就 continue，会永远丢失 total_tokens。
+		if response.Usage != nil && effectiveUsageTotal(response.Usage) > effectiveUsageTotal(lastUsage) {
+			lastUsage = response.Usage
+		}
+		if loose := extractUsageLoose(raw); loose != nil && effectiveUsageTotal(loose) > effectiveUsageTotal(lastUsage) {
+			lastUsage = loose
+			logging.Debug("流式 usage：raw 回退覆盖 chatID=%s total=%d prompt=%d completion=%d",
+				memChatID, loose.TotalTokens, loose.PromptTokens, loose.CompletionTokens)
+		}
+		if response.Usage != nil && effectiveUsageTotal(response.Usage) > 0 {
+			logging.Debug("流式 usage 包 chatID=%s eff=%d choices=%d", memChatID, effectiveUsageTotal(response.Usage), len(response.Choices))
 		}
 
 		if len(response.Choices) == 0 {
@@ -61,9 +151,6 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		ch0 := response.Choices[0]
 		if fr := strings.TrimSpace(ch0.FinishReason); fr != "" {
 			lastFinishReason = fr
-		}
-		if response.Usage != nil {
-			lastUsage = response.Usage
 		}
 		if ch0.Delta == nil {
 			continue
@@ -125,7 +212,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 			if outgoingContent != "" {
 				fullContent.WriteString(outgoingContent)
 				//logging.Info("为chatid %s 返回的内容:%s", ctx.Value(utils.ChatIDString).(string), outgoingContent)
-				globalchannel.SendAssitantMessageStream(ctx, outgoingContent, d_mesageid, false)
+				globalchannel.SendAssitantMessageStream(ctx, outgoingContent, d_mesageid, false, 0)
 			}
 
 		}
@@ -145,7 +232,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	if stripNeedActionHeader && !needActionHeaderParsed && needActionHeaderBuffer.Len() > 0 {
 		bufferedContent := needActionHeaderBuffer.String()
 		fullContent.WriteString(bufferedContent)
-		globalchannel.SendAssitantMessageStream(ctx, bufferedContent, d_mesageid, false)
+		globalchannel.SendAssitantMessageStream(ctx, bufferedContent, d_mesageid, false, 0)
 	}
 
 	result := fullContent.String()
@@ -153,7 +240,14 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 
 	// 关键：发送一次“流结束”信号（IsFinished=true），让 AppenAgentMessageToFrontRole 做收口入库并 emit dialogStreamEnd。
 	// 否则前端虽然能看到流式拼接的内容，但刷新后因 DB 未落库而消失。
-	globalchannel.SendAssitantMessageStream(ctx, "", d_mesageid, true)
+	finishTok := effectiveUsageTotal(lastUsage)
+	if finishTok == 0 {
+		logging.Warn("流式结束但未得到可用 usage（入库 total_tokens 将为 0）chatID=%s messageID=%s lastUsageNil=%v",
+			memChatID, d_mesageid, lastUsage == nil)
+	} else {
+		logging.Info("流式结束写入收尾 token chatID=%s messageID=%s total_tokens=%d", memChatID, d_mesageid, finishTok)
+	}
+	globalchannel.SendAssitantMessageStream(ctx, "", d_mesageid, true, finishTok)
 	globalchannel.SendAReasonningMessageStream(ctx, "", r_message, true)
 	//fmt.Println("最终生成内容: ", result)
 	//fmt.Println("最终推理内容: ", reasoningResult)
@@ -265,7 +359,8 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	}
 	if !skipDialog {
 		if strings.TrimSpace(content) != "" {
-			globalchannel.SendAssitantMessageOnce(ctx, content)
+			usageTok := effectiveUsageTotal(openaiResp.Usage)
+			globalchannel.SendAssitantMessageOnce(ctx, content, usageTok)
 		}
 	}
 
@@ -320,8 +415,12 @@ type StreamScanner struct {
 }
 
 func NewStreamScanner(r io.Reader) *StreamScanner {
+	const maxLine = 1024 * 1024
+	buf := make([]byte, 0, 64*1024)
+	sc := bufio.NewScanner(r)
+	sc.Buffer(buf, maxLine)
 	return &StreamScanner{
-		scanner:   bufio.NewScanner(r),
+		scanner:   sc,
 		requestID: fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
 		created:   time.Now().Unix(),
 	}

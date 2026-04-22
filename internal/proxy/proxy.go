@@ -292,6 +292,8 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		openaistyle.WithMessages(chatMessages),
 		openaistyle.WithMaxTokens(maxTok),
 		openaistyle.WithStream(isStream),
+		// 尽力让 OpenAI 兼容后端在 stream 场景也返回 usage，供 UI 实时统计 token。
+		openaistyle.WithStreamIncludeUsage(isStream),
 		openaistyle.WithTools(tls),
 		openaistyle.WithToolChoice(toolChoice),
 	}

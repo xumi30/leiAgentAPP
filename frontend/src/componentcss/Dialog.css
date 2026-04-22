@@ -74,6 +74,10 @@
     flex: 0 1 auto;
     max-width: 160px;
     min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: center;
     padding: 6px 12px;
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 8px 8px 4px 4px;
@@ -100,11 +104,51 @@
     color: var(--apple-label);
 }
 
+.dialog__tab--main {
+    max-width: min(280px, 56vw);
+}
+
+/* 主标签：单行居中，标题 + 小号 token 文案 */
+.dialog__tab-inline {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.dialog__tab-main-title-inline {
+    font-size: 12px;
+    font-weight: 600;
+    color: inherit;
+}
+
+.dialog__tab-token-inline {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--apple-secondary);
+}
+
+/* 与侧栏会话行同色：小号 token 沿用同一文字色略透明 */
+.dialog__tab--convo-tint .dialog__tab-token-inline {
+    color: inherit;
+    opacity: 0.82;
+}
+
+.dialog__tab--convo-tint.dialog__tab--active {
+    border-color: rgba(0, 0, 0, 0.14);
+}
+
 .dialog__tab-label {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
 }
 
 .dialog__classify-hint {
@@ -919,6 +963,53 @@
     padding-bottom: 5px;
 }
 
+/* 工具调用流水（如「工具openclaw_baidu_search执行成功 …」）：约小两号、收紧行高 */
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine {
+    padding: 4px 10px 5px;
+    color: var(--apple-secondary);
+}
+
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .message-body {
+    font-size: 10px;
+    line-height: 1.22;
+}
+
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .message-markdown,
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .msg-fence-block,
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .msg-json-snippet {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+/* 工具流水内：JSON 胶囊也压缩高度（padding/字号），避免一条胶囊占太高 */
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .msg-json-snippet {
+    padding: 3px 8px 3px 7px;
+    gap: 4px;
+    border-radius: 999px;
+    box-shadow:
+        0 1px 5px rgba(255, 140, 175, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .msg-json-snippet__badge {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+}
+
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .msg-json-snippet__action {
+    font-size: 9px;
+}
+
+/* 工具流水：关键词高亮仍保留，但减弱 padding/字重，避免把行高“顶”得像大字 */
+.messagecontent.messagecontent--assistant.messagecontent--tool-routine .message-markdown .msg-kw {
+    font-weight: 500;
+    padding: 0 0.06em;
+    margin: 0;
+    line-height: inherit;
+    font-size: inherit;
+    vertical-align: baseline;
+}
+
 .messagecontent--streaming {
     padding-top: 22px;
 }
@@ -981,8 +1072,48 @@
     animation: message-streaming-spin 0.75s linear infinite;
 }
 
+/* 包住可滚动正文：角标 absolute 在本层，不随 .message-body 内滚动 */
+.message-body-outer {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.message-body-outer .message-body__expand-all-chip {
+    position: absolute;
+    top: 2px;
+    right: 12px;
+    z-index: 6;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 0.14s ease,
+        background 0.15s ease,
+        color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+/* 桌面：鼠标进入整条消息区域再显示；键盘 Tab 进入按钮时 focus-within 也会显示 */
+@media (hover: hover) and (pointer: fine) {
+    .message-body-outer:hover .message-body__expand-all-chip,
+    .message-body-outer:focus-within .message-body__expand-all-chip {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* 触摸 / 无精确悬停：保持可见，避免无法点开 */
+@media (hover: none), (pointer: coarse) {
+    .message-body-outer .message-body__expand-all-chip {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
 /* 单条消息主体：限制高度，内部滚动，避免撑满整屏 */
 .message-body {
+    position: relative;
     max-height: min(52vh, 440px);
     min-width: 0;
     max-width: 100%;
@@ -993,6 +1124,43 @@
     scrollbar-width: thin;
     word-wrap: break-word;
     overflow-wrap: anywhere;
+}
+
+.message-body--expanded {
+    max-height: none;
+    overflow-y: visible;
+    overflow-x: hidden;
+}
+
+.message-body__expand-all-chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.62);
+    color: rgba(72, 72, 78, 0.38);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.message-body__expand-all-chip:hover {
+    background: rgba(255, 255, 255, 0.92);
+    color: rgba(72, 72, 78, 0.55);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.message-body__expand-all-chip__svg {
+    display: block;
+    flex-shrink: 0;
 }
 
 /* 正文 + JSON 胶囊同一行流动，窄屏时与文字一样自动换行（非强制块级换行） */

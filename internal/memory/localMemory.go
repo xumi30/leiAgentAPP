@@ -5,6 +5,7 @@ import (
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
 	"leiAgent/utils"
+	"strings"
 	"sync"
 )
 
@@ -205,6 +206,67 @@ func AddAssistantContentMessage(chatId string, assistantMessage string) int {
 	idx := memoryLocal.AddMessage(chatId, &assistantMsg)
 	memoryLocal.afterAssistantContentTurn(chatId)
 	return idx
+}
+
+func CompactLatestToolRun(chatId string, summary string) int {
+	if utils.IsBlank(chatId) || utils.IsBlank(summary) {
+		return -1
+	}
+	memoryLocal := GetLocalMemory()
+	memoryLocal.RwLock.Lock()
+	defer memoryLocal.RwLock.Unlock()
+
+	msgs, ok := memoryLocal.Messages[chatId]
+	if !ok || len(msgs) == 0 {
+		memoryLocal.Messages[chatId] = []*Message{{
+			Role:    MessageRoleAssistant,
+			Content: summary,
+		}}
+		memoryLocal.afterAssistantContentTurn(chatId)
+		return 0
+	}
+
+	lastToolCall := -1
+	for i := len(msgs) - 1; i >= 0; i-- {
+		msg := msgs[i]
+		if msg != nil && msg.Role == MessageRoleAssistant && len(msg.ToolCalls) > 0 {
+			lastToolCall = i
+			break
+		}
+	}
+
+	start := lastToolCall
+	if start < 0 {
+		start = len(msgs)
+	} else {
+		for i := lastToolCall - 1; i >= 0; i-- {
+			msg := msgs[i]
+			if msg == nil || msg.Role != MessageRoleUser {
+				continue
+			}
+			if isInternalToolContinuationPrompt(msg.Content) {
+				continue
+			}
+			start = i + 1
+			break
+		}
+	}
+
+	next := append([]*Message{}, msgs[:start]...)
+	next = append(next, &Message{
+		Role:    MessageRoleAssistant,
+		Content: summary,
+	})
+	memoryLocal.Messages[chatId] = next
+	idx := len(next) - 1
+	memoryLocal.afterAssistantContentTurn(chatId)
+	return idx
+}
+
+func isInternalToolContinuationPrompt(content string) bool {
+	s := strings.TrimSpace(content)
+	return strings.HasPrefix(s, "工具已经执行完成") ||
+		strings.HasPrefix(s, "已按你的要求加载")
 }
 
 func SetSystemPrompt(chatId string, systemprompt string) int {

@@ -492,7 +492,12 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				"content":   msg.Content,
 				"role":      role,
 				// 与入库 startTime 一致，便于前端在重载前列顺序/展示时间
-				"timestamp": buf.startTime.UTC().Format(time.RFC3339Nano),
+				"timestamp":    buf.startTime.UTC().Format(time.RFC3339Nano),
+				"total_tokens": msg.TotalTokens,
+			}
+			if msg.TotalTokens > 0 {
+				logging.Info("EventsEmit %s chatID=%s messageID=%s role=%s total_tokens=%d contentLen=%d finished=%v",
+					eventname, chatID, mid, role, msg.TotalTokens, len(msg.Content), msg.IsFinished)
 			}
 			runtime.EventsEmit(a.ctx, eventname, appendMessage)
 
@@ -502,9 +507,19 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 
 			final := buf.content.String()
 			if strings.TrimSpace(final) != "" {
-				if err := dataoperation.SendMessageWithCreateTime(chatID, mid, final, role, buf.startTime); err != nil {
+				if msg.TotalTokens > 0 {
+					logging.Info("DialogOut 收口入库 chatID=%s messageID=%s role=%s total_tokens=%d 正文长度=%d",
+						chatID, mid, role, msg.TotalTokens, len(final))
+				} else {
+					logging.Debug("DialogOut 收口入库 chatID=%s messageID=%s role=%s total_tokens=0 正文长度=%d",
+						chatID, mid, role, len(final))
+				}
+				if err := dataoperation.SendMessageWithCreateTimeAndTokens(chatID, mid, final, role, buf.startTime, msg.TotalTokens); err != nil {
 					logging.Error("Failed to save message: %v", err)
 				}
+			} else if msg.TotalTokens > 0 {
+				logging.Warn("DialogOut 收口：正文为空但携带 total_tokens=%d chatID=%s messageID=%s（跳过入库避免空行）",
+					msg.TotalTokens, chatID, mid)
 			}
 			emitDialogStreamEnd(mid)
 			delete(streams, mid)

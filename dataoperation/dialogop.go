@@ -110,7 +110,32 @@ func SendMessageWithCreateTime(chatID, messageID, message, role string, createTi
 		}
 	}
 
-	err = sql.SaveMessageWithTimestamp(chatID, messageID, role, message, createTime)
+	err = sql.SaveMessageWithTimestamp(chatID, messageID, role, message, createTime, 0)
+	if err != nil {
+		logging.Error("保存消息失败: %v", err)
+		return err
+	}
+	return nil
+}
+
+// SendMessageWithCreateTimeAndTokens 与 SendMessageWithCreateTime 相同，并写入该条消息的 API total_tokens（助手消息）。
+func SendMessageWithCreateTimeAndTokens(chatID, messageID, message, role string, createTime time.Time, totalTokens int) error {
+	sql := GetSqlInstance()
+	if sql == nil {
+		return nil
+	}
+
+	conversations, err := sql.GetConversation(chatID)
+	if err != nil || conversations == nil {
+		logging.Error("SendMessageWithCreateTimeAndTokens 没有发现存在的对话id，现在新建对话: %v", err)
+		err := sql.SaveConversation(chatID, utils.TruncateRunes(message, utils.ChatTitleMaxRunes), "chat")
+		if err != nil {
+			logging.Error("创建对话失败: %v", err)
+			return err
+		}
+	}
+
+	err = sql.SaveMessageWithTimestamp(chatID, messageID, role, message, createTime, totalTokens)
 	if err != nil {
 		logging.Error("保存消息失败: %v", err)
 		return err

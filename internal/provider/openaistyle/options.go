@@ -24,6 +24,19 @@ func WithStream(stream bool) Option {
 	}
 }
 
+// WithStreamIncludeUsage 请求流式时回传 usage（若后端支持 stream_options.include_usage）。
+func WithStreamIncludeUsage(include bool) Option {
+	return func(r *ChatCompletionRequest) {
+		if !include {
+			return
+		}
+		if r.StreamOptions == nil {
+			r.StreamOptions = &StreamOptions{}
+		}
+		r.StreamOptions.IncludeUsage = true
+	}
+}
+
 // WithTemperature 设置采样温度
 func WithTemperature(temperature float64) Option {
 	return func(r *ChatCompletionRequest) {

@@ -503,10 +503,25 @@ const mdComponents = {
 };
 
 /**
- * @param {{ content: string, variant?: 'user' | 'assistant', isStreaming?: boolean }} props
+ * @param {{
+ *   content: string,
+ *   variant?: 'user' | 'assistant',
+ *   isStreaming?: boolean,
+ *   bodiesExpanded?: boolean,
+ *   onExpandAllBodies?: () => void,
+ *   onCollapseAllBodies?: () => void,
+ * }} props
  */
-export default function MessageContent({ content, variant = 'assistant', isStreaming = false }) {
+export default function MessageContent({
+  content,
+  variant = 'assistant',
+  isStreaming = false,
+  bodiesExpanded = false,
+  onExpandAllBodies,
+  onCollapseAllBodies,
+}) {
   const [jsonModalText, setJsonModalText] = useState(null);
+  const [hasInnerOverflow, setHasInnerOverflow] = useState(false);
   const parts = useMemo(() => buildRenderableParts(content ?? ''), [content]);
   const openJson = useCallback((s) => setJsonModalText(s), []);
   const closeJson = useCallback(() => setJsonModalText(null), []);
@@ -518,37 +533,106 @@ export default function MessageContent({ content, variant = 'assistant', isStrea
     el.scrollTop = el.scrollHeight;
   }, [content, isStreaming]);
 
+  useLayoutEffect(() => {
+    // 只对“可能产生内层滚轮的消息”显示角标（展开状态下也仅对这些消息显示“收起”角标）。
+    if (!onExpandAllBodies && !onCollapseAllBodies) {
+      setHasInnerOverflow(false);
+      return;
+    }
+    const el = bodyRef.current;
+    if (!el) return;
+    const measure = () => {
+      const collapsedMaxPx = Math.min(window.innerHeight * 0.52, 440);
+      setHasInnerOverflow(el.scrollHeight > collapsedMaxPx + 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro.disconnect();
+    };
+  }, [content, onExpandAllBodies, onCollapseAllBodies, isStreaming]);
+
+  const showExpandAllHint = Boolean(onExpandAllBodies && !bodiesExpanded && hasInnerOverflow);
+  const showCollapseAllHint = Boolean(onCollapseAllBodies && bodiesExpanded && hasInnerOverflow);
+  const showBodyOverflowChip = showExpandAllHint || showCollapseAllHint;
+
   return (
-    <div ref={bodyRef} className={`message-body message-body--${variant}`}>
-      <div className="message-body__flow">
-        {parts.map((p, idx) => {
-          if (p.type === 'json') {
-            return <JsonSnippetCard key={`j-${idx}`} raw={p.value} onOpen={openJson} />;
-          }
-          if (p.type === 'table') {
-            return (
-              <div key={`t-${idx}`} className="message-markdown message-markdown--in-flow">
-                <SimpleTableBlock table={p.table} />
-              </div>
-            );
-          }
-          if (p.type === 'code') {
-            return (
-              <pre key={`c-${idx}`} className="msg-fence-block">
-                {p.lang ? <span className="msg-fence-block__lang">{p.lang}</span> : null}
-                <code>{p.value}</code>
-              </pre>
-            );
-          }
-          const md = p.value.trim() ? (
-            <MarkdownSlicesWithDocLinks text={p.value} />
-          ) : null;
-          return md ? (
-            <div key={`m-${idx}`} className="message-markdown message-markdown--with-doc-chips message-markdown--in-flow">
-              {md}
-            </div>
-          ) : null;
-        })}
+    <>
+      <div className={`message-body-outer message-body-outer--${variant}`}>
+        {showBodyOverflowChip ? (
+          <button
+            type="button"
+            className="message-body__expand-all-chip"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (showCollapseAllHint) onCollapseAllBodies?.();
+              else onExpandAllBodies?.();
+            }}
+            title={
+              showCollapseAllHint
+                ? '收起全部长消息（恢复每条消息高度限制与内层滚动）'
+                : '展开全部长消息（所有气泡不再内层截断，可一次读完）'
+            }
+            aria-label={showCollapseAllHint ? '收起全部长消息' : '展开全部长消息'}
+          >
+            <svg
+              className="message-body__expand-all-chip__svg"
+              width="7"
+              height="7"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              {showCollapseAllHint ? (
+                <path d="M9 3H3v6M15 21h6v-6M3 3l6.5 6.5M21 21l-6.5-6.5" />
+              ) : (
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-6.5 6.5M3 21l6.5-6.5" />
+              )}
+            </svg>
+          </button>
+        ) : null}
+        <div
+          ref={bodyRef}
+          className={`message-body message-body--${variant}${bodiesExpanded ? ' message-body--expanded' : ''}`}
+        >
+          <div className="message-body__flow">
+            {parts.map((p, idx) => {
+              if (p.type === 'json') {
+                return <JsonSnippetCard key={`j-${idx}`} raw={p.value} onOpen={openJson} />;
+              }
+              if (p.type === 'table') {
+                return (
+                  <div key={`t-${idx}`} className="message-markdown message-markdown--in-flow">
+                    <SimpleTableBlock table={p.table} />
+                  </div>
+                );
+              }
+              if (p.type === 'code') {
+                return (
+                  <pre key={`c-${idx}`} className="msg-fence-block">
+                    {p.lang ? <span className="msg-fence-block__lang">{p.lang}</span> : null}
+                    <code>{p.value}</code>
+                  </pre>
+                );
+              }
+              const md = p.value.trim() ? (
+                <MarkdownSlicesWithDocLinks text={p.value} />
+              ) : null;
+              return md ? (
+                <div key={`m-${idx}`} className="message-markdown message-markdown--with-doc-chips message-markdown--in-flow">
+                  {md}
+                </div>
+              ) : null;
+            })}
+          </div>
+        </div>
       </div>
       {jsonModalText
         ? createPortal(
@@ -556,6 +640,6 @@ export default function MessageContent({ content, variant = 'assistant', isStrea
             document.body
           )
         : null}
-    </div>
+    </>
   );
 }

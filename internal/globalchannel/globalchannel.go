@@ -2,11 +2,26 @@ package globalchannel
 
 import (
 	"context"
+	"strings"
+
 	"leiAgent/logging"
 	"leiAgent/utils"
 	"sync"
 	"time"
 )
+
+// dialogOutChatIDFromCtx 优先使用 DialogOutChatID（子会话/临时 ctx 与 UI 会话分离时），否则回落 ChatIDString。
+func dialogOutChatIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(utils.DialogOutChatIDString).(string); ok {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	if v, ok := ctx.Value(utils.ChatIDString).(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
 
 // ChannelConfig 配置选项
 type ChannelConfig struct {
@@ -42,6 +57,8 @@ type Message struct {
 	Content    string
 	Role       string
 	IsFinished bool
+	// TotalTokens 单次助手补全的 API usage.total_tokens（仅流式收尾或非流式带 usage 时非 0）
+	TotalTokens int
 }
 
 // 全局单例实例
@@ -284,21 +301,39 @@ func CleanupGlobalChannel(chatID string) {
 	_ = Cleanup(chatID)
 }
 
-func SendAssitantMessageOnce(ctx context.Context, msg string) {
-	chatID := ctx.Value(utils.ChatIDString).(string)
+func SendAssitantMessageOnce(ctx context.Context, msg string, totalTokens ...int) {
+	chatID := dialogOutChatIDFromCtx(ctx)
 	dialogOutChan := GetGlobalDialogOutChannel(chatID)
 	messageid := utils.GenerateMessageID()
-	mg := Message{MessageID: messageid, Content: msg, Role: utils.MessageRoleAssistant, IsFinished: true}
+	tok := 0
+	if len(totalTokens) > 0 {
+		tok = totalTokens[0]
+	}
+	mg := Message{
+		MessageID:   messageid,
+		Content:     msg,
+		Role:        utils.MessageRoleAssistant,
+		IsFinished:  true,
+		TotalTokens: tok,
+	}
 
+	if dialogOutChan == nil {
+		logging.Warn("SendAssitantMessageOnce: DialogOut channel 未注册 chatID=%q（消息将丢弃）", chatID)
+		return
+	}
 	dialogOutChan <- &mg
 
 }
 
 func SendUserMessageOnce(ctx context.Context, msg string) {
-	chatID := ctx.Value(utils.ChatIDString).(string)
+	chatID := dialogOutChatIDFromCtx(ctx)
 	dialogOutChan := GetGlobalDialogOutChannel(chatID)
 	messageid := utils.GenerateMessageID()
 
+	if dialogOutChan == nil {
+		logging.Warn("SendUserMessageOnce: DialogOut channel 未注册 chatID=%q", chatID)
+		return
+	}
 	dialogOutChan <- &Message{
 		MessageID:  messageid,
 		Content:    msg,
@@ -308,22 +343,34 @@ func SendUserMessageOnce(ctx context.Context, msg string) {
 
 }
 
-func SendAssitantMessageStream(ctx context.Context, msg string, messageid string, isFinish bool) {
-	chatID := ctx.Value(utils.ChatIDString).(string)
+func SendAssitantMessageStream(ctx context.Context, msg string, messageid string, isFinish bool, totalTokens int) {
+	chatID := dialogOutChatIDFromCtx(ctx)
 	dialogOutChan := GetGlobalDialogOutChannel(chatID)
+	if dialogOutChan == nil {
+		logging.Warn("SendAssitantMessageStream: DialogOut channel 未注册 chatID=%q finish=%v tok=%d（丢弃）", chatID, isFinish, totalTokens)
+		return
+	}
+	if isFinish && totalTokens > 0 {
+		logging.Info("SendAssitantMessageStream 收尾 chatID=%q messageID=%q total_tokens=%d", chatID, messageid, totalTokens)
+	}
 
 	dialogOutChan <- &Message{
-		MessageID:  messageid,
-		Content:    msg,
-		Role:       utils.MessageRoleAssistant,
-		IsFinished: isFinish,
+		MessageID:   messageid,
+		Content:     msg,
+		Role:        utils.MessageRoleAssistant,
+		IsFinished:  isFinish,
+		TotalTokens: totalTokens,
 	}
 
 }
 
 func SendAReasonningMessageStream(ctx context.Context, msg string, messageid string, isFinish bool) {
-	chatID := ctx.Value(utils.ChatIDString).(string)
+	chatID := dialogOutChatIDFromCtx(ctx)
 	reasonOutChan := GetGlobalReasonOutChannel(chatID)
+	if reasonOutChan == nil {
+		logging.Warn("SendAReasonningMessageStream: ReasonOut channel 未注册 chatID=%q finish=%v", chatID, isFinish)
+		return
+	}
 
 	reasonOutChan <- &Message{
 		MessageID:  messageid,

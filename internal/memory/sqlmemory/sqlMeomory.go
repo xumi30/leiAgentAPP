@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -86,6 +87,13 @@ func createTables(db *sql.DB) error {
 	for _, query := range queries {
 		if _, err := db.Exec(query); err != nil {
 			return fmt.Errorf("failed to execute query: %w", err)
+		}
+	}
+
+	if _, err := db.Exec(`ALTER TABLE messages ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0`); err != nil {
+		errStr := strings.ToLower(err.Error())
+		if !strings.Contains(errStr, "duplicate column") {
+			return fmt.Errorf("migrate messages add total_tokens: %w", err)
 		}
 	}
 

@@ -10,6 +10,13 @@ type needToolTopicsPayload struct {
 	NeedToolTopics []string `json:"needToolTopics"`
 }
 
+type ToolCompletePayload struct {
+	NeedToolToics           []string
+	NeedToolTopicsRequested bool
+	Content                 string
+	SummaryForNextLLM       string
+}
+
 // GetNeedToolToics 从模型回复中解析需要补充加载的工具话题。
 // 为兼容现有 prompt，优先读取 needToolToics，同时兼容拼写正确的 needToolTopics。
 func GetNeedToolToics(raw string) ([]string, bool) {
@@ -18,11 +25,89 @@ func GetNeedToolToics(raw string) ([]string, bool) {
 		return nil, false
 	}
 
+	if payload, ok := ParseToolCompletePayload(candidate); ok {
+		return normalizeNeedToolTopics(payload.NeedToolToics)
+	}
+
 	if topics, ok := parseNeedToolTopicsFromJSON(candidate); ok {
 		return topics, true
 	}
 
 	return extractNeedToolTopicsFromText(candidate)
+}
+
+func GetNeedToolToicsFromPayload(payload ToolCompletePayload) ([]string, bool) {
+	return normalizeNeedToolTopics(payload.NeedToolToics)
+}
+
+func ParseToolCompletePayload(raw string) (ToolCompletePayload, bool) {
+	candidate := strings.TrimSpace(raw)
+	if candidate == "" {
+		return ToolCompletePayload{}, false
+	}
+
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(PrepareLLMJSON(candidate)), &obj); err != nil {
+		return ToolCompletePayload{}, false
+	}
+
+	var payload ToolCompletePayload
+	payload.NeedToolToics, payload.NeedToolTopicsRequested = parseFlexibleToolTopics(obj["needToolToics"])
+	if len(payload.NeedToolToics) == 0 {
+		if topics, requested := parseFlexibleToolTopics(obj["needToolTopics"]); len(topics) > 0 || requested {
+			payload.NeedToolToics = topics
+			payload.NeedToolTopicsRequested = requested
+		}
+	}
+
+	payload.Content = firstJSONString(obj, "content", "message")
+	payload.SummaryForNextLLM = firstJSONString(obj, "summaryfornextllm", "summaryForNextLLM", "summaryForNextLlm", "summary_for_next_llm")
+
+	if len(payload.NeedToolToics) == 0 && !payload.NeedToolTopicsRequested && payload.Content == "" && payload.SummaryForNextLLM == "" {
+		return ToolCompletePayload{}, false
+	}
+	return payload, true
+}
+
+func parseFlexibleToolTopics(raw json.RawMessage) ([]string, bool) {
+	if len(raw) == 0 {
+		return nil, false
+	}
+
+	var topics []string
+	if err := json.Unmarshal(raw, &topics); err == nil {
+		normalized, ok := normalizeNeedToolTopics(topics)
+		return normalized, ok
+	}
+
+	var requested bool
+	if err := json.Unmarshal(raw, &requested); err == nil {
+		return nil, requested
+	}
+
+	var topic string
+	if err := json.Unmarshal(raw, &topic); err == nil {
+		normalized, ok := normalizeNeedToolTopics([]string{topic})
+		return normalized, ok
+	}
+
+	return nil, false
+}
+
+func firstJSONString(obj map[string]json.RawMessage, keys ...string) string {
+	for _, key := range keys {
+		raw, ok := obj[key]
+		if !ok || len(raw) == 0 {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(raw, &s); err == nil {
+			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
 }
 
 func parseNeedToolTopicsFromJSON(raw string) ([]string, bool) {

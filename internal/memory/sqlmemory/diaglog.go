@@ -14,6 +14,7 @@ const dialogtable = `CREATE TABLE IF NOT EXISTS messages (
     chatID TEXT NOT NULL,
     role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'reasoning')),
     content TEXT NOT NULL,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (chatID) REFERENCES conversations(id) ON DELETE CASCADE
 )`
@@ -87,26 +88,32 @@ func (m *SQLMemory) GetChatSubChat(subChatID string) (string, error) {
 
 // SaveMessage 保存消息（写入时刻作为 timestamp）
 func (m *SQLMemory) SaveMessage(chatID, messageID, role, content string) error {
-	return m.SaveMessageWithTimestamp(chatID, messageID, role, content, time.Now())
+	return m.SaveMessageWithTimestamp(chatID, messageID, role, content, time.Now(), 0)
 }
 
 // SaveMessageWithTimestamp 保存消息并指定 timestamp（用于流式首包到达时间，保证会话内排序正确）
-func (m *SQLMemory) SaveMessageWithTimestamp(chatID, messageID, role, content string, ts time.Time) error {
+func (m *SQLMemory) SaveMessageWithTimestamp(chatID, messageID, role, content string, ts time.Time, totalTokens int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if ts.IsZero() {
 		ts = time.Now()
 	}
+	if totalTokens < 0 {
+		totalTokens = 0
+	}
 
 	query := `
-		INSERT INTO messages (chatID, messageID, role, content, timestamp)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO messages (chatID, messageID, role, content, timestamp, total_tokens)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := m.db.Exec(query, chatID, messageID, role, content, ts.UTC())
+	_, err := m.db.Exec(query, chatID, messageID, role, content, ts.UTC(), totalTokens)
 	if err != nil {
 		return fmt.Errorf("failed to save message: %w", err)
+	}
+	if totalTokens > 0 {
+		logging.Info("messages 入库 total_tokens chatID=%s messageID=%s role=%s tokens=%d", chatID, messageID, role, totalTokens)
 	}
 
 	return nil
@@ -156,7 +163,7 @@ func (m *SQLMemory) GetMessagesByChatIDAndRole(chatID, role string) ([]map[strin
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	query := `SELECT chatID, messageID, role, content, timestamp FROM messages WHERE chatID = ? AND role = ? ORDER BY timestamp ASC`
+	query := `SELECT chatID, messageID, role, content, timestamp, IFNULL(total_tokens, 0) FROM messages WHERE chatID = ? AND role = ? ORDER BY timestamp ASC`
 
 	rows, err := m.db.Query(query, chatID, role)
 	if err != nil {
@@ -171,16 +178,18 @@ func (m *SQLMemory) GetMessagesByChatIDAndRole(chatID, role string) ([]map[strin
 		var messageID string
 		var r, content string
 		var timestamp time.Time
+		var totalTok int
 
-		if err := rows.Scan(&cid, &messageID, &r, &content, &timestamp); err != nil {
+		if err := rows.Scan(&cid, &messageID, &r, &content, &timestamp, &totalTok); err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
 		messages = append(messages, map[string]interface{}{
-			"chatID":    cid,
-			"messageID": messageID,
-			"role":      r,
-			"content":   content,
-			"timestamp": timestamp,
+			"chatID":       cid,
+			"messageID":    messageID,
+			"role":         r,
+			"content":      content,
+			"timestamp":    timestamp,
+			"total_tokens": totalTok,
 		})
 	}
 
@@ -196,7 +205,7 @@ func (m *SQLMemory) GetMessages(chatID string) ([]map[string]interface{}, error)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	query := `SELECT chatID, messageID, role, content, timestamp FROM messages WHERE chatID = ? AND role != 'reasoning' ORDER BY timestamp ASC`
+	query := `SELECT chatID, messageID, role, content, timestamp, IFNULL(total_tokens, 0) FROM messages WHERE chatID = ? AND role != 'reasoning' ORDER BY timestamp ASC`
 	rows, err := m.db.Query(query, chatID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages: %w", err)
@@ -211,17 +220,19 @@ func (m *SQLMemory) GetMessages(chatID string) ([]map[string]interface{}, error)
 		var messageID string
 		var role, content string
 		var timestamp time.Time
+		var totalTok int
 
-		if err := rows.Scan(&chatID, &messageID, &role, &content, &timestamp); err != nil {
+		if err := rows.Scan(&chatID, &messageID, &role, &content, &timestamp, &totalTok); err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
 
 		messages = append(messages, map[string]interface{}{
-			"chatID":    chatID,
-			"messageID": messageID,
-			"role":      role,
-			"content":   content,
-			"timestamp": timestamp,
+			"chatID":       chatID,
+			"messageID":    messageID,
+			"role":         role,
+			"content":      content,
+			"timestamp":    timestamp,
+			"total_tokens": totalTok,
 		})
 	}
 
@@ -236,7 +247,7 @@ func (m *SQLMemory) GetMessagesByMessageID(messageID string) (map[string]interfa
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	query := `SELECT chatID, messageID, role, content, timestamp FROM messages WHERE messageID = ?`
+	query := `SELECT chatID, messageID, role, content, timestamp, IFNULL(total_tokens, 0) FROM messages WHERE messageID = ?`
 
 	row := m.db.QueryRow(query, messageID)
 
@@ -244,8 +255,9 @@ func (m *SQLMemory) GetMessagesByMessageID(messageID string) (map[string]interfa
 	var msgID string
 	var role, content string
 	var timestamp time.Time
+	var totalTok int
 
-	if err := row.Scan(&chatID, &msgID, &role, &content, &timestamp); err != nil {
+	if err := row.Scan(&chatID, &msgID, &role, &content, &timestamp, &totalTok); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("message not found")
 		}
@@ -253,11 +265,12 @@ func (m *SQLMemory) GetMessagesByMessageID(messageID string) (map[string]interfa
 	}
 
 	return map[string]interface{}{
-		"chatID":    chatID,
-		"messageID": msgID,
-		"role":      role,
-		"content":   content,
-		"timestamp": timestamp,
+		"chatID":       chatID,
+		"messageID":    msgID,
+		"role":         role,
+		"content":      content,
+		"timestamp":    timestamp,
+		"total_tokens": totalTok,
 	}, nil
 }
 

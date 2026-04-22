@@ -45,6 +45,7 @@ type UserProfile struct {
 }
 
 type IdentityProfile struct {
+	Name            string             `json:"name"`
 	AgeRange        string             `json:"age_range"`
 	Gender          string             `json:"gender"`
 	Location        string             `json:"location"`
@@ -146,6 +147,7 @@ Return this schema exactly:
 {
   "summary": "string",
   "identity": {
+    "name": "",
     "age_range": "",
     "gender": "",
     "location": "",

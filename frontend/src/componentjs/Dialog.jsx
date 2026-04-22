@@ -13,7 +13,9 @@ import MessageContent from './MessageContent.jsx';
 import {
     classifyUserMessage,
     classifyUserMessageLabel,
+    isAssistantToolRoutineMessage,
 } from '../utils/messageClassify.js';
+import { getRandomMacaronColor } from './Constant';
 
 const MAIN_SHEET_ID = 'main';
 
@@ -143,6 +145,8 @@ export default function Dialog() {
     const [sheets, setSheets] = useState([
         { id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 },
     ]);
+    /** 侧栏/会话标题，用于主便签页签展示（替代固定「主对话」） */
+    const [conversationTitle, setConversationTitle] = useState('');
     const [activeSheetId, setActiveSheetId] = useState(MAIN_SHEET_ID);
     const [classifyHint, setClassifyHint] = useState('');
     /** 生成备忘：收窄消息区 + 按条勾选后写入 */
@@ -158,6 +162,8 @@ export default function Dialog() {
     const [memoPresetDraftLabel, setMemoPresetDraftLabel] = useState('');
     const [memoPresetDraftText, setMemoPresetDraftText] = useState('');
     const messagesRef = useRef(null);
+    /** 为 true 时取消每条消息气泡内的 max-height，便于通读长文（由溢出气泡角标触发） */
+    const [allMessageBodiesExpanded, setAllMessageBodiesExpanded] = useState(false);
     const [pinnedToBottom, setPinnedToBottom] = useState(true);
     const inputRef = useRef(null);
     /** 中文等 IME：拼音阶段为 true，避免回车被当成发送 */
@@ -239,6 +245,21 @@ export default function Dialog() {
         [customMemoPresets],
     );
 
+    /** 当前会话 API 报告的 total_tokens 之和（按条记在助手消息上） */
+    const conversationTokenTotal = useMemo(() => {
+        const list = messages ?? [];
+        let sum = 0;
+        for (const m of list) {
+            const raw = m.total_tokens ?? m.totalTokens;
+            const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+            if (Number.isFinite(n) && n > 0) sum += n;
+        }
+        return sum;
+    }, [messages]);
+
+    /** 与侧栏对话列表同一套马卡龙色（按 chatID 哈希） */
+    const listMacaron = useMemo(() => getRandomMacaronColor(String(chatId ?? '')), [chatId]);
+
     const addCustomMemoPreset = useCallback(() => {
         const label = memoPresetDraftLabel.trim().slice(0, 24);
         const text = memoPresetDraftText.trim().slice(0, 800);
@@ -261,6 +282,9 @@ export default function Dialog() {
             return next;
         });
     }, []);
+
+    const expandAllMessageBodies = useCallback(() => setAllMessageBodiesExpanded(true), []);
+    const collapseAllMessageBodies = useCallback(() => setAllMessageBodiesExpanded(false), []);
 
     const showTransientHint = useCallback((text, ms = QUEUE_HINT_MS) => {
         setClassifyHint(text);
@@ -356,7 +380,8 @@ export default function Dialog() {
 
     useEffect(() => {
         const handleConversationChange = (event) => {
-            const { conversationId } = event.detail;
+            const { conversationId, title } = event.detail ?? {};
+            setConversationTitle(String(title ?? '').trim());
             const nextChatId = String(conversationId ?? '');
             const preservePendingStop =
                 !chatIdRef.current &&
@@ -373,6 +398,7 @@ export default function Dialog() {
             setClassifyHint('');
             setMemoStripOpen(false);
             setMemoMarkedIds(new Set());
+            setAllMessageBodiesExpanded(false);
             const getMessages = async () => {
                 const messages = await GetMessages(conversationId);
                 setMessages(messages);
@@ -416,8 +442,12 @@ export default function Dialog() {
                 // 检查是否已存在该消息ID
                 const messageExists = prevMessages.some(msg => msg.messageID === message.messageID);
 
-                // 如果消息已存在，返回原数组；否则添加新消息
-                return messageExists ? prevMessages : [...prevMessages, message];
+                if (messageExists) {
+                    return prevMessages.map((msg) =>
+                        String(msg.messageID) === String(message.messageID) ? { ...msg, ...message } : msg,
+                    );
+                }
+                return [...prevMessages, message];
             });
 
             setChatId(message.chatID); // 更新当前对话ID
@@ -441,10 +471,17 @@ export default function Dialog() {
                     // 使用 map 创建新数组，保持不可变性；timestamp 以首包为准
                     return prevMessages.map((msg) => {
                         if (msg.messageID === message.messageID) {
+                            const tokRaw = message.total_tokens ?? message.totalTokens;
+                            const tokN = typeof tokRaw === 'number' ? tokRaw : parseInt(String(tokRaw ?? ''), 10);
+                            const mergedTok =
+                                Number.isFinite(tokN) && tokN > 0
+                                    ? tokN
+                                    : (msg.total_tokens ?? msg.totalTokens ?? 0);
                             // 创建新对象，保持不可变性
                             return {
                                 ...msg,
                                 content: msg.content + message.content,
+                                total_tokens: mergedTok,
                             };
                         }
                         return msg;
@@ -684,13 +721,35 @@ export default function Dialog() {
                             aria-selected={activeSheetId === s.id}
                             className={
                                 'dialog__tab' +
-                                (activeSheetId === s.id ? ' dialog__tab--active' : '')
+                                (activeSheetId === s.id ? ' dialog__tab--active' : '') +
+                                (s.id === MAIN_SHEET_ID ? ' dialog__tab--main dialog__tab--convo-tint' : '')
+                            }
+                            style={
+                                s.id === MAIN_SHEET_ID
+                                    ? { backgroundColor: listMacaron.bg, color: listMacaron.text }
+                                    : undefined
                             }
                             // 暂时断开“点击页签切换”触发点：保留 UI，但不触发切换。
                             // onClick={() => setActiveSheetId(s.id)}
-                            title={s.title}
+                            title={
+                                s.id === MAIN_SHEET_ID
+                                    ? `${(conversationTitle || s.title || '主对话').trim() || '主对话'} · ${conversationTokenTotal.toLocaleString()} tokens`
+                                    : s.title
+                            }
                         >
-                            <span className="dialog__tab-label">{s.title}</span>
+                            {s.id === MAIN_SHEET_ID ? (
+                                <span className="dialog__tab-inline" dir="auto">
+                                    <span className="dialog__tab-main-title-inline">
+                                        {(conversationTitle || s.title || '主对话').trim() || '主对话'}
+                                    </span>
+                                    <span className="dialog__tab-token-inline">
+                                        {' / '}
+                                        {conversationTokenTotal.toLocaleString()} tokens
+                                    </span>
+                                </span>
+                            ) : (
+                                <span className="dialog__tab-label">{s.title}</span>
+                            )}
                         </button>
                     ))}
                 </div>
@@ -722,6 +781,8 @@ export default function Dialog() {
                         lastUserMessageIdInSheet != null &&
                         String(msg.messageID) === lastUserMessageIdInSheet;
                     const mid = String(msg.messageID);
+                    const toolRoutineCompact =
+                        !isUser && isAssistantToolRoutineMessage(msg.content || '');
                     return (
                         <div
                             key={'dialogmessage_' + msg.messageID}
@@ -753,7 +814,7 @@ export default function Dialog() {
                                     </div>
                                 ) : null}
                                 <div
-                                    className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}${streamingHere ? ' messagecontent--streaming' : ''}${awaitingAssistantFirstChunk ? ' messagecontent--user-awaiting' : ''}`}
+                                    className={`messagecontent messagecontent--${isUser ? 'user' : 'assistant'}${streamingHere ? ' messagecontent--streaming' : ''}${awaitingAssistantFirstChunk ? ' messagecontent--user-awaiting' : ''}${toolRoutineCompact ? ' messagecontent--tool-routine' : ''}`}
                                 >
                                     {awaitingAssistantFirstChunk ? (
                                         <span
@@ -779,6 +840,9 @@ export default function Dialog() {
                                         content={msg.content || ''}
                                         variant={isUser ? 'user' : 'assistant'}
                                         isStreaming={Boolean(streamingHere)}
+                                        bodiesExpanded={allMessageBodiesExpanded}
+                                        onExpandAllBodies={expandAllMessageBodies}
+                                        onCollapseAllBodies={collapseAllMessageBodies}
                                     />
                                 </div>
                             </div>

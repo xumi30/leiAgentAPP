@@ -37,6 +37,7 @@ type ChatCompletionRequest struct {
 	Model            string          `json:"model"`                       // 模型名称
 	Messages         []ChatMessage   `json:"messages"`                    // 消息列表
 	Stream           bool            `json:"stream,omitempty"`            // 是否流式输出
+	StreamOptions    *StreamOptions  `json:"stream_options,omitempty"`    // OpenAI 兼容：流式选项（如 include_usage）
 	Temperature      *float64        `json:"temperature,omitempty"`       // 采样温度
 	TopP             *float64        `json:"top_p,omitempty"`             // 核采样参数
 	MaxTokens        *int            `json:"max_tokens,omitempty"`        // 最大token数
@@ -53,6 +54,12 @@ type ChatCompletionRequest struct {
 	Seed             *int            `json:"seed,omitempty"`              // 随机种子
 	Enablesearch     bool            `json:"enable_search,omitempty"`     // 是否启用搜索QWEN
 	EnableThinking   *bool           `json:"enable_thinking,omitempty"`   // 百炼/DashScope Qwen 思考开关（兼容 OpenAI 扩展字段）
+}
+
+// StreamOptions OpenAI 兼容：流式响应附加选项
+// include_usage=true 时，部分后端会在流末尾回传 usage 统计。
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage,omitempty"`
 }
 
 // ChatMessage 对话消息结构体
