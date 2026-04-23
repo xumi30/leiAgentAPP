@@ -292,17 +292,12 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		openaistyle.WithMessages(chatMessages),
 		openaistyle.WithMaxTokens(maxTok),
 		openaistyle.WithStream(isStream),
-		// 尽力让 OpenAI 兼容后端在 stream 场景也返回 usage，供 UI 实时统计 token。
 		openaistyle.WithStreamIncludeUsage(isStream),
 		openaistyle.WithTools(tls),
 		openaistyle.WithToolChoice(toolChoice),
 	}
-	if IsLLMThinkingDisabled() {
-		opts = append(opts,
-			openaistyle.WithEnableThinking(false),
-			openaistyle.WithThinking(&openaistyle.ChatThinking{Type: openaistyle.ThinkingDisabled}),
-		)
-	}
+	// Some OpenAI-compatible gateways reject non-standard thinking fields even
+	// when they are set to "disabled". In disabled mode we simply omit them.
 
 	req := openaistyle.NewChatCompletionRequest(opts...)
 

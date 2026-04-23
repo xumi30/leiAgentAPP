@@ -145,10 +145,10 @@ export default function Dialog() {
     const [sheets, setSheets] = useState([
         { id: MAIN_SHEET_ID, title: '主对话', startIdx: 0 },
     ]);
-    /** 侧栏/会话标题，用于主便签页签展示（替代固定「主对话」） */
     const [conversationTitle, setConversationTitle] = useState('');
     const [activeSheetId, setActiveSheetId] = useState(MAIN_SHEET_ID);
     const [classifyHint, setClassifyHint] = useState('');
+    const [runtimeError, setRuntimeError] = useState('');
     /** 生成备忘：收窄消息区 + 按条勾选后写入 */
     const [memoStripOpen, setMemoStripOpen] = useState(false);
     /** @type {[Set<string>, React.Dispatch<React.SetStateAction<Set<string>>>]} */
@@ -162,7 +162,6 @@ export default function Dialog() {
     const [memoPresetDraftLabel, setMemoPresetDraftLabel] = useState('');
     const [memoPresetDraftText, setMemoPresetDraftText] = useState('');
     const messagesRef = useRef(null);
-    /** 为 true 时取消每条消息气泡内的 max-height，便于通读长文（由溢出气泡角标触发） */
     const [allMessageBodiesExpanded, setAllMessageBodiesExpanded] = useState(false);
     const [pinnedToBottom, setPinnedToBottom] = useState(true);
     const inputRef = useRef(null);
@@ -231,6 +230,21 @@ export default function Dialog() {
 
     const memoMarkedCount = memoMarkedIds.size;
 
+    const conversationTokenTotal = useMemo(() => {
+        let sum = 0;
+        for (const msg of messages ?? []) {
+            const raw = msg.total_tokens ?? msg.totalTokens;
+            const value = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+            if (Number.isFinite(value) && value > 0) sum += value;
+        }
+        return sum;
+    }, [messages]);
+
+    const listMacaron = useMemo(
+        () => getRandomMacaronColor(String(chatId ?? '')),
+        [chatId],
+    );
+
     /** 当前便签内时间顺序上最后一条用户消息（用于「等待首包」时的 loading 锚点） */
     const lastUserMessageIdInSheet = useMemo(() => {
         const list = visibleMessages ?? [];
@@ -244,21 +258,6 @@ export default function Dialog() {
         () => [...MEMO_COMPOSE_PRESETS_DEFAULT, ...customMemoPresets],
         [customMemoPresets],
     );
-
-    /** 当前会话 API 报告的 total_tokens 之和（按条记在助手消息上） */
-    const conversationTokenTotal = useMemo(() => {
-        const list = messages ?? [];
-        let sum = 0;
-        for (const m of list) {
-            const raw = m.total_tokens ?? m.totalTokens;
-            const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
-            if (Number.isFinite(n) && n > 0) sum += n;
-        }
-        return sum;
-    }, [messages]);
-
-    /** 与侧栏对话列表同一套马卡龙色（按 chatID 哈希） */
-    const listMacaron = useMemo(() => getRandomMacaronColor(String(chatId ?? '')), [chatId]);
 
     const addCustomMemoPreset = useCallback(() => {
         const label = memoPresetDraftLabel.trim().slice(0, 24);
@@ -331,6 +330,17 @@ export default function Dialog() {
         };
     }, []);
 
+    const showRuntimeError = useCallback((text, ms = 6000) => {
+        const msg = String(text ?? '').trim();
+        if (!msg) return;
+        setRuntimeError(msg);
+        if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+        hintTimerRef.current = setTimeout(() => {
+            setRuntimeError('');
+            hintTimerRef.current = null;
+        }, ms);
+    }, []);
+
     const refreshMemoRefIds = useCallback(async () => {
         try {
             const arr = await GetMemoReferencedMessageIDs();
@@ -400,9 +410,15 @@ export default function Dialog() {
             setMemoMarkedIds(new Set());
             setAllMessageBodiesExpanded(false);
             const getMessages = async () => {
-                const messages = await GetMessages(conversationId);
-                setMessages(messages);
-                console.log("1收到消息更新事件:", messages);
+                try {
+                    const nextMessages = await GetMessages(conversationId);
+                    setMessages(Array.isArray(nextMessages) ? nextMessages : []);
+                    console.log("1收到消息更新事件:", nextMessages);
+                } catch (e) {
+                    console.error('GetMessages:', e);
+                    setMessages([]);
+                    showRuntimeError(`加载对话失败：${String(e?.message || e)}`);
+                }
             }
             getMessages();
         };
@@ -412,7 +428,7 @@ export default function Dialog() {
         return () => {
             window.removeEventListener('conversationChanged', handleConversationChange);
         };
-    }, []);
+    }, [showRuntimeError]);
 
     const handleMessagesScroll = useCallback(() => {
         const el = messagesRef.current;
@@ -468,20 +484,17 @@ export default function Dialog() {
                 const messageExists = prevMessages.some(msg => msg.messageID === message.messageID);
 
                 if (messageExists) {
-                    // 使用 map 创建新数组，保持不可变性；timestamp 以首包为准
                     return prevMessages.map((msg) => {
                         if (msg.messageID === message.messageID) {
                             const tokRaw = message.total_tokens ?? message.totalTokens;
-                            const tokN = typeof tokRaw === 'number' ? tokRaw : parseInt(String(tokRaw ?? ''), 10);
-                            const mergedTok =
-                                Number.isFinite(tokN) && tokN > 0
-                                    ? tokN
-                                    : (msg.total_tokens ?? msg.totalTokens ?? 0);
-                            // 创建新对象，保持不可变性
+                            const tokValue = typeof tokRaw === 'number' ? tokRaw : parseInt(String(tokRaw ?? ''), 10);
                             return {
                                 ...msg,
                                 content: msg.content + message.content,
-                                total_tokens: mergedTok,
+                                total_tokens:
+                                    Number.isFinite(tokValue) && tokValue > 0
+                                        ? tokValue
+                                        : (msg.total_tokens ?? msg.totalTokens ?? 0),
                             };
                         }
                         return msg;
@@ -496,16 +509,18 @@ export default function Dialog() {
         }
 
         const handleSenderror = (error) => {
-            alert("发送消息失败: " + error);
-            console.log("发送消息失败: ", error);
+            const msg = String(error?.message || error || '未知错误');
+            console.log("发送消息失败: ", msg);
+            showRuntimeError(`发送消息失败：${msg}`);
             setTaskBusy(false);
             setStopVisible(false);
             setStreamPulse(null);
         }
 
         const handleDispatcherError = (error) => {
-            alert("无法启动对话引擎（Dispatcher）\n\n" + error);
-            console.error("dispatcherError:", error);
+            const msg = String(error?.message || error || '未知错误');
+            console.error("dispatcherError:", msg);
+            showRuntimeError(`无法启动对话引擎：${msg}`);
             setTaskBusy(false);
             setStopVisible(false);
             setStreamPulse(null);
@@ -544,7 +559,7 @@ export default function Dialog() {
             EventsOff("sendMessageError");
             EventsOff("dispatcherError");
         };
-    }, []);
+    }, [showRuntimeError]);
 
     const sendMessage = async () => {
         const el = inputRef.current;
@@ -659,7 +674,7 @@ export default function Dialog() {
         if (memoCheckSaving) return;
         const ordered = memoListMessages.filter((m) => memoMarkedIds.has(String(m.messageID)));
         if (ordered.length === 0) {
-            alert('请先勾选要写入备忘录的消息。');
+            showRuntimeError('请先勾选要写入备忘录的消息。', 2600);
             return;
         }
         const built = buildMemoMarkdownFromMarked(ordered);
@@ -671,17 +686,17 @@ export default function Dialog() {
             finishMemoAppend();
         } catch (err) {
             console.error('AppendMemoMarkdown:', err);
-            alert(String(err?.message || err));
+            showRuntimeError(String(err?.message || err));
         } finally {
             setMemoCheckSaving(false);
         }
-    }, [memoCheckSaving, memoListMessages, memoMarkedIds, finishMemoAppend]);
+    }, [memoCheckSaving, memoListMessages, memoMarkedIds, finishMemoAppend, showRuntimeError]);
 
     const sendLLMMemo = useCallback(async () => {
         if (memoCheckSaving) return;
         const ordered = memoListMessages.filter((m) => memoMarkedIds.has(String(m.messageID)));
         if (ordered.length === 0) {
-            alert('请先勾选要写入备忘录的消息。');
+            showRuntimeError('请先勾选要写入备忘录的消息。', 2600);
             return;
         }
         const built = buildMemoMarkdownFromMarked(ordered);
@@ -696,11 +711,11 @@ export default function Dialog() {
             finishMemoAppend();
         } catch (err) {
             console.error('ComposeMemoWithLLM:', err);
-            alert(String(err?.message || err));
+            showRuntimeError(String(err?.message || err));
         } finally {
             setMemoCheckSaving(false);
         }
-    }, [memoCheckSaving, memoListMessages, memoMarkedIds, memoComposeHint, finishMemoAppend]);
+    }, [memoCheckSaving, memoListMessages, memoMarkedIds, memoComposeHint, finishMemoAppend, showRuntimeError]);
 
     return (
         <div
@@ -724,11 +739,7 @@ export default function Dialog() {
                                 (activeSheetId === s.id ? ' dialog__tab--active' : '') +
                                 (s.id === MAIN_SHEET_ID ? ' dialog__tab--main dialog__tab--convo-tint' : '')
                             }
-                            style={
-                                s.id === MAIN_SHEET_ID
-                                    ? { backgroundColor: listMacaron.bg, color: listMacaron.text }
-                                    : undefined
-                            }
+                            style={s.id === MAIN_SHEET_ID ? { backgroundColor: listMacaron.bg, color: listMacaron.text } : undefined}
                             // 暂时断开“点击页签切换”触发点：保留 UI，但不触发切换。
                             // onClick={() => setActiveSheetId(s.id)}
                             title={
@@ -757,6 +768,11 @@ export default function Dialog() {
             {classifyHint ? (
                 <div className="dialog__classify-hint" role="status">
                     {classifyHint}
+                </div>
+            ) : null}
+            {runtimeError ? (
+                <div className="dialog__classify-hint" role="alert">
+                    {runtimeError}
                 </div>
             ) : null}
             <div

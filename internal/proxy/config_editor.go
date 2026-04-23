@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"leiAgent/internal/appruntime"
 )
 
 // GetResolvedConfigPath 返回当前使用的配置文件绝对路径；未找到时返回空字符串。
@@ -24,7 +26,8 @@ func DefaultConfigWritePath() string {
 	if p, ok := resolveConfigPath(); ok {
 		return p
 	}
-	return filepath.Clean("config/config.yaml")
+	// 对可执行文件更友好：默认写入 runtime root（开发时为仓库根；安装后为用户配置目录）。
+	return appruntime.ResolvePath(filepath.Join("config", "config.yaml"))
 }
 
 // ReadLLMConfigForUI 读取用于编辑器展示的内容。若尚无配置文件，则返回示例内容与建议保存路径，usingExample 为 true。
@@ -35,11 +38,26 @@ func ReadLLMConfigForUI() (content string, savePath string, usingExample bool, e
 	}
 	p, ok := resolveConfigPath()
 	if !ok {
-		example, e := os.ReadFile("config/config.example.yaml")
-		if e != nil {
-			return "", savePath, true, fmt.Errorf("未找到 config/config.yaml，且无法读取 config/config.example.yaml：%w", e)
+		examplePathCandidates := []string{
+			// 1) runtime root（开发：仓库根；安装：用户配置目录）
+			appruntime.ResolvePath(filepath.Join("config", "config.example.yaml")),
+			// 2) 当前工作目录（兼容旧逻辑/CLI 运行）
+			filepath.Clean(filepath.Join("config", "config.example.yaml")),
 		}
-		return string(example), savePath, true, nil
+		// 3) 可执行文件同目录（打包发布常见布局：<exeDir>/config/config.example.yaml）
+		if exe, err := os.Executable(); err == nil {
+			examplePathCandidates = append(examplePathCandidates, filepath.Join(filepath.Dir(exe), "config", "config.example.yaml"))
+		}
+
+		var lastErr error
+		for _, c := range examplePathCandidates {
+			example, e := os.ReadFile(c)
+			if e == nil {
+				return string(example), savePath, true, nil
+			}
+			lastErr = e
+		}
+		return "", savePath, true, fmt.Errorf("未找到 config/config.yaml，且无法读取 config/config.example.yaml：%w", lastErr)
 	}
 	if abs, e := filepath.Abs(p); e == nil {
 		savePath = abs

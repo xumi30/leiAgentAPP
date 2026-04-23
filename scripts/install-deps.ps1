@@ -13,11 +13,7 @@ go mod download
 Write-Host "==> frontend dependencies"
 Push-Location (Join-Path $Root "frontend")
 try {
-    if (Test-Path "package-lock.json") {
-        npm ci
-    } else {
-        npm install
-    }
+    npm install
 } finally {
     Pop-Location
 }

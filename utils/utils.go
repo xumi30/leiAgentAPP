@@ -3,11 +3,12 @@ package utils
 import (
 	"errors"
 	"fmt"
-	"leiAgent/logging"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
+
+	"leiAgent/internal/appruntime"
 
 	"github.com/6tail/lunar-go/calendar"
 	"go.yaml.in/yaml/v2"
@@ -33,7 +34,7 @@ var ReadConfig = func(filename string) (map[string]interface{}, error) {
 
 func GetProviderUrl(providerName string) (string, error) {
 	// 读取配置文件
-	config, err := ReadConfig("config/config.yaml")
+	config, err := ReadConfig(appruntime.ResolvePath("config/config.yaml"))
 	if err != nil {
 		return "", err
 	}
@@ -288,7 +289,7 @@ func GenerateChatID() string {
 func GenerateMessageID() string {
 
 	messageID := fmt.Sprintf("%d%06d", time.Now().UnixMilli(), rand.Intn(100000))
-	logging.Info("Generated messageID: %s", messageID)
+	//logging.Info("Generated messageID: %s", messageID)
 	return messageID
 }
 

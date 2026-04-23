@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"leiAgent/internal/appruntime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,7 +203,7 @@ func NewLogger(name, filePath string, level LogLevel, maxSize int64) *Logger {
 		return logger
 	}
 
-	resolvedPath := appruntime.ResolvePath(filePath)
+	resolvedPath := resolveLogFilePath(filePath)
 	zl := zerolog.New(io.Discard).With().Timestamp().Str("component", name).Logger()
 	zl = zl.Level(convertLevel(level))
 
@@ -433,6 +432,65 @@ func Error(format string, v ...interface{}) {
 	defaultLogger.Error(format, v...)
 }
 
+// Fatalf 输出 ERROR 级别日志后退出进程（exit code 1）。
+func Fatalf(format string, v ...interface{}) {
+	_ = defaultLogger.checkRotation()
+	defaultLogger.logger.Error().Caller(2).Msgf(format, v...)
+	_ = defaultLogger.Flush()
+	os.Exit(1)
+}
+
+func debugWithCallerSkip(skip int, format string, args ...interface{}) {
+	_ = defaultLogger.checkRotation()
+	defaultLogger.logger.Debug().Caller(skip).Msgf(format, args...)
+}
+
+func infoWithCallerSkip(skip int, format string, args ...interface{}) {
+	_ = defaultLogger.checkRotation()
+	defaultLogger.logger.Info().Caller(skip).Msgf(format, args...)
+}
+
+func warnWithCallerSkip(skip int, format string, args ...interface{}) {
+	_ = defaultLogger.checkRotation()
+	defaultLogger.logger.Warn().Caller(skip).Msgf(format, args...)
+}
+
+func errorWithCallerSkip(skip int, format string, args ...interface{}) {
+	_ = defaultLogger.checkRotation()
+	defaultLogger.logger.Error().Caller(skip).Msgf(format, args...)
+}
+
+// resolveLogFilePath 将相对路径解析为基于当前工作目录的绝对路径；已是绝对路径则规范化。
+func resolveLogFilePath(filePath string) string {
+	p := strings.TrimSpace(filePath)
+	if p == "" {
+		return p
+	}
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	return abs
+}
+
+// GinWriter 供 gin.DefaultWriter / gin.DefaultErrorWriter 使用，把 gin 输出写入本包默认日志。
+func GinWriter() io.Writer {
+	return ginLogWriter{}
+}
+
+type ginLogWriter struct{}
+
+func (ginLogWriter) Write(p []byte) (int, error) {
+	msg := strings.TrimSpace(string(p))
+	if msg != "" {
+		infoWithCallerSkip(4, "[gin] %s", msg)
+	}
+	return len(p), nil
+}
+
 // convertLevel 将自定义日志级别转换为zerolog级别
 func convertLevel(level LogLevel) zerolog.Level {
 	switch level {
@@ -465,22 +523,20 @@ func (w *k8sConsoleWriter) Write(p []byte) (n int, err error) {
 
 	var builder strings.Builder
 
-	if raw, ok := event[zerolog.TimestampFieldName]; ok {
-		switch ts := raw.(type) {
+	if ts, exists := event[zerolog.TimestampFieldName]; exists {
+		switch v := ts.(type) {
 		case string:
-			if ts != "" {
-				builder.WriteString(ts)
+			if v != "" {
+				builder.WriteString(v)
 				builder.WriteString(" ")
 			}
 		case float64:
-			// When zerolog.TimeFieldFormat is Unix/UnixMs/etc, JSON unmarshal yields float64.
-			t := time.UnixMilli(int64(ts)).Format(w.TimeFormat)
-			builder.WriteString(t)
+			// When zerolog.TimeFieldFormat = TimeFormatUnixMs, timestamp is a number (ms).
+			builder.WriteString(time.UnixMilli(int64(v)).Format(w.TimeFormat))
 			builder.WriteString(" ")
 		case json.Number:
-			if ms, convErr := ts.Int64(); convErr == nil {
-				t := time.UnixMilli(ms).Format(w.TimeFormat)
-				builder.WriteString(t)
+			if ms, err := v.Int64(); err == nil {
+				builder.WriteString(time.UnixMilli(ms).Format(w.TimeFormat))
 				builder.WriteString(" ")
 			}
 		}

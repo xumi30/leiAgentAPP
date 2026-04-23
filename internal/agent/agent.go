@@ -125,8 +125,7 @@ func (a *Agent) handleToolCompleteChat(ctx context.Context, message string) (uti
 	chatId := ctx.Value(utils.ChatIDString).(string)
 	memory.AddUserMessage(chatId, message)
 
-	toolCtx := context.WithValue(ctx, utils.IsStreamString, false)
-	toolCtx = context.WithValue(toolCtx, utils.SkipDialogToUIString, true)
+	toolCtx := context.WithValue(ctx, utils.IsStreamString, true)
 
 	toolAndContent, err := a.proxy.Communicate(toolCtx)
 	logging.Info("工具完成后代理返回信息: %v", toolAndContent)
@@ -146,14 +145,13 @@ func (a *Agent) handleToolCompleteChat(ctx context.Context, message string) (uti
 	if !ok {
 		content := strings.TrimSpace(toolAndContent.Content)
 		if content != "" {
-			globalchannel.SendAssitantMessageOnce(ctx, content)
 			memory.AddAssistantContentMessage(chatId, content)
 		}
 		return utils.ToolCompletePayload{Content: content}, nil
 	}
 
 	if strings.TrimSpace(payload.Content) != "" {
-		globalchannel.SendAssitantMessageOnce(ctx, payload.Content)
+		memory.AddAssistantContentMessage(chatId, strings.TrimSpace(payload.Content))
 	}
 
 	compactSummary := strings.TrimSpace(payload.SummaryForNextLLM)

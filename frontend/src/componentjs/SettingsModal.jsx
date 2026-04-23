@@ -268,7 +268,6 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const [loadErr, setLoadErr] = useState('');
   const [saveErr, setSaveErr] = useState('');
   const [saving, setSaving] = useState(false);
-
   const [hubStatus, setHubStatus] = useState(() => emptyHubStatus());
   const [hubRegisterName, setHubRegisterName] = useState('leiagentapp');
   const [hubRegisterDesc, setHubRegisterDesc] = useState('A desktop AI assistant that manages MCP services for local workflows.');
@@ -287,7 +286,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const [hubNotice, setHubNotice] = useState('');
   const [hubInstallStates, setHubInstallStates] = useState({});
   const [skillState, setSkillState] = useState({ workspaceRoot: '', skillsRoot: '', skills: [] });
-  const [skillInstallText, setSkillInstallText] = useState('npx clawhub@latest install baidu-search');
+  const [skillInstallText, setSkillInstallText] = useState('claw skill install official/baidu-search');
   const [skillInstalling, setSkillInstalling] = useState(false);
   const [skillNotice, setSkillNotice] = useState('');
   const [skillErr, setSkillErr] = useState('');
@@ -295,18 +294,28 @@ export default function SettingsModal({ open, onClose, onSaved }) {
 
   const lastValidatedRef = useRef([]);
 
-  const load = useCallback(async () => {
+  const loadLLMOnly = useCallback(async () => {
     setLoadErr('');
     try {
-      const [llmState, mcpState, nextHubStatus, nextSkillState] = await Promise.all([
-        GetLLMConfigFormState(),
+      const llmState = await GetLLMConfigFormState();
+      const llmList = Array.isArray(llmState.backends) ? llmState.backends : [];
+      setBackends(llmList.length > 0 ? llmList.map(mapBackendRow) : []);
+      setSavePath(llmState.path ?? '');
+      setUsingExample(!!llmState.usingExample);
+    } catch (e) {
+      setLoadErr(String(e?.message || e));
+    }
+  }, []);
+
+  const loadNonLLM = useCallback(async () => {
+    try {
+      const [mcpState, nextHubStatus, nextSkillState] = await Promise.all([
         GetMCPConfigFormState(),
         GetMCPHubStatus(),
         GetOpenClawSkillState(),
       ]);
-      const llmList = Array.isArray(llmState.backends) ? llmState.backends : [];
+
       const mcpList = Array.isArray(mcpState.servers) ? mcpState.servers : [];
-      setBackends(llmList.length > 0 ? llmList.map(mapBackendRow) : []);
       const nextMcp = mcpList.length > 0 ? mcpList.map((row) => ({ ...emptyMcpRow(), ...row })) : [];
       setMcpServers(nextMcp);
       setSelectedMcpIndex(null);
@@ -324,25 +333,34 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         )
       );
       lastValidatedRef.current = nextMcp.map(() => '');
-      setSavePath(llmState.path ?? mcpState.path ?? '');
-      setUsingExample(!!(llmState.usingExample || mcpState.usingExample));
+
+      // Prefer LLM path (already set). Fall back to MCP path if LLM path is empty.
+      setSavePath((prev) => prev || mcpState.path || '');
+      setUsingExample((prev) => prev || !!mcpState.usingExample);
+
       setHubStatus({ ...emptyHubStatus(), ...(nextHubStatus ?? {}) });
       setHubNotice('');
       setHubSearchErr('');
       setHubDetailErr('');
+
       setSkillState(nextSkillState ?? { workspaceRoot: '', skillsRoot: '', skills: [] });
       setSkillNotice('');
       setSkillErr('');
     } catch (e) {
+      // Non-LLM panels failed: keep LLM visible and only show the error banner.
       setLoadErr(String(e?.message || e));
     }
   }, []);
 
   useEffect(() => {
     if (open) {
-      load();
+      void (async () => {
+        await loadLLMOnly();
+        // Load other panels in background so LLM renders first.
+        loadNonLLM();
+      })();
     }
-  }, [open, load]);
+  }, [open, loadLLMOnly, loadNonLLM]);
 
   useEffect(() => {
     if (open) return;
@@ -913,7 +931,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
                       className="settings-table__input"
                       value={skillInstallText}
                       onChange={(e) => setSkillInstallText(e.target.value)}
-                      placeholder="npx clawhub@latest install baidu-search"
+                      placeholder="claw skill install official/baidu-search"
                       spellCheck={false}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {

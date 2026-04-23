@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"leiAgent/internal/appruntime"
 	"leiAgent/logging"
 	"net/http"
 	"net/url"
@@ -23,6 +24,40 @@ import (
 )
 
 const defaultInstallTimeout = 3 * time.Minute
+
+func envWithAugmentedPath(base []string) []string {
+	// GUI apps on macOS often start with a minimal PATH, so npx/node installed via
+	// Homebrew won't be found. Augment PATH to common locations.
+	env := append([]string(nil), base...)
+	pathIdx := -1
+	var cur string
+	for i, kv := range env {
+		if strings.HasPrefix(kv, "PATH=") {
+			pathIdx = i
+			cur = strings.TrimPrefix(kv, "PATH=")
+			break
+		}
+	}
+	extra := []string{"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"}
+	wantPrefix := strings.Join(extra, ":")
+	if pathIdx == -1 {
+		env = append(env, "PATH="+wantPrefix)
+		return env
+	}
+	cur = strings.TrimSpace(cur)
+	if cur == "" {
+		env[pathIdx] = "PATH=" + wantPrefix
+		return env
+	}
+	// If it already has the common prefixes, keep as-is.
+	for _, p := range extra {
+		if strings.Contains(cur, p) {
+			return env
+		}
+	}
+	env[pathIdx] = "PATH=" + wantPrefix + ":" + cur
+	return env
+}
 
 type Requires struct {
 	Bins []string `json:"bins" yaml:"bins"`
@@ -146,7 +181,7 @@ func SkillsRoot() string {
 func ConfigEnv() map[string]string {
 	path := strings.TrimSpace(os.Getenv("LEIAGENT_CONFIG_PATH"))
 	if path == "" {
-		path = filepath.Join("config", "config.yaml")
+		path = appruntime.ResolvePath(filepath.Join("config", "config.yaml"))
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -249,6 +284,13 @@ func Install(ctx context.Context, input string) (InstallResult, error) {
 		return installFromClawd(ctx, req, start)
 	}
 
+	// If npx is not available (common in packaged desktop apps), fall back to clawd HTTP install.
+	if _, lookErr := exec.LookPath("npx"); lookErr != nil {
+		logging.Warn("OpenClaw install: npx not found, fallback to clawd mode: slug=%s err=%v", slug, lookErr)
+		req.Mode = "clawd"
+		return installFromClawd(ctx, req, start)
+	}
+
 	args := []string{"-y", "clawhub@latest", "install", slug, "--workdir", WorkspaceRoot()}
 	if req.Force {
 		args = append(args, "--force")
@@ -256,7 +298,7 @@ func Install(ctx context.Context, input string) (InstallResult, error) {
 	command := append([]string{"npx"}, args...)
 	logging.Info("OpenClaw skill install command: slug=%s command=%s", slug, strings.Join(command, " "))
 	cmd := exec.CommandContext(ctx, "npx", args...)
-	cmd.Env = append(os.Environ(), "CLAWHUB_WORKDIR="+WorkspaceRoot())
+	cmd.Env = envWithAugmentedPath(append(os.Environ(), "CLAWHUB_WORKDIR="+WorkspaceRoot()))
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
@@ -625,7 +667,14 @@ func Delete(skillPath string) (OpenClawDeleteResult, error) {
 func Find(name string) (SkillInfo, bool) {
 	target := strings.ToLower(strings.TrimSpace(name))
 	for _, skill := range Scan() {
-		if strings.ToLower(skill.Name) == target || strings.EqualFold(filepath.Base(skill.Path), target) {
+		base := strings.ToLower(strings.TrimSpace(filepath.Base(skill.Path)))
+		sn := strings.ToLower(strings.TrimSpace(skill.Name))
+		// Exact matches: skill name or folder name.
+		if sn == target || base == target {
+			return skill, true
+		}
+		// Fuzzy folder match for namespaced installs, e.g. official__baidu-search.
+		if target != "" && base != "" && strings.Contains(base, target) {
 			return skill, true
 		}
 	}
@@ -635,7 +684,7 @@ func Find(name string) (SkillInfo, bool) {
 func BaiduSearchScriptPath() (string, error) {
 	skill, ok := Find("baidu-search")
 	if !ok {
-		return "", fmt.Errorf("未安装 baidu-search skill：可在设置页粘贴 `npx clawhub@latest install baidu-search` 安装")
+		return "", fmt.Errorf("未安装 baidu-search skill：可在设置页粘贴 `claw skill install official/baidu-search` 安装")
 	}
 	script := filepath.Join(skill.Path, "scripts", "search.py")
 	if st, err := os.Stat(script); err != nil || st.IsDir() {

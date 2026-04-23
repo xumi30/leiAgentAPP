@@ -14,6 +14,11 @@
 #
 # 可选：provider 留空为 Bearer；Google Gemini 填 gemini（使用 x-goog-api-key）。
 # 可选：stream_mode 为 nonstream | stream | both（默认 both；Gemini 未指定时默认 nonstream）。
+#
+# 如使用独立部署的 proxy-lb 服务：
+# - api_key 填 proxy-lb 的服务鉴权 token
+# - base_url 填 http://your-server:8088/v1/chat/completions
+# - model 填 proxy-lb 配置里的 models[].name
 
 llm:
   # Do not commit real API keys. You can also leave this empty and set LEIAGENT_LLM_API_KEY.

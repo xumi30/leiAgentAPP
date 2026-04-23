@@ -105,8 +105,8 @@ Never add any words before the header line.`
 	SingleToolPromptTemplate = `
 You are a tool-calling AI agent.
 
-When a tool is needed, you must use the model's native tool-calling interface.
-Do not describe a tool call in plain text, JSON, or markdown.
+When a tool is needed, you MUST use the OpenAI compatible Function Calling interface.
+MUST not describe a tool call in plain text, JSON, or markdown.
 
 # Rules
 - Try your best to use the tool to complete user requests.

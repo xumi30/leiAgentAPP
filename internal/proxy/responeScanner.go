@@ -50,7 +50,6 @@ func intFromJSONAny(v interface{}) int {
 	}
 }
 
-// extractUsageLoose 从原始 JSON 再抠一层 usage（兼容字段名差异、仅给 input/output 等）。
 func extractUsageLoose(raw []byte) *openaistyle.TokenUsage {
 	var top map[string]interface{}
 	if err := json.Unmarshal(raw, &top); err != nil {
@@ -121,27 +120,19 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	r_message := utils.GenerateMessageID()
 	memChatID, _ := ctx.Value(utils.ChatIDString).(string)
 	for scanner.Scan() {
-		logging.Debug("处理流式响应: %v", string(scanner.Bytes()))
-		var response openaistyle.ChatCompletionResponse
 		raw := scanner.Bytes()
+		var response openaistyle.ChatCompletionResponse
 
 		if err := json.Unmarshal(raw, &response); err != nil {
 			logging.Error("解析流式JSON失败: %v", err)
 			continue
 		}
 
-		// 许多后端会在流末尾单独发一条仅含 usage、choices 为空的 SSE；
-		// 若先判断 choices==0 就 continue，会永远丢失 total_tokens。
 		if response.Usage != nil && effectiveUsageTotal(response.Usage) > effectiveUsageTotal(lastUsage) {
 			lastUsage = response.Usage
 		}
 		if loose := extractUsageLoose(raw); loose != nil && effectiveUsageTotal(loose) > effectiveUsageTotal(lastUsage) {
 			lastUsage = loose
-			logging.Debug("流式 usage：raw 回退覆盖 chatID=%s total=%d prompt=%d completion=%d",
-				memChatID, loose.TotalTokens, loose.PromptTokens, loose.CompletionTokens)
-		}
-		if response.Usage != nil && effectiveUsageTotal(response.Usage) > 0 {
-			logging.Debug("流式 usage 包 chatID=%s eff=%d choices=%d", memChatID, effectiveUsageTotal(response.Usage), len(response.Choices))
 		}
 
 		if len(response.Choices) == 0 {
@@ -240,14 +231,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 
 	// 关键：发送一次“流结束”信号（IsFinished=true），让 AppenAgentMessageToFrontRole 做收口入库并 emit dialogStreamEnd。
 	// 否则前端虽然能看到流式拼接的内容，但刷新后因 DB 未落库而消失。
-	finishTok := effectiveUsageTotal(lastUsage)
-	if finishTok == 0 {
-		logging.Warn("流式结束但未得到可用 usage（入库 total_tokens 将为 0）chatID=%s messageID=%s lastUsageNil=%v",
-			memChatID, d_mesageid, lastUsage == nil)
-	} else {
-		logging.Info("流式结束写入收尾 token chatID=%s messageID=%s total_tokens=%d", memChatID, d_mesageid, finishTok)
-	}
-	globalchannel.SendAssitantMessageStream(ctx, "", d_mesageid, true, finishTok)
+	globalchannel.SendAssitantMessageStream(ctx, "", d_mesageid, true, effectiveUsageTotal(lastUsage))
 	globalchannel.SendAReasonningMessageStream(ctx, "", r_message, true)
 	//fmt.Println("最终生成内容: ", result)
 	//fmt.Println("最终推理内容: ", reasoningResult)
@@ -268,7 +252,7 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 			lastUsage.TotalTokens,
 			len(result))
 	} else {
-		logging.Info("流式响应结束 finish_reason=%q（无 usage 块）正文长度=%d 字符", lastFinishReason, len(result))
+		logging.Info("流式响应结束 finish_reason=%q（无 usage 块）正文长度=%d 字符 chatID=%s", lastFinishReason, len(result), memChatID)
 	}
 	if lastFinishReason == "length" {
 		logging.Warn("模型因 max_tokens 上限结束（finish_reason=length），输出可能被截断；可在 config 增加 max_output_tokens 或设置环境变量 LEIAGENT_LLM_MAX_OUTPUT_TOKENS")
@@ -357,10 +341,17 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 			content = rest
 		}
 	}
+
+	// 工具续问模式：如果模型输出的是 tool-complete JSON，则前端/DB 只展示 payload.Content。
+	if payload, ok := utils.ParseToolCompletePayload(content); ok {
+		if s := strings.TrimSpace(payload.Content); s != "" {
+			content = s
+		}
+	}
+
 	if !skipDialog {
 		if strings.TrimSpace(content) != "" {
-			usageTok := effectiveUsageTotal(openaiResp.Usage)
-			globalchannel.SendAssitantMessageOnce(ctx, content, usageTok)
+			globalchannel.SendAssitantMessageOnce(ctx, content, effectiveUsageTotal(openaiResp.Usage))
 		}
 	}
 
@@ -430,7 +421,7 @@ func (s *StreamScanner) Scan() bool {
 	for s.scanner.Scan() {
 		line := s.scanner.Text()
 
-		logging.Debug("line: %s", line)
+		logging.Info("line: %s", line)
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}

@@ -178,9 +178,16 @@ func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
 	}
 	intent, err := ConfirmIntention(ctx, message, d.Intention)
 	if err != nil {
+		logging.Error("确认意图失败: %v", err)
 		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
 		return // 确认意图失败，直接返回
 	}
+	if intent == nil {
+		logging.Error("确认意图失败: 返回了空意图且没有错误")
+		globalchannel.SendAssitantMessageOnce(ctx, "确认意图失败...")
+		return
+	}
+	logging.Info("确认意图: %s", intent.Intent)
 	d.Intention = intent
 	taskProfile := AnalyzeTask(message, d.Intention)
 	executionBlueprint := BuildExecutionBlueprint(taskProfile, d.Intention)
@@ -338,6 +345,7 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 	ctx = context.WithValue(ctx, utils.IsPlanningString, true)
 
 	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "开始进行任务规划...\n"))
+	logging.Info("开始进行任务规划...")
 
 	// 单次规划调用：goal 传用户原文。此前此处先 Communicate 再 GeneratePlan，会重复规划且第二次仍用包装后的长串污染 goal。
 	pInst, err := planner.GeneratePlan(ctx, userGoal, string(toolsInfo()))

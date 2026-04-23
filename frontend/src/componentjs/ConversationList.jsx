@@ -42,6 +42,7 @@ export default function ConversationList({
     const renameInputRef = useRef(null);
     const [cons, setCons] = useState([]);
     const [selectedDate, setSelectedDate] = useState(null);
+    const [listError, setListError] = useState('');
 
     const displayedCons = useMemo(() => {
         const list = normalizeConversationList(cons);
@@ -133,7 +134,7 @@ export default function ConversationList({
         };
 
         const handleConversationListError = (error) => {
-            alert("更新失败: " + error);
+            setListError("更新失败: " + String(error?.message || error || '未知错误'));
         };
 
         const handleDeleteSuccess = async () => {
@@ -163,7 +164,7 @@ export default function ConversationList({
         };
 
         const handleDeleteError = (error) => {
-            alert("删除失败: " + error);
+            setListError("删除失败: " + String(error?.message || error || '未知错误'));
         };
 
         EventsOn("deleteConversationSuccess", handleDeleteSuccess);
@@ -246,7 +247,7 @@ export default function ConversationList({
             console.log('删除对话:', conversation);
         } catch (err) {
             console.error('删除对话失败:', err);
-            alert('删除失败: ' + (err?.message || String(err)));
+            setListError('删除失败: ' + (err?.message || String(err)));
         }
     };
 
@@ -278,6 +279,11 @@ export default function ConversationList({
                     <span className="btn-icon"> + </span>
                     <span className="btn-text">新建对话</span>
                 </button>
+            ) : null}
+            {listError ? (
+                <div className="conversation-list-error" role="alert">
+                    {listError}
+                </div>
             ) : null}
 
             {renameTarget ? (
@@ -441,4 +447,3 @@ export default function ConversationList({
         </div>
     );
 }
-

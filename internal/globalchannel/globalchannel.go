@@ -53,11 +53,10 @@ var defaultConfig = ChannelConfig{
 }
 
 type Message struct {
-	MessageID  string
-	Content    string
-	Role       string
-	IsFinished bool
-	// TotalTokens 单次助手补全的 API usage.total_tokens（仅流式收尾或非流式带 usage 时非 0）
+	MessageID   string
+	Content     string
+	Role        string
+	IsFinished  bool
 	TotalTokens int
 }
 
@@ -347,11 +346,8 @@ func SendAssitantMessageStream(ctx context.Context, msg string, messageid string
 	chatID := dialogOutChatIDFromCtx(ctx)
 	dialogOutChan := GetGlobalDialogOutChannel(chatID)
 	if dialogOutChan == nil {
-		logging.Warn("SendAssitantMessageStream: DialogOut channel 未注册 chatID=%q finish=%v tok=%d（丢弃）", chatID, isFinish, totalTokens)
+		logging.Warn("SendAssitantMessageStream: DialogOut channel 未注册 chatID=%q finish=%v（丢弃）", chatID, isFinish)
 		return
-	}
-	if isFinish && totalTokens > 0 {
-		logging.Info("SendAssitantMessageStream 收尾 chatID=%q messageID=%q total_tokens=%d", chatID, messageid, totalTokens)
 	}
 
 	dialogOutChan <- &Message{

@@ -36,24 +36,17 @@ func chatURLToModelsURL(chatURL string) (string, bool) {
 	}
 }
 
-// CheckLLMConnectionStatus 加载配置并探测首个后端的 OpenAI 兼容模型列表接口。
+// CheckLLMConnectionStatus 使用内置默认配置并探测首个 OpenAI 兼容模型列表接口。
 func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
-	path, ok := resolveConfigPath()
-	if !ok {
-		return LLMConnectionStatus{
-			OK: false, Phase: "no_config", Message: "未找到配置文件，请将 config.example.yaml 复制为 config/config.yaml 并填写",
-		}
-	}
-
 	backends, err := loadModelConfigs()
 	if err != nil {
 		return LLMConnectionStatus{
-			OK: false, Phase: "config_error", Message: err.Error(), ConfigPath: path,
+			OK: false, Phase: "config_error", Message: err.Error(), ConfigPath: "built-in",
 		}
 	}
 	if len(backends) == 0 {
 		return LLMConnectionStatus{
-			OK: false, Phase: "config_error", Message: "配置中没有任何可用 LLM 后端", ConfigPath: path,
+			OK: false, Phase: "config_error", Message: "内置配置中没有任何可用 LLM 后端", ConfigPath: "built-in",
 		}
 	}
 
@@ -62,7 +55,7 @@ func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 	if strings.EqualFold(info.provider, "gemini") {
 		return LLMConnectionStatus{
 			OK: true, Reachable: true, Phase: "gemini_skip", Message: "配置有效（Gemini 未做 HTTP 探测）",
-			ConfigPath: path, Backend: label,
+			ConfigPath: "built-in", Backend: label,
 		}
 	}
 
@@ -71,7 +64,7 @@ func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 		return LLMConnectionStatus{
 			OK: true, Reachable: true, Phase: "no_probe",
 			Message: "配置已加载；base_url 非标准 Chat Completions 路径，无法自动探测连通性",
-			ConfigPath: path, Backend: label,
+			ConfigPath: "built-in", Backend: label,
 		}
 	}
 
@@ -80,7 +73,7 @@ func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 	if err != nil {
 		return LLMConnectionStatus{
 			OK: false, Phase: "unreachable", Message: fmt.Sprintf("构造探测请求失败：%v", err),
-			ConfigPath: path, Backend: label,
+			ConfigPath: "built-in", Backend: label,
 		}
 	}
 	switch strings.ToLower(strings.TrimSpace(info.provider)) {
@@ -94,7 +87,7 @@ func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 	if err != nil {
 		return LLMConnectionStatus{
 			OK: false, Phase: "unreachable", Message: fmt.Sprintf("网络不可达：%v", err),
-			ConfigPath: path, Backend: label,
+			ConfigPath: "built-in", Backend: label,
 		}
 	}
 	defer resp.Body.Close()
@@ -102,7 +95,7 @@ func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 
 	st := resp.StatusCode
 	out := LLMConnectionStatus{
-		Reachable: true, ConfigPath: path, Backend: label, HTTPStatus: st,
+		Reachable: true, ConfigPath: "built-in", Backend: label, HTTPStatus: st,
 	}
 	switch {
 	case st >= 200 && st < 300:

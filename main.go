@@ -2,6 +2,10 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"os"
+
+	"leiAgent/internal/appruntime"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -13,6 +17,10 @@ import (
 var assets embed.FS
 
 func main() {
+	if root, err := appruntime.BootstrapWorkingDirectory(); err != nil {
+		fmt.Fprintf(os.Stderr, "bootstrap runtime root failed (%s): %v\n", root, err)
+	}
+
 	// Create an instance of the app structure
 	app := NewApp()
 

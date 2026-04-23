@@ -6,7 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"leiAgent/internal/appruntime"
+
 	"go.yaml.in/yaml/v2"
+)
+
+const (
+	hardcodedLLMAPIKey  = "123456"
+	hardcodedLLMBaseURL = "http://127.0.0.1:8088"
+	hardcodedLLMModel   = "qwen"
 )
 
 type fileRoot struct {
@@ -15,14 +23,14 @@ type fileRoot struct {
 }
 
 type llmYAML struct {
-	Name             string `yaml:"name"`
-	APIKey           string `yaml:"api_key"`
-	BaseURL          string `yaml:"base_url"`
-	Model            string `yaml:"model"`
-	Provider         string `yaml:"provider"`
-	StreamMode       string `yaml:"stream_mode"`
-	MaxOutputTokens  int    `yaml:"max_output_tokens,omitempty"` // 可选，>0 时作为该后端的 max_tokens 上限基准
-	Enabled          *bool  `yaml:"enabled,omitempty"`           // 多后端时：false 表示不参与故障转移；省略默认 true
+	Name            string `yaml:"name"`
+	APIKey          string `yaml:"api_key"`
+	BaseURL         string `yaml:"base_url"`
+	Model           string `yaml:"model"`
+	Provider        string `yaml:"provider"`
+	StreamMode      string `yaml:"stream_mode"`
+	MaxOutputTokens int    `yaml:"max_output_tokens,omitempty"` // 可选，>0 时作为该后端的 max_tokens 上限基准
+	Enabled         *bool  `yaml:"enabled,omitempty"`           // 多后端时：false 表示不参与故障转移；省略默认 true
 }
 
 func backendRowEnabled(row llmYAML) bool {
@@ -38,7 +46,12 @@ func resolveConfigPath() (path string, ok bool) {
 			return filepath.Clean(p), true
 		}
 	}
-	candidates := []string{"config/config.yaml"}
+	candidates := []string{
+		// runtime root（开发：仓库根；安装：用户配置目录）
+		appruntime.ResolvePath(filepath.Join("config", "config.yaml")),
+		// 兼容旧逻辑：相对当前工作目录
+		filepath.Clean(filepath.Join("config", "config.yaml")),
+	}
 	exe, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exe)
@@ -231,13 +244,29 @@ func modelConfigsFromRoot(root fileRoot, cfgPath string) ([]*ModelAPIInfo, error
 	return []*ModelAPIInfo{m}, nil
 }
 
+func defaultModelConfigs() []*ModelAPIInfo {
+	return []*ModelAPIInfo{
+		{
+			backendName: "builtin-qwen",
+			provider:    "",
+			token:       hardcodedLLMAPIKey,
+			url:         hardcodedLLMBaseURL + "/v1/chat/completions",
+			modelName:   hardcodedLLMModel,
+			isStream:    streamModeBoth,
+		},
+	}
+}
+
 // loadModelConfigs 加载后端：有 llm_backends 则按顺序 failover；否则单条 llm（支持环境变量覆盖）。
 func loadModelConfigs() ([]*ModelAPIInfo, error) {
-	root, cfgPath, err := readConfigRoot()
-	if err != nil {
-		return nil, fmt.Errorf("读取 LLM 配置失败（%s）：%w", cfgPath, err)
-	}
-	return modelConfigsFromRoot(root, cfgPath)
+	// root, cfgPath, err := readConfigRoot()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("读取 LLM 配置失败（%s）：%w", cfgPath, err)
+	// }
+	// if cfgPath != "" {
+	// 	return modelConfigsFromRoot(root, cfgPath)
+	// }
+	return defaultModelConfigs(), nil
 }
 
 // ValidateLLMConfigYAML 校验 YAML 文本能否解析为可用 LLM 配置（不写盘）。

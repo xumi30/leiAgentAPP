@@ -54,7 +54,7 @@ export default function Header({
             type="button"
             className="header-settings-btn clay-card"
             onClick={onOpenSettings}
-            title="编辑 LLM 配置"
+            title="打开设置"
           >
             <span className="header-settings-btn__icon" aria-hidden>
               ⚙

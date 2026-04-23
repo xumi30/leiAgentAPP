@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	"leiAgent/internal/appruntime"
+
 	"go.yaml.in/yaml/v2"
 )
 
@@ -28,7 +30,7 @@ type appConfig struct {
 func LoadServerConfigs() ([]ServerConfig, error) {
 	configPath := strings.TrimSpace(os.Getenv("LEIAGENT_CONFIG_PATH"))
 	if configPath == "" {
-		configPath = "config/config.yaml"
+		configPath = appruntime.ResolvePath("config/config.yaml")
 	}
 
 	data, err := os.ReadFile(configPath)

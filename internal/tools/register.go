@@ -73,7 +73,6 @@ func (r *registry) ListByTopic(topic string) []Tool {
 func (r *registry) ConvertToolsByTopic(topic string) []openaistyle.Tool {
 	toolsList := make([]openaistyle.Tool, 0)
 	for _, tool := range r.ListByTopic(topic) {
-
 		chatTool := openaistyle.Tool{
 			Type: "function",
 			Function: &openaistyle.Function{
@@ -91,7 +90,6 @@ func (r *registry) ConvertToolsByTopic(topic string) []openaistyle.Tool {
 func (r *registry) ConvertTools() []openaistyle.Tool {
 	toolsList := make([]openaistyle.Tool, 0)
 	for _, tool := range r.List() {
-
 		chatTool := openaistyle.Tool{
 			Type: "function",
 			Function: &openaistyle.Function{

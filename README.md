@@ -9,19 +9,34 @@
 ## 开发与构建
 
 ```bash
-go mod tidy
+go mod download
 cd frontend && npm install && npm run build && cd ..
 wails dev    # 开发
-wails build  # 发布构建
+bash scripts/build-release.sh  # macOS 发布构建
 ```
 
-具体依赖与输出以本仓库 `go.mod`、`wails.json` 为准。
+说明：
+
+- macOS 发布请优先使用 `scripts/build-release.sh`，不要直接用 `wails build`。
+- 这个脚本会显式执行前端构建、Go 编译、`.app` 打包和 ad-hoc 签名，避开当前环境下 Wails CLI 在 `node_modules` 扫描、`UTType` 链接和 GUI 启动工作目录上的不稳定点。
+- Windows 下可继续使用 `scripts/build-release.ps1`。
+
+## 独立 LLM 后端
+
+仓库内置了一个可单独部署的 Gin 服务 [`proxy-lb/`](/Users/lei/codes/leiAgentAPP/proxy-lb/README.md)，用于把桌面端 `proxy` 之后的模型实际请求下沉到服务器端执行。
+
+典型接法：
+
+1. 在服务器上启动 `proxy-lb`
+2. 将主项目 `config/config.yaml` 中的 `llm.base_url` 改成 `http://your-server:8088/v1/chat/completions`
+3. 将 `llm.api_key` 改成 `proxy-lb` 的服务 token
+4. 将 `llm.model` 改成 `proxy-lb` 中配置的逻辑模型名，例如 `qwen`
 
 ## 发布前检查
 
 ```bash
 npm run release:check
-wails build
+bash scripts/build-release.sh
 ```
 
 发布清单见 [docs/release-readiness.md](docs/release-readiness.md)。正式分发前请确认没有提交真实 API Key，并完成 macOS/Windows 签名与隐私说明。

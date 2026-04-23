@@ -1,7 +1,14 @@
 # Build outputs
-build/bin
+build/
 frontend/dist
+frontend/wailsjs/
 *.exe
+*.app
+*.dmg
+*.pkg
+*.msi
+*.zip
+*.tar.gz
 
 # Dependencies
 node_modules
@@ -22,6 +29,9 @@ data/memo.md
 
 # macOS
 .DS_Store
+
+# Editor / IDE
+.vscode/
 
 # Agent 工作区与用户文稿（本地即可）
 workspace/

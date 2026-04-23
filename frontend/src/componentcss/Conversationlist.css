@@ -175,6 +175,17 @@
   transform: scale(0.99);
 }
 
+.conversation-list-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #8a1c1c;
+  background: rgba(255, 235, 235, 0.92);
+  border: 1px solid rgba(214, 89, 89, 0.22);
+}
+
 .btn-icon {
   margin-right: 8px;
   font-size: 18px;

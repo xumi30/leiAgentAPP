@@ -12,10 +12,6 @@ go mod download
 
 echo "==> frontend dependencies"
 cd "$ROOT/frontend"
-if [[ -f package-lock.json ]]; then
-  npm ci
-else
-  npm install
-fi
+npm install
 
 echo "==> install-deps done"

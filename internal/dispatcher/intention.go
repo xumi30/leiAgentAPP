@@ -256,7 +256,7 @@ func ConfirmIntention(ctx context.Context, message string, currentState *Intenti
 		logging.Error("Failed to parse intention: %v", err)
 		return nil, err
 	}
-
+	
 	return result, nil
 
 }

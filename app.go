@@ -19,6 +19,7 @@ import (
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/memory"
+	"leiAgent/internal/openclawskill"
 	"leiAgent/internal/profile"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools/noveltool"
@@ -57,6 +58,28 @@ func (a *App) startup(ctx context.Context) {
 	}
 	// Start scheduled task runner (polls due tasks, claims with optimistic lock, executes).
 	_ = crontabthread.NewRunner(2*time.Second, 100, nil).Start(ctx)
+
+	// Best-effort: silently install default skills once (non-blocking).
+	// Disable by setting LEIAGENT_AUTO_INSTALL_SKILLS=0/false/off.
+	go func() {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv("LEIAGENT_AUTO_INSTALL_SKILLS")))
+		if v == "0" || v == "false" || v == "off" || v == "no" {
+			return
+		}
+		if _, ok := openclawskill.Find("baidu-search"); ok {
+			return
+		}
+		installCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		if _, err := openclawskill.Install(installCtx, "claw skill install official/baidu-search"); err != nil {
+			logging.Warn("自动安装 baidu-search skill 失败（可在设置页手动安装）：%v", err)
+			return
+		}
+		// Optional deps install: ignore errors (python missing / network).
+		if skill, ok := openclawskill.Find("baidu-search"); ok {
+			_, _ = openclawskill.InstallDeps(skill.Path)
+		}
+	}()
 }
 func (a *App) ListConversation() []map[string]interface{} {
 	// 模拟对话数据
@@ -289,7 +312,7 @@ func GenerateMessageID() string {
 	return messageID
 }
 
-// SetLLMThinkingDisabled 为 true 时，后续发往 LLM 的请求会关闭思考/推理（如百炼 Qwen 的 enable_thinking）。
+// SetLLMThinkingDisabled 为 true 时，前端隐藏推理面板，后端也不再发送 thinking 相关扩展字段。
 func (a *App) SetLLMThinkingDisabled(disabled bool) {
 	proxy.SetLLMThinkingDisabled(disabled)
 }
@@ -495,10 +518,6 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				"timestamp":    buf.startTime.UTC().Format(time.RFC3339Nano),
 				"total_tokens": msg.TotalTokens,
 			}
-			if msg.TotalTokens > 0 {
-				logging.Info("EventsEmit %s chatID=%s messageID=%s role=%s total_tokens=%d contentLen=%d finished=%v",
-					eventname, chatID, mid, role, msg.TotalTokens, len(msg.Content), msg.IsFinished)
-			}
 			runtime.EventsEmit(a.ctx, eventname, appendMessage)
 
 			if !msg.IsFinished {
@@ -506,20 +525,24 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 			}
 
 			final := buf.content.String()
+			toSave := final
+			wasToolCompletePayload := false
+			// 工具续问模式：落库前把 tool-complete JSON 净化为最终 content，避免刷新后看到控制 JSON。
+			if role == utils.MessageRoleAssistant {
+				if payload, ok := utils.ParseToolCompletePayload(final); ok {
+					if s := strings.TrimSpace(payload.Content); s != "" {
+						toSave = s
+						wasToolCompletePayload = true
+					}
+				}
+			}
 			if strings.TrimSpace(final) != "" {
-				if msg.TotalTokens > 0 {
-					logging.Info("DialogOut 收口入库 chatID=%s messageID=%s role=%s total_tokens=%d 正文长度=%d",
-						chatID, mid, role, msg.TotalTokens, len(final))
-				} else {
-					logging.Debug("DialogOut 收口入库 chatID=%s messageID=%s role=%s total_tokens=0 正文长度=%d",
-						chatID, mid, role, len(final))
-				}
-				if err := dataoperation.SendMessageWithCreateTimeAndTokens(chatID, mid, final, role, buf.startTime, msg.TotalTokens); err != nil {
+				if err := dataoperation.SendMessageWithCreateTimeAndTokens(chatID, mid, toSave, role, buf.startTime, msg.TotalTokens); err != nil {
 					logging.Error("Failed to save message: %v", err)
+				} else if wasToolCompletePayload {
+					// 该条消息在流式阶段可能展示了控制 JSON；落库净化后，主动再 emit 一次 DB 最终内容用于界面替换。
+					a.GetMessagesByMessageID(mid)
 				}
-			} else if msg.TotalTokens > 0 {
-				logging.Warn("DialogOut 收口：正文为空但携带 total_tokens=%d chatID=%s messageID=%s（跳过入库避免空行）",
-					msg.TotalTokens, chatID, mid)
 			}
 			emitDialogStreamEnd(mid)
 			delete(streams, mid)
@@ -591,11 +614,13 @@ func (a *App) shouldRestoreLocalMemorySnapshot(chatID string) bool {
 func (a *App) shutdown(_ context.Context) {
 	a.switchMu.Lock()
 	defer a.switchMu.Unlock()
-	if a.lastActiveChatID == "" {
-		return
+	if a.lastActiveChatID != "" {
+		if err := memory.PersistLocalMemoryToYAMLFile(a.lastActiveChatID); err != nil {
+			logging.Error("退出时写入本地记忆失败 chatID=%s: %v", a.lastActiveChatID, err)
+		}
 	}
-	if err := memory.PersistLocalMemoryToYAMLFile(a.lastActiveChatID); err != nil {
-		logging.Error("退出时写入本地记忆失败 chatID=%s: %v", a.lastActiveChatID, err)
+	if err := logging.CloseAll(); err != nil {
+		fmt.Fprintf(os.Stderr, "shutdown logging flush failed: %v\n", err)
 	}
 }
 

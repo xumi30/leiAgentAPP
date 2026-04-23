@@ -1,0 +1,31 @@
+server:
+  listen: ":8088"
+  auth_token: "replace-with-your-service-token"
+  default_model: "qwen"
+  request_timeout_seconds: 300
+  auth_data_path: "data/auth.json"
+
+models:
+  - name: "qwen"
+    strategy: "round_robin"
+    backends:
+      - name: "dashscope-primary"
+        api_key: "your-dashscope-key"
+        base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        model: "qwen-plus"
+        stream_mode: "both"
+      - name: "dashscope-backup"
+        api_key: "your-dashscope-key"
+        base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        model: "qwen-turbo"
+        stream_mode: "both"
+
+  - name: "gemini-flash"
+    strategy: "round_robin"
+    backends:
+      - name: "gemini-primary"
+        provider: "gemini"
+        api_key: "your-gemini-key"
+        base_url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        model: "gemini-2.5-flash"
+        stream_mode: "nonstream"
