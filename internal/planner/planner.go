@@ -293,6 +293,8 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 	logging.Info("planning系统提示词已加载...")
 	ctx = context.WithValue(ctx, utils.SkipDialogToUIString, true)
 	ctx = context.WithValue(ctx, utils.DialogOutChatIDString, chatId)
+	// 规划结果必须是完整 JSON；这里强制非流式，避免部分后端 SSE 半截返回导致解析失败。
+	ctx = context.WithValue(ctx, utils.IsStreamString, false)
 	workingMessages := []openaistyle.ChatMessage{
 		{
 			Role:    openaistyle.RoleSystem,
@@ -321,12 +323,12 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		var probe struct {
 			Error string `json:"error"`
 		}
-		if err := json.Unmarshal([]byte(rawJSON), &probe); err == nil && strings.TrimSpace(probe.Error) != "" {
+		if err := utils.UnmarshalLLMJSON(response.Content, &probe); err == nil && strings.TrimSpace(probe.Error) != "" {
 			return nil, fmt.Errorf("需要先确认：%s", probe.Error)
 		}
 
 		var planner Planning
-		if err := json.Unmarshal([]byte(rawJSON), &planner); err != nil {
+		if err := utils.UnmarshalLLMJSON(response.Content, &planner); err != nil {
 			lastParseErr = err
 			logging.Error("解析规划结果失败（plan attempt=%d）: %v", attempt, err)
 			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("规划结果不是合法 JSON（已自动重试 %d 次）：%v", attempt, err))

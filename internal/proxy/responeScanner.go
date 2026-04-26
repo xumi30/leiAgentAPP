@@ -254,6 +254,10 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 	} else {
 		logging.Info("流式响应结束 finish_reason=%q（无 usage 块）正文长度=%d 字符 chatID=%s", lastFinishReason, len(result), memChatID)
 	}
+	if !scanner.Completed() && strings.TrimSpace(lastFinishReason) == "" {
+		logging.Warn("流式响应未收到 [DONE]，且未提供 finish_reason；本次输出可能为半截内容，视为异常结束并交由上层重试/兜底")
+		return nil, fmt.Errorf("流式响应异常结束：未收到 [DONE] 或 finish_reason")
+	}
 	if lastFinishReason == "length" {
 		logging.Warn("模型因 max_tokens 上限结束（finish_reason=length），输出可能被截断；可在 config 增加 max_output_tokens 或设置环境变量 LEIAGENT_LLM_MAX_OUTPUT_TOKENS")
 	}
@@ -403,6 +407,7 @@ type StreamScanner struct {
 	current     []byte
 	err         error
 	hasSentRole bool
+	completed   bool
 }
 
 func NewStreamScanner(r io.Reader) *StreamScanner {
@@ -428,6 +433,7 @@ func (s *StreamScanner) Scan() bool {
 		//fmt.Println("line: %s", line)
 		dataStr := strings.TrimPrefix(line, "data: ")
 		if strings.TrimSpace(dataStr) == "[DONE]" {
+			s.completed = true
 			return false
 		}
 
@@ -447,6 +453,10 @@ func (s *StreamScanner) Bytes() []byte {
 
 func (s *StreamScanner) Err() error {
 	return s.err
+}
+
+func (s *StreamScanner) Completed() bool {
+	return s.completed
 }
 
 // 定义结构体用于返回工具对象和内容

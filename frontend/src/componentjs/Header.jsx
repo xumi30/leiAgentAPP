@@ -1,4 +1,5 @@
 import appIcon from '../../../build/appicon.png';
+import '../componentcss/Header.css';
 
 function shortConnectionLabel(loading, status) {
   if (loading) return '检测中…';
@@ -8,7 +9,7 @@ function shortConnectionLabel(loading, status) {
     return '配置正常';
   }
   if (status.phase === 'no_config') return '未配置';
-  return '不可用';
+  return '请登录';
 }
 
 export default function Header({
@@ -132,22 +133,15 @@ export default function Header({
           <div
             className={`status-indicator clay-card ${connectionLoading ? 'checking' : ok ? 'connected' : 'disconnected'}`}
             title={detail || label}
+            role={typeof onRefreshConnection === 'function' ? 'button' : undefined}
+            tabIndex={typeof onRefreshConnection === 'function' ? 0 : undefined}
+            onClick={onRefreshConnection}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRefreshConnection?.(); } }}
           >
             <span className={`status-dot ${connectionLoading ? 'pending' : ok ? 'active' : 'error'}`} />
             <span className="status-text">{label}</span>
+            <span className="status-refresh-icon" aria-hidden>↻</span>
           </div>
-          {typeof onRefreshConnection === 'function' ? (
-            <button
-              type="button"
-              className="header-refresh-btn"
-              onClick={onRefreshConnection}
-              disabled={connectionLoading}
-              title="重新检测连接"
-              aria-label="重新检测连接"
-            >
-              ↻
-            </button>
-          ) : null}
         </div>
       </div>
     </header>

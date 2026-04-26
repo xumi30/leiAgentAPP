@@ -80,7 +80,7 @@ func (t *FileDownloadTool) Parameters() map[string]interface{} {
 
 func (t *FileDownloadTool) Execute(ctx context.Context, args string) (string, error) {
 	var in fileDownloadInput
-	if err := json.Unmarshal([]byte(utils.PrepareLLMJSON(args)), &in); err != nil {
+	if err := utils.UnmarshalLLMJSON(args, &in); err != nil {
 		return "", fmt.Errorf("parse tool args: %w", err)
 	}
 

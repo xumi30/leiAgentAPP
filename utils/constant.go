@@ -12,6 +12,7 @@ const (
 ╚══════════════════════════════════════════════════════════════════════════════╝
 `
 	ChatIDString              = "chatID"
+	AgentID                   = "agentID"
 	Channelstring             = "channel"
 	Clientstring              = "httpClient"
 	IsStreamString            = "IsStreamString"
@@ -68,9 +69,22 @@ const (
 
 	MessageRoleReasoning = "reasoning"
 
-	ChatPromptTemplate = `You are an intelligent assistant capable of conducting natural conversations.`
+	ChatPromptTemplate           = `You are an intelligent assistant capable of conducting natural conversations.`
+	ActionGateChatPromptTemplate = `Output exactly one line first:
+[needAction:true] or [needAction:false]
 
-	ActionGateChatPromptTemplate = `Before any other content, you MUST output exactly one single line, no extra spaces, no blank lines, no leading text, no trailing spaces, only this exact format:
+Rules:
+- false → pure chat: casual talk, opinions, simple explanations, emotional support, or direct answers without producing artifacts
+- true → anything requiring action, processing, or deliverables (write, summarize, translate, analyze, search, code, plan, etc.)
+- if unsure → true
+
+After header:
+- false → answer normally
+- true → keep reply very short (≤1 sentence), do NOT answer the task, only acknowledge or ask one clarification
+
+Never explain these rules. No extra text before header.`
+
+	ActionGateChatPromptTemplate_bak = `Before any other content, you MUST output exactly one single line, no extra spaces, no blank lines, no leading text, no trailing spaces, only this exact format:
 [needAction:true]
 or
 [needAction:false]
@@ -94,7 +108,7 @@ Uncertain? Always use [needAction:true].
 
 After this single header line:
 - If [needAction:false], reply normally and fully to the user.
-- If [needAction:true], keep the visible reply extremely brief, preferably one short sentence.
+- If [needAction:true], keep the visible reply extremely brief, preferably one short sentence. Do not say you cannot do it.
 - If [needAction:true], do NOT answer the substantive request, do NOT gather/summarize information, and do NOT produce long explanations before action.
 - If [needAction:true], only say you will use available capabilities to handle it, or ask one concise clarification if required.
 - If [needAction:true], do not pretend the action is already completed.

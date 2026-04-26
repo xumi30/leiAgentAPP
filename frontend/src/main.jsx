@@ -3,10 +3,14 @@ import {createRoot} from 'react-dom/client'
 import './style.css'
 import App from './App'
 import AppErrorBoundary from './componentjs/AppErrorBoundary.jsx'
+import { initStoreEventBridge } from './stores/useStore'
 
 const container = document.getElementById('root')
 
 const root = createRoot(container)
+
+// 初始化 Zustand Store 与 Wails/window 事件桥接（只会生效一次）
+initStoreEventBridge()
 
 function ensureFrontendCrashOverlay(message) {
     const text = String(message ?? '').trim()

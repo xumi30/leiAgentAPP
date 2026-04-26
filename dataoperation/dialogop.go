@@ -84,7 +84,7 @@ func SendMessage(chatID, messageID, message, role string) error {
 		logging.Info("创建对话成功")
 	}
 
-	err = sql.SaveMessage(chatID, messageID, role, message)
+	err = sql.SaveMessage(chatID, messageID, "", role, message)
 	if err != nil {
 		logging.Error("保存消息失败: %v", err)
 		return err
@@ -94,7 +94,7 @@ func SendMessage(chatID, messageID, message, role string) error {
 }
 
 // SendMessageWithCreateTime 写入消息并使用 createTime 作为库内 timestamp（流式首包到达时间，避免仅用收尾写入时刻导致乱序）
-func SendMessageWithCreateTime(chatID, messageID, message, role string, createTime time.Time) error {
+func SendMessageWithCreateTime(agentID, chatID, messageID, message, role string, createTime time.Time) error {
 	sql := GetSqlInstance()
 	if sql == nil {
 		return nil
@@ -110,7 +110,7 @@ func SendMessageWithCreateTime(chatID, messageID, message, role string, createTi
 		}
 	}
 
-	err = sql.SaveMessageWithTimestamp(chatID, messageID, role, message, createTime, 0)
+	err = sql.SaveMessageWithTimestamp(chatID, messageID, agentID, role, message, createTime, 0)
 	if err != nil {
 		logging.Error("保存消息失败: %v", err)
 		return err
@@ -119,7 +119,7 @@ func SendMessageWithCreateTime(chatID, messageID, message, role string, createTi
 }
 
 // SendMessageWithCreateTimeAndTokens 与 SendMessageWithCreateTime 相同，并写入该条消息的 API total_tokens（助手消息）。
-func SendMessageWithCreateTimeAndTokens(chatID, messageID, message, role string, createTime time.Time, totalTokens int) error {
+func SendMessageWithCreateTimeAndTokens(agentID, chatID, messageID, message, role string, createTime time.Time, totalTokens int) error {
 	sql := GetSqlInstance()
 	if sql == nil {
 		return nil
@@ -135,7 +135,7 @@ func SendMessageWithCreateTimeAndTokens(chatID, messageID, message, role string,
 		}
 	}
 
-	err = sql.SaveMessageWithTimestamp(chatID, messageID, role, message, createTime, totalTokens)
+	err = sql.SaveMessageWithTimestamp(chatID, messageID, agentID, role, message, createTime, totalTokens)
 	if err != nil {
 		logging.Error("保存消息失败: %v", err)
 		return err

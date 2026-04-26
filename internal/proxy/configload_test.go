@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -75,5 +77,74 @@ func TestModelConfigsFromRootRequiresEnabledBackend(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "至少需要启用一条后端") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateLLMConfigYAMLSkipsWhenFeatureDisabled(t *testing.T) {
+	data := []byte(`
+mcp_servers:
+  - label: "demo"
+    url: "http://127.0.0.1:3000"
+`)
+
+	if err := ValidateLLMConfigYAML(data); err != nil {
+		t.Fatalf("expected config without llm to pass when feature disabled, got: %v", err)
+	}
+}
+
+func TestLoadModelConfigsUsesBuiltinWhenFeatureDisabled(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	data := []byte(`
+enable_llm_config: false
+llm:
+  api_key: "file-key"
+  base_url: "https://example.test/v1/chat/completions"
+  model: "file-model"
+`)
+	if err := os.WriteFile(cfgPath, data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("LEIAGENT_CONFIG_PATH", cfgPath)
+
+	configs, err := loadModelConfigs()
+	if err != nil {
+		t.Fatalf("loadModelConfigs returned error: %v", err)
+	}
+	if len(configs) != 1 {
+		t.Fatalf("expected one builtin config, got %d", len(configs))
+	}
+	if configs[0].backendName != "builtin-qwen" {
+		t.Fatalf("expected builtin backend, got %q", configs[0].backendName)
+	}
+}
+
+func TestLoadModelConfigsReadsFileWhenFeatureEnabled(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	data := []byte(`
+enable_llm_config: true
+llm:
+  api_key: "file-key"
+  base_url: "https://example.test/v1/chat/completions"
+  model: "file-model"
+`)
+	if err := os.WriteFile(cfgPath, data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("LEIAGENT_CONFIG_PATH", cfgPath)
+
+	configs, err := loadModelConfigs()
+	if err != nil {
+		t.Fatalf("loadModelConfigs returned error: %v", err)
+	}
+	if len(configs) != 1 {
+		t.Fatalf("expected one config, got %d", len(configs))
+	}
+	if configs[0].token != "file-key" {
+		t.Fatalf("expected file token, got %q", configs[0].token)
+	}
+	if configs[0].modelName != "file-model" {
+		t.Fatalf("expected file model, got %q", configs[0].modelName)
 	}
 }

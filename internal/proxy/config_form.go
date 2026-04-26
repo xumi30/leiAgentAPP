@@ -100,10 +100,11 @@ func jsonIntAny(m map[string]json.RawMessage, keys ...string) int {
 
 // LLMConfigFormState 为 GetLLMConfigFormState 的返回值。
 type LLMConfigFormState struct {
-	Primary      LLMConfigRow   `json:"primary"`
-	Backends     []LLMConfigRow `json:"backends"`
-	Path         string         `json:"path"`
-	UsingExample bool           `json:"usingExample"`
+	ConfigEnabled bool           `json:"configEnabled"`
+	Primary       LLMConfigRow   `json:"primary"`
+	Backends      []LLMConfigRow `json:"backends"`
+	Path          string         `json:"path"`
+	UsingExample  bool           `json:"usingExample"`
 }
 
 func rowFromYAML(y llmYAML) LLMConfigRow {
@@ -166,10 +167,11 @@ func GetLLMConfigFormState() (LLMConfigFormState, error) {
 	}
 
 	return LLMConfigFormState{
-		Primary:      LLMConfigRow{Enabled: true},
-		Backends:     backends,
-		Path:         path,
-		UsingExample: usingExample,
+		ConfigEnabled: root.EnableLLMConfig,
+		Primary:       LLMConfigRow{Enabled: true},
+		Backends:      backends,
+		Path:          path,
+		UsingExample:  usingExample,
 	}, nil
 }
 
@@ -177,6 +179,7 @@ func marshalLLMConfigForm(root mcpFileRoot, backends []LLMConfigRow) ([]byte, er
 	if len(backends) == 0 {
 		return nil, fmt.Errorf("多后端列表至少需一行")
 	}
+	root.EnableLLMConfig = true
 	rows := make([]llmYAML, 0, len(backends))
 	for _, b := range backends {
 		rows = append(rows, b.toYAML())

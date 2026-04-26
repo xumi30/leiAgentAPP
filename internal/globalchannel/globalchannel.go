@@ -23,6 +23,16 @@ func dialogOutChatIDFromCtx(ctx context.Context) string {
 	return ""
 }
 
+// agentIDFromCtx 从上下文中获取 AgentID
+func agentIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(utils.AgentID).(string); ok {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
 // ChannelConfig 配置选项
 type ChannelConfig struct {
 	BufferSize      int           // channel 缓冲区大小
@@ -53,11 +63,13 @@ var defaultConfig = ChannelConfig{
 }
 
 type Message struct {
+	AgentID     string
 	MessageID   string
 	Content     string
 	Role        string
 	IsFinished  bool
 	TotalTokens int
+	AgentList   []string
 }
 
 // 全局单例实例
@@ -309,6 +321,7 @@ func SendAssitantMessageOnce(ctx context.Context, msg string, totalTokens ...int
 		tok = totalTokens[0]
 	}
 	mg := Message{
+		AgentID:     agentIDFromCtx(ctx),
 		MessageID:   messageid,
 		Content:     msg,
 		Role:        utils.MessageRoleAssistant,
@@ -334,6 +347,7 @@ func SendUserMessageOnce(ctx context.Context, msg string) {
 		return
 	}
 	dialogOutChan <- &Message{
+		AgentID:    agentIDFromCtx(ctx),
 		MessageID:  messageid,
 		Content:    msg,
 		Role:       utils.MessageRoleUser,
@@ -351,6 +365,7 @@ func SendAssitantMessageStream(ctx context.Context, msg string, messageid string
 	}
 
 	dialogOutChan <- &Message{
+		AgentID:     agentIDFromCtx(ctx),
 		MessageID:   messageid,
 		Content:     msg,
 		Role:        utils.MessageRoleAssistant,
@@ -369,6 +384,7 @@ func SendAReasonningMessageStream(ctx context.Context, msg string, messageid str
 	}
 
 	reasonOutChan <- &Message{
+		AgentID:    agentIDFromCtx(ctx),
 		MessageID:  messageid,
 		Content:    msg,
 		Role:       utils.MessageRoleReasoning,
@@ -388,6 +404,7 @@ func SendTaskState(ctx context.Context, busy bool) {
 		content = "busy"
 	}
 	taskStateChan <- &Message{
+		AgentID:    agentIDFromCtx(ctx),
 		MessageID:  utils.GenerateMessageID(),
 		Content:    content,
 		Role:       "task_state",

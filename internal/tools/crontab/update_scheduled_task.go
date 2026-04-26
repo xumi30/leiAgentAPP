@@ -3,7 +3,6 @@ package crontab
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -31,23 +30,23 @@ func (t *UpdateScheduledTaskTool) Parameters() map[string]interface{} {
 			"action_type":    map[string]interface{}{"type": "string", "enum": []string{"notify", "tool"}},
 			"action_payload": map[string]interface{}{"type": "string"},
 			"schedule": map[string]interface{}{
-				"type": "object",
+				"type":        "object",
 				"description": "Schedule object. Supported: once({run_at,timezone}), cron({cron_expr,timezone}), hourly({interval,timezone}).",
 				"properties": map[string]interface{}{
-					"type":     map[string]interface{}{"type": "string"},
-					"run_at":   map[string]interface{}{"type": "string"},
-					"timezone": map[string]interface{}{"type": "string"},
+					"type":      map[string]interface{}{"type": "string"},
+					"run_at":    map[string]interface{}{"type": "string"},
+					"timezone":  map[string]interface{}{"type": "string"},
 					"cron_expr": map[string]interface{}{"type": "string"},
-					"interval": map[string]interface{}{"type": "integer"},
+					"interval":  map[string]interface{}{"type": "integer"},
 				},
 			},
 
 			// legacy flat fields
-			"schedule_type":  map[string]interface{}{"type": "string", "enum": []string{"once", "recurring"}},
-			"run_at":         map[string]interface{}{"type": "string", "description": "RFC3339 or 'YYYY-MM-DD HH:MM:SS'"},
-			"cron_expr":      map[string]interface{}{"type": "string"},
-			"timezone":       map[string]interface{}{"type": "string"},
-			"status":         map[string]interface{}{"type": "string", "enum": []string{"active", "paused", "deleted"}},
+			"schedule_type": map[string]interface{}{"type": "string", "enum": []string{"once", "recurring"}},
+			"run_at":        map[string]interface{}{"type": "string", "description": "RFC3339 or 'YYYY-MM-DD HH:MM:SS'"},
+			"cron_expr":     map[string]interface{}{"type": "string"},
+			"timezone":      map[string]interface{}{"type": "string"},
+			"status":        map[string]interface{}{"type": "string", "enum": []string{"active", "paused", "deleted"}},
 		},
 		"required": []string{"id"},
 		"oneOf": []interface{}{
@@ -99,19 +98,19 @@ func (t *UpdateScheduledTaskTool) Parameters() map[string]interface{} {
 
 func (t *UpdateScheduledTaskTool) Execute(ctx context.Context, args string) (string, error) {
 	var in struct {
-		ID            string `json:"id"`
-		Title         string `json:"title"`
-		ActionType    string `json:"action_type"`
-		ActionPayload string `json:"action_payload"`
+		ID            string        `json:"id"`
+		Title         string        `json:"title"`
+		ActionType    string        `json:"action_type"`
+		ActionPayload string        `json:"action_payload"`
 		Schedule      scheduleInput `json:"schedule"`
-		ScheduleType  string `json:"schedule_type"`
-		RunAt         string `json:"run_at"`
-		CronExpr      string `json:"cron_expr"`
-		RRule         string `json:"rrule"`
-		Timezone      string `json:"timezone"`
-		Status        string `json:"status"`
+		ScheduleType  string        `json:"schedule_type"`
+		RunAt         string        `json:"run_at"`
+		CronExpr      string        `json:"cron_expr"`
+		RRule         string        `json:"rrule"`
+		Timezone      string        `json:"timezone"`
+		Status        string        `json:"status"`
 	}
-	if err := json.Unmarshal([]byte(utils.PrepareLLMJSON(args)), &in); err != nil {
+	if err := utils.UnmarshalLLMJSON(args, &in); err != nil {
 		return "", fmt.Errorf("invalid JSON args: %w", err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
@@ -135,11 +134,11 @@ func (t *UpdateScheduledTaskTool) Execute(ctx context.Context, args string) (str
 
 	var (
 		id, userID, title, actionType, actionPayload, scheduleType, timezone, status string
-		runAt                                                              sql.NullTime
-		cronExpr                                                           sql.NullString
-		rruleText                                                          sql.NullString
-		lastRunAt, nextRunAt                                               sql.NullTime
-		createdAt, updatedAt                                               time.Time
+		runAt                                                                        sql.NullTime
+		cronExpr                                                                     sql.NullString
+		rruleText                                                                    sql.NullString
+		lastRunAt, nextRunAt                                                         sql.NullTime
+		createdAt, updatedAt                                                         time.Time
 	)
 	if err := row.Scan(&id, &userID, &title, &actionType, &actionPayload, &scheduleType, &runAt, &cronExpr, &rruleText, &timezone, &status, &lastRunAt, &nextRunAt, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
@@ -357,4 +356,3 @@ func (t *UpdateScheduledTaskTool) Results() map[string]interface{} {
 func (t *UpdateScheduledTaskTool) SimpleInfo() map[string]string {
 	return utils.SimpleInfoMap(utils.ToolTopicCrontab, "更新定时任务（标题、动作、RRULE/cron/时间、时区、状态），并自动重算下一次触发时间。")
 }
-

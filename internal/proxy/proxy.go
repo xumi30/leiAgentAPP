@@ -15,6 +15,7 @@ import (
 	"leiAgent/utils"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -298,6 +299,12 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 	}
 	// Some OpenAI-compatible gateways reject non-standard thinking fields even
 	// when they are set to "disabled". In disabled mode we simply omit them.
+	if IsLLMThinkingDisabled() {
+		opts = append(opts,
+			openaistyle.WithEnableThinking(false),
+			openaistyle.WithThinking(&openaistyle.ChatThinking{Type: openaistyle.ThinkingDisabled}),
+		)
+	}
 
 	req := openaistyle.NewChatCompletionRequest(opts...)
 
@@ -320,16 +327,23 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 func convertMessages(messages []*memory.Message) []openaistyle.ChatMessage {
 	logging.Info("convertMessages")
 	chatMessages := make([]openaistyle.ChatMessage, 0, len(messages))
+	// 清理历史中残留的 <tool_code> 文本，防止模型模仿
+	toolCodeRe := regexp.MustCompile("(?s)<tool_code>\\s*.*?\\s*</tool_code>")
 	for _, msg := range messages {
 		if msg == nil {
 			continue
 		}
-		if strings.TrimSpace(msg.Content) == "" && len(msg.ToolCalls) == 0 && msg.ToolCallID == "" {
+		content := msg.Content
+		if content != "" && strings.Contains(content, "<tool_code>") {
+			content = toolCodeRe.ReplaceAllString(content, "")
+			content = strings.TrimSpace(content)
+		}
+		if content == "" && len(msg.ToolCalls) == 0 && msg.ToolCallID == "" {
 			continue
 		}
 		chatMsg := openaistyle.ChatMessage{
 			Role:    string(msg.Role),
-			Content: msg.Content,
+			Content: content,
 		}
 
 		if len(msg.ToolCalls) > 0 {

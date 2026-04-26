@@ -122,3 +122,11 @@ func UpdateConversationTitle(chatID string, newTitle string) error {
 	}
 	return nil
 }
+
+func AddAgentToConversation(chatID, agentID string) error {
+	sql := GetSqlInstance()
+	if sql == nil {
+		return fmt.Errorf("无法获取数据库实例")
+	}
+	return sql.AddAgentToConversation(chatID, agentID)
+}

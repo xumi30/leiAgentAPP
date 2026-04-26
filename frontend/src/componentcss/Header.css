@@ -113,33 +113,6 @@
     gap: 4px;
   }
 
-  .header-refresh-btn {
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    border: none;
-    border-radius: 10px;
-    background: var(--apple-fill);
-    color: var(--apple-blue);
-    font-size: 18px;
-    line-height: 1;
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.2s ease;
-  }
-
-  .header-refresh-btn:hover:not(:disabled) {
-    background: rgba(0, 122, 255, 0.12);
-  }
-
-  .header-refresh-btn:disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-
-  .header-refresh-btn:not(:disabled):active {
-    transform: rotate(60deg);
-  }
-
   .header-library-btn {
     display: inline-flex;
     align-items: center;
@@ -229,8 +202,15 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 8px 10px 8px 16px;
     border-radius: var(--border-radius-sm);
+  }
+
+  .status-refresh-icon {
+    margin-left: 2px;
+    font-size: 11px;
+    line-height: 1;
+    opacity: 0.5;
   }
   
   .status-dot {
@@ -245,8 +225,20 @@
     color: #1d7a3a;
   }
 
+  .status-indicator.connected .status-refresh-icon {
+    color: rgba(29, 122, 58, 0.5);
+  }
+
+  .status-indicator.disconnected {
+    cursor: pointer;
+  }
+
   .status-indicator.disconnected .status-text {
     color: #c62828;
+  }
+
+  .status-indicator.disconnected .status-refresh-icon {
+    color: rgba(160, 54, 54, 0.5);
   }
 
   .status-indicator.checking .status-text {

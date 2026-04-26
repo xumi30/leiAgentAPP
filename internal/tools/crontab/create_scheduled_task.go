@@ -3,7 +3,6 @@ package crontab
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -38,7 +37,7 @@ func (t *CreateScheduledTaskTool) Parameters() map[string]interface{} {
 				"description": "notify: send a reminder; tool: call a tool.",
 			},
 			"action_payload": map[string]interface{}{
-				"type": "string",
+				"type":        "string",
 				"description": "notify: plain text to remind. tool: JSON string like {\"tool\":\"query_weather\",\"args\":{\"city\":\"Singapore\"}}",
 			},
 			"status": map[string]interface{}{
@@ -138,13 +137,13 @@ func (t *CreateScheduledTaskTool) Execute(ctx context.Context, args string) (str
 		Schedule scheduleInput `json:"schedule"`
 
 		// legacy flat fields
-		ScheduleType  string `json:"schedule_type"`
-		RunAt         string `json:"run_at"`
-		CronExpr      string `json:"cron_expr"`
-		Timezone      string `json:"timezone"`
-		Status        string `json:"status"`
+		ScheduleType string `json:"schedule_type"`
+		RunAt        string `json:"run_at"`
+		CronExpr     string `json:"cron_expr"`
+		Timezone     string `json:"timezone"`
+		Status       string `json:"status"`
 	}
-	if err := json.Unmarshal([]byte(utils.PrepareLLMJSON(args)), &in); err != nil {
+	if err := utils.UnmarshalLLMJSON(args, &in); err != nil {
 		return "", fmt.Errorf("invalid JSON args: %w", err)
 	}
 
@@ -316,4 +315,3 @@ func (t *CreateScheduledTaskTool) Results() map[string]interface{} {
 func (t *CreateScheduledTaskTool) SimpleInfo() map[string]string {
 	return utils.SimpleInfoMap(utils.ToolTopicCrontab, "创建一次性或周期性（RRULE/cron）定时任务，并持久化到本地 SQLite。")
 }
-

@@ -475,7 +475,7 @@ func Refresh(ctx context.Context, chatID string) (*UserProfile, error) {
 	}
 
 	next := normalizeProfile(existing)
-	if err := json.Unmarshal([]byte(utils.PrepareLLMJSON(resp.Content)), next); err != nil {
+	if err := utils.UnmarshalLLMJSON(resp.Content, next); err != nil {
 		logging.Warn("profile parse failed chatID=%s: %v", cid, err)
 		next = fallbackProfile(cid, existing, metrics, dialogs)
 	}

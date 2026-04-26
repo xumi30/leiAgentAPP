@@ -14,10 +14,11 @@ import (
 )
 
 type mcpFileRoot struct {
-	LLM         llmYAML                  `yaml:"llm,omitempty"`
-	LLMBackends []llmYAML                `yaml:"llm_backends,omitempty"`
-	MCPServers  []mcpbridge.ServerConfig `yaml:"mcp_servers,omitempty"`
-	OpenClaw    openClawYAML             `yaml:"openclaw,omitempty"`
+	EnableLLMConfig bool                     `yaml:"enable_llm_config,omitempty"`
+	LLM             llmYAML                  `yaml:"llm,omitempty"`
+	LLMBackends     []llmYAML                `yaml:"llm_backends,omitempty"`
+	MCPServers      []mcpbridge.ServerConfig `yaml:"mcp_servers,omitempty"`
+	OpenClaw        openClawYAML             `yaml:"openclaw,omitempty"`
 }
 
 type openClawYAML struct {

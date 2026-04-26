@@ -17,6 +17,15 @@ type ToolCompletePayload struct {
 	SummaryForNextLLM       string
 }
 
+func hasAnyJSONKey(obj map[string]json.RawMessage, keys ...string) bool {
+	for _, key := range keys {
+		if raw, ok := obj[key]; ok && len(raw) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // GetNeedToolToics 从模型回复中解析需要补充加载的工具话题。
 // 为兼容现有 prompt，优先读取 needToolToics，同时兼容拼写正确的 needToolTopics。
 func GetNeedToolToics(raw string) ([]string, bool) {
@@ -48,6 +57,15 @@ func ParseToolCompletePayload(raw string) (ToolCompletePayload, bool) {
 
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(PrepareLLMJSON(candidate)), &obj); err != nil {
+		return ToolCompletePayload{}, false
+	}
+
+	// 只有显式带有 tool-complete 控制字段时，才当作工具续问 payload。
+	// 普通结构化 JSON（例如意图识别结果）也常包含 content 字段，不能仅凭 content 误判。
+	if !hasAnyJSONKey(obj,
+		"needToolToics", "needToolTopics",
+		"summaryfornextllm", "summaryForNextLLM", "summaryForNextLlm", "summary_for_next_llm",
+	) {
 		return ToolCompletePayload{}, false
 	}
 

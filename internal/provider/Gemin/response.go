@@ -2,8 +2,8 @@ package gemini
 
 import (
 	"encoding/json"
-	"fmt"
 	"leiAgent/internal/provider/openaistyle"
+	"strings"
 
 	"time"
 )
@@ -159,11 +159,11 @@ func ConvertToOpenAIResponse(geminiResp *ChatCompletionResponse) *openaistyle.Ch
 			}
 
 			// 处理 parts
+			var textParts []string
 			for _, part := range candidate.Content.Parts {
 				// 处理文本内容
 				if part.Text != "" {
-					fmt.Println("part.Text:", part.Text)
-					choice.Message.Content = part.Text
+					textParts = append(textParts, part.Text)
 				}
 
 				// 处理工具调用
@@ -185,6 +185,9 @@ func ConvertToOpenAIResponse(geminiResp *ChatCompletionResponse) *openaistyle.Ch
 					}
 					choice.Message.ToolCalls = append(choice.Message.ToolCalls, toolCall)
 				}
+			}
+			if len(textParts) > 0 {
+				choice.Message.Content = strings.Join(textParts, "")
 			}
 
 			response.Choices[i] = choice

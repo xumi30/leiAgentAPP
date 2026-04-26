@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -129,13 +130,97 @@ func IsBlank(s string) bool {
 	return len(strings.TrimSpace(s)) == 0
 }
 
-func ExtractJSON(raw string) string {
+func normalizePotentialJSONPayload(raw string) string {
 	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "\ufeff")
+	raw = strings.TrimSpace(raw)
+
+	lines := strings.Split(raw, "\n")
+	if len(lines) == 0 {
+		return raw
+	}
+
+	trimmedLines := make([]string, 0, len(lines))
+	removedDataPrefix := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "data:") {
+			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
+			removedDataPrefix = true
+		}
+		if trimmed == "[DONE]" {
+			continue
+		}
+		trimmedLines = append(trimmedLines, trimmed)
+	}
+
+	if removedDataPrefix {
+		raw = strings.Join(trimmedLines, "\n")
+	}
+
+	return strings.TrimSpace(raw)
+}
+
+func extractBalancedJSONObject(raw string) string {
+	start := -1
+	depth := 0
+	inString := false
+	escaped := false
+
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+
+		if start == -1 {
+			if c == '{' {
+				start = i
+				depth = 1
+			}
+			continue
+		}
+
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inString {
+			if c == '\\' {
+				escaped = true
+				continue
+			}
+			if c == '"' {
+				inString = false
+			}
+			continue
+		}
+
+		switch c {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return raw[start : i+1]
+			}
+		}
+	}
+
+	return ""
+}
+
+func ExtractJSON(raw string) string {
+	raw = normalizePotentialJSONPayload(raw)
 
 	// 去掉 markdown 包裹
 	raw = strings.TrimPrefix(raw, "```json")
 	raw = strings.TrimPrefix(raw, "```")
 	raw = strings.TrimSuffix(raw, "```")
+	raw = strings.TrimSpace(raw)
+
+	if balanced := extractBalancedJSONObject(raw); balanced != "" {
+		return balanced
+	}
 
 	// 找 JSON 区间
 	start := strings.Index(raw, "{")
@@ -279,6 +364,44 @@ func PrepareLLMJSON(raw string) string {
 	extracted := ExtractJSON(raw)
 	fixed := RepairUnescapedInnerQuotesInJSONStrings(extracted)
 	return EscapeRawNewlinesInJSONStrings(fixed)
+}
+
+func PreviewJSONBytes(s string, limit int) string {
+	if limit <= 0 {
+		limit = 64
+	}
+	b := []byte(s)
+	if len(b) > limit {
+		b = b[:limit]
+	}
+	return fmt.Sprintf("len=%d first_bytes=%v quoted=%q", len(s), b, string(b))
+}
+
+func UnmarshalLLMJSON(raw string, out interface{}) error {
+	candidates := []struct {
+		name  string
+		value string
+	}{
+		{name: "raw", value: strings.TrimSpace(raw)},
+		{name: "prepared", value: PrepareLLMJSON(raw)},
+	}
+
+	var lastErr error
+	for _, candidate := range candidates {
+		if strings.TrimSpace(candidate.value) == "" {
+			continue
+		}
+		if err := json.Unmarshal([]byte(candidate.value), out); err == nil {
+			return nil
+		} else {
+			lastErr = fmt.Errorf("%s parse failed: %w; payload=%s",
+				candidate.name, err, PreviewJSONBytes(candidate.value, 96))
+		}
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+	return errors.New("empty JSON payload")
 }
 
 func GenerateChatID() string {

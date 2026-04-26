@@ -11,15 +11,10 @@ import (
 	"go.yaml.in/yaml/v2"
 )
 
-const (
-	hardcodedLLMAPIKey  = "123456"
-	hardcodedLLMBaseURL = "http://127.0.0.1:8088"
-	hardcodedLLMModel   = "qwen"
-)
-
 type fileRoot struct {
-	LLM         llmYAML   `yaml:"llm"`
-	LLMBackends []llmYAML `yaml:"llm_backends"`
+	EnableLLMConfig bool      `yaml:"enable_llm_config,omitempty"`
+	LLM             llmYAML   `yaml:"llm"`
+	LLMBackends     []llmYAML `yaml:"llm_backends"`
 }
 
 type llmYAML struct {
@@ -244,29 +239,55 @@ func modelConfigsFromRoot(root fileRoot, cfgPath string) ([]*ModelAPIInfo, error
 	return []*ModelAPIInfo{m}, nil
 }
 
-func defaultModelConfigs() []*ModelAPIInfo {
-	return []*ModelAPIInfo{
-		{
-			backendName: "builtin-qwen",
-			provider:    "",
-			token:       hardcodedLLMAPIKey,
-			url:         hardcodedLLMBaseURL + "/v1/chat/completions",
-			modelName:   hardcodedLLMModel,
-			isStream:    streamModeBoth,
-		},
+// resolveDefaultBackendPath 查找 config/defaultBackend.yaml，优先级同 resolveConfigPath。
+func resolveDefaultBackendPath() (string, bool) {
+	candidates := []string{
+		appruntime.ResolvePath(filepath.Join("config", "defaultBackend.yaml")),
+		filepath.Clean(filepath.Join("config", "defaultBackend.yaml")),
 	}
+	exe, err := os.Executable()
+	if err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config", "defaultBackend.yaml"))
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && !st.IsDir() {
+			return filepath.Clean(c), true
+		}
+	}
+	return "", false
 }
 
-// loadModelConfigs 加载后端：有 llm_backends 则按顺序 failover；否则单条 llm（支持环境变量覆盖）。
+func defaultModelConfigs() ([]*ModelAPIInfo, error) {
+	path, ok := resolveDefaultBackendPath()
+	if !ok {
+		return nil, fmt.Errorf("未找到内置默认后端配置文件 config/defaultBackend.yaml")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("读取默认后端配置失败（%s）：%w", path, err)
+	}
+	var root fileRoot
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return nil, fmt.Errorf("解析默认后端配置失败（%s）：%w", path, err)
+	}
+	m, err := mergeLLMYAML(root.LLM, false, path)
+	if err != nil {
+		return nil, err
+	}
+	return []*ModelAPIInfo{m}, nil
+}
+
+// loadModelConfigs 加载后端：enable_llm_config 开启时从 config.yaml 读取（多后端 failover 或单后端），
+// 否则回退到 config/defaultBackend.yaml 内置默认后端。
 func loadModelConfigs() ([]*ModelAPIInfo, error) {
-	// root, cfgPath, err := readConfigRoot()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("读取 LLM 配置失败（%s）：%w", cfgPath, err)
-	// }
-	// if cfgPath != "" {
-	// 	return modelConfigsFromRoot(root, cfgPath)
-	// }
-	return defaultModelConfigs(), nil
+	root, cfgPath, err := readConfigRoot()
+	if err != nil {
+		return nil, fmt.Errorf("读取 LLM 配置失败（%s）：%w", cfgPath, err)
+	}
+	if cfgPath == "" || !root.EnableLLMConfig {
+		return defaultModelConfigs()
+	}
+	return modelConfigsFromRoot(root, cfgPath)
 }
 
 // ValidateLLMConfigYAML 校验 YAML 文本能否解析为可用 LLM 配置（不写盘）。
@@ -274,6 +295,9 @@ func ValidateLLMConfigYAML(data []byte) error {
 	var root fileRoot
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return fmt.Errorf("YAML 解析失败：%w", err)
+	}
+	if !root.EnableLLMConfig {
+		return nil
 	}
 	if _, err := modelConfigsFromRoot(root, "config.yaml"); err != nil {
 		return err

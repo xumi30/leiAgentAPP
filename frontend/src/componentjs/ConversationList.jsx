@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { SwitchChat, ListConversation, DeleteConversation, UpdateConversationTitle } from '../../wailsjs/go/main/App';
+import React, { useState, useEffect, useRef } from 'react';
+import { SwitchChat, ListConversation, DeleteConversation, UpdateConversationTitle, AddConversation } from '../../wailsjs/go/main/App';
 import { getRandomMacaronColor } from './Constant';
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime';
 import ConversationCalendar from './ConversationCalendar.jsx';
+import '../componentcss/Conversationlist.css';
 
 /** Go 侧在无记录时可能返回 null，统一为数组避免 .length / .filter 报错 */
 function normalizeConversationList(raw) {
@@ -10,27 +11,7 @@ function normalizeConversationList(raw) {
     return Array.isArray(raw) ? raw : [];
 }
 
-/** 从时间字段解析本地日历日 YYYY-MM-DD，无效则返回 null */
-function ymdFromConvField(v) {
-    if (v == null || v === '') return null;
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return null;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** 对话的创建/更新日期（本地日历日）是否与选中日期一致 */
-function conversationMatchesCalendarDay(conv, ymd) {
-    if (!ymd) return true;
-    for (const key of ['updated_at', 'created_at']) {
-        const s = ymdFromConvField(conv[key]);
-        if (s != null && s === ymd) return true;
-    }
-    return false;
-}
-
 export default function ConversationList({
-    memoDates = new Set(),
-    refreshMemoDates,
     streamingChatIds = new Set(),
 }) {
     const [openMenuId, setOpenMenuId] = useState(null);
@@ -41,26 +22,7 @@ export default function ConversationList({
     const [renameTitle, setRenameTitle] = useState('');
     const renameInputRef = useRef(null);
     const [cons, setCons] = useState([]);
-    const [selectedDate, setSelectedDate] = useState(null);
     const [listError, setListError] = useState('');
-
-    const displayedCons = useMemo(() => {
-        const list = normalizeConversationList(cons);
-        if (!selectedDate) return list;
-        return list.filter((c) => conversationMatchesCalendarDay(c, selectedDate));
-    }, [cons, selectedDate]);
-
-    /** 日历上标出「当天有对话」的日期（创建或更新落在该日） */
-    const conversationDates = useMemo(() => {
-        const s = new Set();
-        for (const c of normalizeConversationList(cons)) {
-            for (const key of ['updated_at', 'created_at']) {
-                const ymd = ymdFromConvField(c[key]);
-                if (ymd) s.add(ymd);
-            }
-        }
-        return s;
-    }, [cons]);
 
     // 不在 document 上监听 click：Wails/WebView 里可能与 React 委托顺序冲突，先关闭菜单导致菜单项 onClick 永远不触发。
     useEffect(() => {
@@ -205,15 +167,28 @@ export default function ConversationList({
         setOpenMenuId(null);
     };
 
-    const handleNewConversation = () => {
-        switchDialog("", '');
-        // const newConversationName = prompt("请输入新对话的名称:");
-        // if (!newConversationName) {
-        //     console.log("用户取消了输入或未输入内容");
-        //     return;
-        // }
+    const handleNewConversation = async () => {
+        setListError('');
+        try {
+            const title = '新对话';
+            const newID = await AddConversation(title);
+            const idStr = newID != null ? String(newID) : '';
+            if (!idStr) {
+                setListError('新建对话失败：未返回会话ID');
+                return;
+            }
 
-        // AddConversation(newConversationName)
+            // 乐观更新：先把会话塞到列表顶端并切换；随后 Go 侧 getConversation 事件会再同步一次（同 ID 会去重）。
+            setCons((prevCons) => {
+                const prev = normalizeConversationList(prevCons);
+                const filtered = prev.filter((c) => String(c.id ?? '') !== idStr);
+                return [{ id: idStr, title }, ...filtered];
+            });
+            switchDialog(idStr, title);
+        } catch (error) {
+            console.error('新建对话失败:', error);
+            setListError('新建对话失败: ' + String(error?.message || error || '未知错误'));
+        }
     };
 
     const closeRenameModal = () => {
@@ -267,19 +242,11 @@ export default function ConversationList({
 
     return (
         <div className="conversation-list-panel">
-            <ConversationCalendar
-                memoDates={memoDates}
-                conversationDates={conversationDates}
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-                onVisibleMonthChange={typeof refreshMemoDates === 'function' ? refreshMemoDates : undefined}
-            />
-            {normalizeConversationList(cons).length > 0 ? (
-                <button className="new-conversation-btn" onClick={handleNewConversation}>
-                    <span className="btn-icon"> + </span>
-                    <span className="btn-text">新建对话</span>
-                </button>
-            ) : null}
+            <ConversationCalendar />
+            <button className="new-conversation-btn" onClick={handleNewConversation}>
+                <span className="btn-icon"> + </span>
+                <span className="btn-text">新建对话</span>
+            </button>
             {listError ? (
                 <div className="conversation-list-error" role="alert">
                     {listError}
@@ -378,8 +345,8 @@ export default function ConversationList({
 
             <div className="conversation-list">
                 <div className="conversation">
-                    {displayedCons && displayedCons.length > 0 &&
-                        displayedCons.map((conversation) => {
+                    {normalizeConversationList(cons).length > 0 &&
+                        normalizeConversationList(cons).map((conversation) => {
                         const rowId = conversation.id != null ? String(conversation.id) : '';
                         const colors = getRandomMacaronColor(rowId);
                         const isMenuOpen = openMenuId === rowId;
@@ -437,11 +404,6 @@ export default function ConversationList({
                             </div>
                         );
                     })}
-                    {displayedCons.length === 0 && normalizeConversationList(cons).length > 0 && selectedDate ? (
-                        <p className="conversation-filter-empty">
-                            这一天还没有对话，试试其它日期或点下方「显示全部对话」。
-                        </p>
-                    ) : null}
                 </div>
             </div>
         </div>

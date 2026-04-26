@@ -66,3 +66,36 @@ export function classifyUserMessageLabel(kind) {
       return '补充';
   }
 }
+
+/**
+ * 判断是否显示消息头像
+ * @param {number} index 消息索引
+ * @param {Array} messages 消息列表
+ * @returns {boolean} 是否显示头像
+ */
+export function shouldShowMessageAvatar(index, messages) {
+  if (index < 0 || index >= messages.length) return false;
+  
+  const currentMessage = messages[index];
+  const prevMessage = index > 0 ? messages[index - 1] : null;
+
+  // 如果当前消息带 agentID（字段或 content 元信息），总是显示头像（不受 3 分钟分组限制）
+  const hasAgentIDField = String(currentMessage?.agentID ?? '').trim() !== '';
+  const hasAgentIDInContent = String(currentMessage?.content ?? '').trim().startsWith('{agentID:');
+  if (hasAgentIDField || hasAgentIDInContent) return true;
+  
+  // 如果是第一条消息，显示头像
+  if (index === 0) return true;
+  
+  // 如果上一条消息的角色不同，显示头像
+  if (prevMessage && prevMessage.role !== currentMessage.role) return true;
+  
+  // 根据时间间隔决定是否显示头像（超过一定时间间隔显示）
+  if (prevMessage && currentMessage.timestamp && prevMessage.timestamp) {
+    const timeDiff = Math.abs(currentMessage.timestamp - prevMessage.timestamp);
+    // 如果消息间隔超过3分钟，显示头像
+    if (timeDiff >= 3 * 60 * 1000) return true;
+  }
+  
+  return false;
+}

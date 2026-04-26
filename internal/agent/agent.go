@@ -7,10 +7,12 @@ import (
 	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
+	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
 	"leiAgent/utils"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -165,6 +167,9 @@ func (a *Agent) handleToolCompleteChat(ctx context.Context, message string) (uti
 	return payload, nil
 }
 
+// toolCodeRegex 匹配模型以纯文本输出的 <tool_code>...</tool_code> 格式
+var toolCodeRegex = regexp.MustCompile("(?s)<tool_code>\\s*(.*?)\\s*</tool_code>")
+
 func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *proxy.ToolAndContent) {
 
 	logging.Info("开始记忆返回信息")
@@ -172,7 +177,7 @@ func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *p
 	chatId := ctx.Value(utils.ChatIDString).(string)
 
 	if len(toolAndContent.ToolList) > 0 {
-		// 工具执行
+		// 原生 tool_calls：正常执行
 		names := make([]string, 0, len(toolAndContent.ToolList))
 		for _, tc := range toolAndContent.ToolList {
 			if tc.Function.Name != "" {
@@ -181,6 +186,22 @@ func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *p
 		}
 		logging.Info("开始执行工具: count=%d names=%s", len(toolAndContent.ToolList), strings.Join(names, ","))
 		a.executeTools(ctx, toolAndContent)
+	} else if toolAndContent.Content != "" && strings.Contains(toolAndContent.Content, "<tool_code>") {
+		// ToolList 为空但 Content 包含 <tool_code>：尝试解析为原生 tool_calls
+		parsed := tryParseToolCode(toolAndContent.Content)
+		if len(parsed) > 0 {
+			logging.Info("检测到 <tool_code> 文本格式，解析出 %d 个工具调用，转为原生 tool_calls 执行", len(parsed))
+			a.executeTools(ctx, &proxy.ToolAndContent{ToolList: parsed})
+		} else {
+			logging.Warn("检测到 <tool_code> 文本但解析失败，清除该段落后存入记忆")
+		}
+		// 无论解析成功与否，都清除 content 中的 <tool_code> 段，防止污染后续历史
+		cleaned := toolCodeRegex.ReplaceAllString(toolAndContent.Content, "")
+		cleaned = strings.TrimSpace(cleaned)
+		if cleaned != "" {
+			memory.AddAssistantContentMessage(chatId, cleaned)
+		}
+		return
 	} else {
 		logging.Info("本轮模型未触发工具调用（ToolList 为空）")
 	}
@@ -188,6 +209,41 @@ func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *p
 	if toolAndContent.Content != "" {
 		memory.AddAssistantContentMessage(chatId, toolAndContent.Content)
 	}
+}
+
+// tryParseToolCode 从包含 <tool_code>...</tool_code> 的文本中解析出原生 tool_calls
+func tryParseToolCode(content string) []openaistyle.ChatCompletionToolCall {
+	matches := toolCodeRegex.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	var tools []openaistyle.ChatCompletionToolCall
+	for i, match := range matches {
+		body := strings.TrimSpace(match[1])
+		var tc struct {
+			Name      string          `json:"name"`
+			Arguments json.RawMessage `json:"arguments"`
+		}
+		if err := json.Unmarshal([]byte(body), &tc); err != nil {
+			logging.Warn("解析第 %d 个 <tool_code> 失败: %v, body: %s", i+1, err, body)
+			return nil // 任一失败则整体放弃
+		}
+		argsStr := string(tc.Arguments)
+		if argsStr == "" {
+			argsStr = "{}"
+		}
+		tools = append(tools, openaistyle.ChatCompletionToolCall{
+			ID:   fmt.Sprintf("toolcode_%d", i),
+			Type: "function",
+			Function: &openaistyle.FunctionCall{
+				Name:      tc.Name,
+				Arguments: argsStr,
+			},
+			Index: i,
+		})
+	}
+	return tools
 }
 
 func truncateForLog(s string, max int) string {
@@ -272,7 +328,6 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 	if a.taskLoopTimes >= 0 {
 		logging.Info("工具执行完成,继续请求模型生成最终回复")
 		a.taskLoopTimes--
-
 		backInfo, err := a.handleToolCompleteChat(ctx, utils.ToolCompletePromptTemplate)
 		if err != nil {
 			logging.Error("继续请求模型生成最终回复失败: %v", err)

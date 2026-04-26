@@ -2,9 +2,11 @@ package sqlmemory
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"leiAgent/logging"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -13,8 +15,39 @@ const conversationstable = `CREATE TABLE IF NOT EXISTS conversations (
 			title TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			mode TEXT DEFAULT 'chat'
+			mode TEXT DEFAULT 'chat',
+			agents TEXT NOT NULL DEFAULT '[]'
 		)`
+
+func parseConversationAgents(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{}
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return []string{}
+	}
+	out := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func marshalConversationAgents(ids []string) string {
+	b, _ := json.Marshal(ids)
+	return string(b)
+}
 
 func (m *SQLMemory) SaveConversation(chatID, title, mode string) error {
 
@@ -28,8 +61,8 @@ func (m *SQLMemory) SaveConversation(chatID, title, mode string) error {
 	defer m.mu.Unlock()
 
 	query := `
-		INSERT INTO conversations (id, title, mode, updated_at)
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO conversations (id, title, mode, agents, updated_at)
+		VALUES (?, ?, ?, '[]', CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			title = excluded.title,
 			mode = excluded.mode,
@@ -49,14 +82,14 @@ func (m *SQLMemory) GetConversation(chatID string) (map[string]interface{}, erro
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	query := `SELECT id, title, created_at, updated_at, mode FROM conversations WHERE id = ?`
+	query := `SELECT id, title, created_at, updated_at, mode, agents FROM conversations WHERE id = ?`
 
 	row := m.db.QueryRow(query, chatID)
 
-	var id, title, mode string
+	var id, title, mode, agentsRaw string
 	var createdAt, updatedAt time.Time
 
-	if err := row.Scan(&id, &title, &createdAt, &updatedAt, &mode); err != nil {
+	if err := row.Scan(&id, &title, &createdAt, &updatedAt, &mode, &agentsRaw); err != nil {
 		if err == sql.ErrNoRows {
 			logging.Warn("Co313nversation with ID %s not found", chatID)
 			return nil, fmt.Errorf("conversation not found")
@@ -70,6 +103,7 @@ func (m *SQLMemory) GetConversation(chatID string) (map[string]interface{}, erro
 		"created_at": createdAt,
 		"updated_at": updatedAt,
 		"mode":       mode,
+		"agents":     parseConversationAgents(agentsRaw),
 	}, nil
 }
 
@@ -78,7 +112,7 @@ func (m *SQLMemory) ListConversations() ([]map[string]interface{}, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	query := `SELECT id, title, created_at, updated_at, mode FROM conversations ORDER BY updated_at DESC`
+	query := `SELECT id, title, created_at, updated_at, mode, agents FROM conversations ORDER BY updated_at DESC`
 
 	rows, err := m.db.Query(query)
 	if err != nil {
@@ -89,10 +123,10 @@ func (m *SQLMemory) ListConversations() ([]map[string]interface{}, error) {
 	var conversations []map[string]interface{}
 
 	for rows.Next() {
-		var id, title, mode string
+		var id, title, mode, agentsRaw string
 		var createdAt, updatedAt time.Time
 
-		if err := rows.Scan(&id, &title, &createdAt, &updatedAt, &mode); err != nil {
+		if err := rows.Scan(&id, &title, &createdAt, &updatedAt, &mode, &agentsRaw); err != nil {
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
 
@@ -102,6 +136,7 @@ func (m *SQLMemory) ListConversations() ([]map[string]interface{}, error) {
 			"created_at": createdAt,
 			"updated_at": updatedAt,
 			"mode":       mode,
+			"agents":     parseConversationAgents(agentsRaw),
 		})
 	}
 
@@ -159,4 +194,36 @@ func (m *SQLMemory) UpdateConversationTitle(chatID, title string) error {
 		return fmt.Errorf("failed to update conversation title: %w", err)
 	}
 	return nil
+}
+
+func (m *SQLMemory) ReplaceConversationAgents(chatID string, agentIDs []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	query := `
+		UPDATE conversations
+		SET agents = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	_, err := m.db.Exec(query, marshalConversationAgents(agentIDs), chatID)
+	if err != nil {
+		return fmt.Errorf("failed to update conversation agents: %w", err)
+	}
+	return nil
+}
+
+func (m *SQLMemory) AddAgentToConversation(chatID, agentID string) error {
+	conv, err := m.GetConversation(chatID)
+	if err != nil {
+		return err
+	}
+	rawIDs, _ := conv["agents"].([]string)
+	next := append([]string{}, rawIDs...)
+	for _, existing := range next {
+		if existing == agentID {
+			return nil
+		}
+	}
+	next = append(next, agentID)
+	return m.ReplaceConversationAgents(chatID, next)
 }

@@ -256,7 +256,7 @@ func ConfirmIntention(ctx context.Context, message string, currentState *Intenti
 		logging.Error("Failed to parse intention: %v", err)
 		return nil, err
 	}
-	
+
 	return result, nil
 
 }
@@ -284,7 +284,8 @@ func buildIntentRecentContext(ctx context.Context, currentMessage string) []Inte
 			continue
 		}
 
-		content := normalizeIntentContextContent(msg.Content)
+		// content := normalizeIntentContextContent(msg.Content)
+		content := msg.Content
 		if strings.TrimSpace(content) == "" {
 			if len(msg.ToolCalls) == 0 && msg.ToolCallID == "" {
 				continue
@@ -309,13 +310,13 @@ func buildIntentRecentContext(ctx context.Context, currentMessage string) []Inte
 	return contextMessages
 }
 
-func normalizeIntentContextContent(content string) string {
-	trimmed := strings.TrimSpace(content)
-	if strings.HasPrefix(trimmed, "用户请求:") {
-		return strings.TrimSpace(strings.TrimPrefix(trimmed, "用户请求:"))
-	}
-	return trimmed
-}
+// func normalizeIntentContextContent(content string) string {
+// 	trimmed := strings.TrimSpace(content)
+// 	if strings.HasPrefix(trimmed, "用户请求:") {
+// 		return strings.TrimSpace(strings.TrimPrefix(trimmed, "用户请求:"))
+// 	}
+// 	return trimmed
+// }
 
 func summarizeToolMessage(msg *memory.Message) string {
 	if msg == nil {
@@ -417,9 +418,8 @@ func messageLooksLikeMultiStepPlan(low string) bool {
 
 func parseIntention(data string) (*Intention, error) {
 	var i Intention
-
-	err := json.Unmarshal([]byte(data), &i)
-	if err != nil {
+	if err := utils.UnmarshalLLMJSON(data, &i); err != nil {
+		logging.Warn("parseIntention failed: %v", err)
 		return nil, err
 	}
 

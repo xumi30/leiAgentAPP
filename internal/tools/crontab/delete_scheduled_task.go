@@ -2,7 +2,6 @@ package crontab
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -38,7 +37,7 @@ func (t *DeleteScheduledTaskTool) Execute(ctx context.Context, args string) (str
 	var in struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal([]byte(utils.PrepareLLMJSON(args)), &in); err != nil {
+	if err := utils.UnmarshalLLMJSON(args, &in); err != nil {
 		return "", fmt.Errorf("invalid JSON args: %w", err)
 	}
 	in.ID = strings.TrimSpace(in.ID)
@@ -90,4 +89,3 @@ func (t *DeleteScheduledTaskTool) Results() map[string]interface{} {
 func (t *DeleteScheduledTaskTool) SimpleInfo() map[string]string {
 	return utils.SimpleInfoMap(utils.ToolTopicCrontab, "删除（软删除）指定的定时任务：将状态置为 deleted。")
 }
-

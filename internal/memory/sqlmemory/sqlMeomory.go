@@ -82,6 +82,7 @@ func createTables(db *sql.DB) error {
 		chatIDindex,
 		planstable,
 		planstepstable,
+		agentstable,
 	}
 
 	for _, query := range queries {
@@ -97,6 +98,48 @@ func createTables(db *sql.DB) error {
 		}
 	}
 
+	if err := ensureConversationSchema(db); err != nil {
+		return err
+	}
+	if err := ensureAgentsSchema(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func listTableColumns(db *sql.DB, table string) (map[string]bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cols := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		cols[strings.ToLower(strings.TrimSpace(name))] = true
+	}
+	return cols, rows.Err()
+}
+
+func ensureConversationSchema(db *sql.DB) error {
+	cols, err := listTableColumns(db, "conversations")
+	if err != nil {
+		return fmt.Errorf("inspect conversations schema: %w", err)
+	}
+	if cols["agents"] {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE conversations ADD COLUMN agents TEXT NOT NULL DEFAULT '[]'`); err != nil {
+		return fmt.Errorf("migrate conversations add agents: %w", err)
+	}
 	return nil
 }
 
@@ -258,7 +301,7 @@ func (m *SQLMemory) Import(jsonData string) error {
 			return fmt.Errorf("invalid message id")
 		}
 
-		if err := m.SaveMessage(chatID, MessageID, role, content); err != nil {
+		if err := m.SaveMessage(chatID, MessageID, "", role, content); err != nil {
 			return fmt.Errorf("failed to save message: %w", err)
 		}
 	}

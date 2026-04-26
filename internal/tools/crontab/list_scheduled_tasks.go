@@ -3,7 +3,6 @@ package crontab
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -56,7 +55,7 @@ func (t *ListScheduledTasksTool) Execute(ctx context.Context, args string) (stri
 		Offset         int    `json:"offset"`
 	}
 	if strings.TrimSpace(args) != "" {
-		if err := json.Unmarshal([]byte(utils.PrepareLLMJSON(args)), &in); err != nil {
+		if err := utils.UnmarshalLLMJSON(args, &in); err != nil {
 			return "", fmt.Errorf("invalid JSON args: %w", err)
 		}
 	}
@@ -112,11 +111,11 @@ func (t *ListScheduledTasksTool) Execute(ctx context.Context, args string) (stri
 	for rows.Next() {
 		var (
 			id, userID, title, actionType, actionPayload, scheduleType, timezone, status string
-			runAt                                                              sql.NullTime
-			cronExpr                                                           sql.NullString
-			rruleText                                                          sql.NullString
-			lastRunAt, nextRunAt                                               sql.NullTime
-			createdAt, updatedAt                                               time.Time
+			runAt                                                                        sql.NullTime
+			cronExpr                                                                     sql.NullString
+			rruleText                                                                    sql.NullString
+			lastRunAt, nextRunAt                                                         sql.NullTime
+			createdAt, updatedAt                                                         time.Time
 		)
 		if err := rows.Scan(&id, &userID, &title, &actionType, &actionPayload, &scheduleType, &runAt, &cronExpr, &rruleText, &timezone, &status, &lastRunAt, &nextRunAt, &createdAt, &updatedAt); err != nil {
 			return "", fmt.Errorf("scan scheduled_task: %w", err)
@@ -153,4 +152,3 @@ func (t *ListScheduledTasksTool) Results() map[string]interface{} {
 func (t *ListScheduledTasksTool) SimpleInfo() map[string]string {
 	return utils.SimpleInfoMap(utils.ToolTopicCrontab, "列出已创建的定时任务（可按 status 过滤，默认不含 deleted）。")
 }
-

@@ -257,7 +257,8 @@ function hubRatingText(item) {
 }
 
 export default function SettingsModal({ open, onClose, onSaved }) {
-  const [activeTab, setActiveTab] = useState('llm');
+  const [activeTab, setActiveTab] = useState('mcp');
+  const [llmConfigEnabled, setLlmConfigEnabled] = useState(false);
   const [backends, setBackends] = useState(() => []);
   const [mcpServers, setMcpServers] = useState(() => []);
   const [mcpStatuses, setMcpStatuses] = useState(() => []);
@@ -299,6 +300,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     try {
       const llmState = await GetLLMConfigFormState();
       const llmList = Array.isArray(llmState.backends) ? llmState.backends : [];
+      setLlmConfigEnabled(!!llmState.configEnabled);
       setBackends(llmList.length > 0 ? llmList.map(mapBackendRow) : []);
       setSavePath(llmState.path ?? '');
       setUsingExample(!!llmState.usingExample);
@@ -361,6 +363,11 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       })();
     }
   }, [open, loadLLMOnly, loadNonLLM]);
+
+  useEffect(() => {
+    if (llmConfigEnabled || activeTab !== 'llm') return;
+    setActiveTab('mcp');
+  }, [activeTab, llmConfigEnabled]);
 
   useEffect(() => {
     if (open) return;
@@ -842,7 +849,9 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         </div>
 
         <div className="settings-tabs" role="tablist" aria-label="设置分组">
-          <button type="button" className={`settings-tabs__btn ${activeTab === 'llm' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('llm')}>LLM</button>
+          {llmConfigEnabled ? (
+            <button type="button" className={`settings-tabs__btn ${activeTab === 'llm' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('llm')}>LLM</button>
+          ) : null}
           <button type="button" className={`settings-tabs__btn ${activeTab === 'mcp' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('mcp')}>MCP</button>
           <button type="button" className={`settings-tabs__btn ${activeTab === 'skills' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('skills')}>Skills</button>
         </div>

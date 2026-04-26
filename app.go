@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +31,80 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+type userSendPayload struct {
+	Content string   `json:"content"`
+	Aite    []string `json:"aite"`
+}
+
+func stripLeadingMentions(s string) string {
+	// Remove leading "@xxx" tokens separated by spaces/commas, e.g.:
+	// "@A @B hello" -> "hello"
+	// "@A, @B，hello" -> "hello"
+	in := strings.TrimLeft(s, " \t\r\n")
+	for {
+		if !strings.HasPrefix(in, "@") {
+			break
+		}
+		// scan token "@<non-separator>"
+		i := 1
+		for i < len(in) {
+			ch := in[i]
+			if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == ',' {
+				break
+			}
+			// UTF-8 comma '，' may appear; treat as separator if it starts at this byte.
+			if strings.HasPrefix(in[i:], "，") {
+				break
+			}
+			i++
+		}
+		// consume mention token
+		in = in[i:]
+		// consume separators after token
+		in = strings.TrimLeft(in, " \t\r\n")
+		for strings.HasPrefix(in, ",") || strings.HasPrefix(in, "，") {
+			in = strings.TrimLeft(in[1:], " \t\r\n")
+		}
+	}
+	return strings.TrimSpace(in)
+}
+
+func parseUserSendPayload(raw string) (content string, aite []string, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil, false
+	}
+	if !strings.HasPrefix(raw, "{") {
+		return "", nil, false
+	}
+	var p userSendPayload
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return "", nil, false
+	}
+	c := strings.TrimSpace(p.Content)
+	if c == "" {
+		return "", nil, false
+	}
+	out := make([]string, 0, len(p.Aite))
+	seen := map[string]struct{}{}
+	for _, id := range p.Aite {
+		s := strings.TrimSpace(id)
+		if s == "" {
+			continue
+		}
+		if _, exists := seen[s]; exists {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	plain := stripLeadingMentions(c)
+	if plain != "" {
+		c = plain
+	}
+	return c, out, true
+}
 
 // App struct
 type App struct {
@@ -55,6 +132,9 @@ func (a *App) startup(ctx context.Context) {
 	// 必须先于其它包调用 sqlmemory.GetSqlInstance，否则 sync.Once 会锁在错误的默认库路径上
 	if dataoperation.GetSqlInstance() == nil {
 		logging.Error("启动时未能打开对话数据库 data/memory.db")
+	}
+	if err := dataoperation.SyncPresetAgents(); err != nil {
+		logging.Warn("同步预设 agents 失败: %v", err)
 	}
 	// Start scheduled task runner (polls due tasks, claims with optimistic lock, executes).
 	_ = crontabthread.NewRunner(2*time.Second, 100, nil).Start(ctx)
@@ -237,10 +317,37 @@ func (a *App) SendMessage(chatID, message, role string) {
 		runtime.EventsEmit(a.ctx, "sendMessageError", "messages is empty, not sending")
 		return
 	}
+
+	content := message
+	contentForPersist := message
+	var agentList []string
+	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
+		if c, aite, ok := parseUserSendPayload(message); ok {
+			// Persist original display content (with @mentions), but process with plain content.
+			if rawContent, ok2 := func() (string, bool) {
+				var p userSendPayload
+				if err := json.Unmarshal([]byte(strings.TrimSpace(message)), &p); err != nil {
+					return "", false
+				}
+				raw := strings.TrimSpace(p.Content)
+				if raw == "" {
+					return "", false
+				}
+				return raw, true
+			}(); ok2 {
+				contentForPersist = rawContent
+			}
+			content = c
+			agentList = aite
+			logging.Info("SendMessage payload parsed: content_len=%d aite=%v raw_prefix=%q", len(content), agentList, utils.TruncateRunes(strings.TrimSpace(message), 120))
+		} else {
+			logging.Info("SendMessage payload NOT parsed (treat as plain text): raw_prefix=%q", utils.TruncateRunes(strings.TrimSpace(message), 120))
+		}
+	}
 	//如果chatID为空，则生成一个新的chatID，并创建一个新的conversation
 	if chatID == "" {
 		logging.Info("ChatID is empty, adding new conversation")
-		title := proxy.GenerateConversationTitle(context.Background(), message)
+		title := proxy.GenerateConversationTitle(context.Background(), content)
 		chatID = a.AddConversation(title)
 		logging.Info("New conversation added with ID: %s", chatID)
 		a.SwitchChat(chatID)
@@ -254,7 +361,7 @@ func (a *App) SendMessage(chatID, message, role string) {
 	messageID := GenerateMessageID()
 
 	//logging.Info("Sending message to conversation with ID: %s, messageID: %s, Message: %s, Role: %s", chatID, messageID, message, role)
-	err := dataoperation.SendMessage(chatID, messageID, message, role)
+	err := dataoperation.SendMessage(chatID, messageID, contentForPersist, role)
 	logging.Info("Sending message to conversation successfully")
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "sendMessageError", err.Error())
@@ -266,9 +373,10 @@ func (a *App) SendMessage(chatID, message, role string) {
 	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
 		msg := &globalchannel.Message{
 			MessageID:  utils.GenerateMessageID(),
-			Content:    message,
+			Content:    content,
 			Role:       utils.MessageRoleUser,
 			IsFinished: true,
+			AgentList:  agentList,
 		}
 
 		inputChan <- msg
@@ -305,6 +413,12 @@ func GenerateChatID() string {
 	chatID := fmt.Sprintf("%d%03d", time.Now().UnixMilli(), rand.Intn(1000))
 	return chatID
 }
+
+func GenerateAgentID() string {
+	agentID := fmt.Sprintf("agent_%d%04d", time.Now().UnixMilli(), rand.Intn(10000))
+	return agentID
+}
+
 func GenerateMessageID() string {
 
 	messageID := fmt.Sprintf("%d%06d", time.Now().UnixMilli(), rand.Intn(100000))
@@ -317,6 +431,29 @@ func (a *App) SetLLMThinkingDisabled(disabled bool) {
 	proxy.SetLLMThinkingDisabled(disabled)
 }
 
+func (a *App) ListAgents() ([]map[string]interface{}, error) {
+	if err := dataoperation.SyncPresetAgents(); err != nil {
+		return nil, err
+	}
+	return dataoperation.ListAgents()
+}
+
+func (a *App) CreateAgent(agentName, avatarImage, description string) (map[string]interface{}, error) {
+	return dataoperation.CreateAgent(GenerateAgentID(), agentName, avatarImage, description)
+}
+
+func (a *App) DeleteCustomAgent(agentID string) error {
+	return dataoperation.DeleteCustomAgent(agentID)
+}
+
+func (a *App) AddAgentToConversation(chatID, agentID string) error {
+	return dataoperation.AddAgentToConversation(chatID, agentID)
+}
+
+func (a *App) GetConversationAgents(chatID string) ([]map[string]interface{}, error) {
+	return dataoperation.ListConversationAgents(chatID)
+}
+
 // GetLLMThinkingDisabled 返回当前是否对 LLM 关闭了思考过程。
 func (a *App) GetLLMThinkingDisabled() bool {
 	return proxy.IsLLMThinkingDisabled()
@@ -326,10 +463,79 @@ func (a *App) GetReasoningMessage(chatID string) []map[string]interface{} {
 	reasonings, err := dataoperation.GetReasonings(chatID)
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "getReasoningMessageError", err.Error())
-		return nil
 	}
-	//logging.Info("Getting reasoning messages for conversation with ID: %s %v", chatID, reasonings)
 	return reasonings
+}
+
+// ProxyAuthRequest forwards an auth request (login/register/send-code) to the
+// proxy-lb server from Go to avoid CORS issues in the Wails webview.
+// For login/register, if a token is returned the LLM config is updated automatically.
+func (a *App) ProxyAuthRequest(path string, body map[string]interface{}) (map[string]interface{}, error) {
+	username, _ := body["username"].(string)
+	logging.Info("ProxyAuthRequest: path=%s username=%s", path, username)
+	url := "http://127.0.0.1:7077" + path
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("序列化请求失败: %w", err)
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Post(url, "application/json", bytes.NewReader(bodyBytes))
+	if err != nil {
+		logging.Error("ProxyAuthRequest 请求失败: path=%s err=%v", path, err)
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	respBytes, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if err := json.Unmarshal(respBytes, &result); err != nil {
+		result = map[string]interface{}{"raw": string(respBytes)}
+	}
+	result["_statusCode"] = resp.StatusCode
+	logging.Info("ProxyAuthRequest: path=%s status=%d", path, resp.StatusCode)
+
+	// 登录或注册成功后，自动写入 LLM 配置
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		token, _ := result["token"].(string)
+		if token != "" {
+			if saveErr := a.saveAuthConfig(token); saveErr != nil {
+				logging.Error("登录成功但写入配置失败: %v", saveErr)
+			}
+		}
+	}
+	return result, nil
+}
+
+// saveAuthConfig 将认证 token 写入 LLM 配置的第一条后端。
+func (a *App) saveAuthConfig(token string) error {
+	state, err := proxy.GetLLMConfigFormState()
+	if err != nil {
+		return fmt.Errorf("读取配置失败: %w", err)
+	}
+	currentRows := state.Backends
+	nextRow := proxy.LLMConfigRow{
+		Name:            "proxy-lb",
+		APIKey:          strings.TrimSpace(token),
+		BaseURL:         "http://127.0.0.1:7077/v1/chat/completions",
+		Model:           "qwen",
+		Provider:        "",
+		StreamMode:      "both",
+		MaxOutputTokens: 0,
+		Enabled:         true,
+	}
+	var nextRows []proxy.LLMConfigRow
+	if len(currentRows) > 0 {
+		merged := currentRows[0]
+		merged.Name = nextRow.Name
+		merged.APIKey = nextRow.APIKey
+		merged.BaseURL = nextRow.BaseURL
+		merged.Model = nextRow.Model
+		merged.StreamMode = nextRow.StreamMode
+		nextRows = append([]proxy.LLMConfigRow{merged}, currentRows[1:]...)
+	} else {
+		nextRows = []proxy.LLMConfigRow{nextRow}
+	}
+	_, err = proxy.SaveLLMConfigForm(proxy.LLMConfigRow{}, nextRows)
+	return err
 }
 
 // evictLRUDispatcherLocked 在 poolMutex 已持有时调用：驱逐最久未访问的会话 dispatcher（避免 map 随机迭代误杀正在跑的对话）。
@@ -387,16 +593,21 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		dp, err = dispatcher.NewDispatcher(ctx, chatID, cancel) // 传递 cancel 函数
 		if err != nil {
 			logging.Error("创建 Dispatcher 失败: %v", err)
-			globalchannel.SendAssitantMessageOnce(ctx, "创建 Dispatcher 失败: "+err.Error())
-			runtime.EventsEmit(a.ctx, "dispatcherError", err.Error())
-			if a.ctx != nil {
-				_, dlgErr := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
-					Type:    runtime.ErrorDialog,
-					Title:   "无法启动对话引擎",
-					Message: "创建 Dispatcher 失败：\n" + err.Error(),
-				})
-				if dlgErr != nil {
-					logging.Error("MessageDialog: %v", dlgErr)
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "未配置 API Key") {
+				runtime.EventsEmit(a.ctx, "needLogin", errMsg)
+			} else {
+				globalchannel.SendAssitantMessageOnce(ctx, "创建 Dispatcher 失败: "+errMsg)
+				runtime.EventsEmit(a.ctx, "dispatcherError", errMsg)
+				if a.ctx != nil {
+					_, dlgErr := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+						Type:    runtime.ErrorDialog,
+						Title:   "无法启动对话引擎",
+						Message: "创建 Dispatcher 失败：\n" + errMsg,
+					})
+					if dlgErr != nil {
+						logging.Error("MessageDialog: %v", dlgErr)
+					}
 				}
 			}
 			cancel()
@@ -407,7 +618,7 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		logging.Info("Starting dispatcher for conversation with ChatID: %s", chatID)
 		go dp.Run(ctx)
 		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
-		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
+		// go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
 		go a.AppendTaskStateToFront(ctx, chatID)
 	}
 
@@ -517,6 +728,7 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				// 与入库 startTime 一致，便于前端在重载前列顺序/展示时间
 				"timestamp":    buf.startTime.UTC().Format(time.RFC3339Nano),
 				"total_tokens": msg.TotalTokens,
+				"agentID":      msg.AgentID,
 			}
 			runtime.EventsEmit(a.ctx, eventname, appendMessage)
 
@@ -537,7 +749,7 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				}
 			}
 			if strings.TrimSpace(final) != "" {
-				if err := dataoperation.SendMessageWithCreateTimeAndTokens(chatID, mid, toSave, role, buf.startTime, msg.TotalTokens); err != nil {
+				if err := dataoperation.SendMessageWithCreateTimeAndTokens(msg.AgentID, chatID, mid, toSave, role, buf.startTime, msg.TotalTokens); err != nil {
 					logging.Error("Failed to save message: %v", err)
 				} else if wasToolCompletePayload {
 					// 该条消息在流式阶段可能展示了控制 JSON；落库净化后，主动再 emit 一次 DB 最终内容用于界面替换。

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"leiAgent/dataoperation"
 	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/agent"
 	"leiAgent/internal/globalchannel"
@@ -16,6 +17,7 @@ import (
 	"leiAgent/internal/tools/bashfunction"
 	"leiAgent/internal/tools/crontab"
 	"leiAgent/internal/tools/mcptool"
+	"sync"
 
 	fileFunctions "leiAgent/internal/tools/fileFunction"
 	"leiAgent/internal/tools/libraryfs"
@@ -136,7 +138,7 @@ func (d *Dispatcher) Run(ctx context.Context) {
 			logging.Info("Dispatcher 收到消息: %s", msg.Content)
 			// 同一 chatID 下严格串行处理，避免共享 agent / memory / intention 并发踩踏。
 			globalchannel.SendTaskState(ctx, true)
-			d.handleMessage(ctx, msg.Content)
+			d.handleMessage(ctx, msg.Content, msg.AgentList)
 			globalchannel.SendTaskState(ctx, false)
 		}
 	}
@@ -159,11 +161,18 @@ func (d *Dispatcher) ReplaceRunContext(ctx context.Context, cancel context.Cance
 	}
 }
 
-func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
-	chatIDForPersist, _ := ctx.Value(utils.ChatIDString).(string)
+func (d *Dispatcher) handleMessage(ctx context.Context, message string, agentList []string) {
 
+	chatIDForPersist, _ := ctx.Value(utils.ChatIDString).(string)
 	logging.Info("Dispatcher 处理消息: %s", message)
-	memory.AddUserMessage(chatIDForPersist, fmt.Sprintf("用户请求: %s", message))
+	memory.AddUserMessage(chatIDForPersist, fmt.Sprintf(message))
+
+	go chatWithAitessistant(ctx, message, agentList)
+
+	if len(agentList) > 0 {
+		return
+	}
+
 	ctx = d.attachProfileContext(ctx)
 	if shouldUseActionGate(message) {
 		needAction, handled, err := d.handleActionGateChat(ctx, message)
@@ -234,7 +243,6 @@ func (d *Dispatcher) handleMessage(ctx context.Context, message string) {
 
 func (d *Dispatcher) handleActionGateChat(ctx context.Context, message string) (needAction bool, handled bool, err error) {
 	chatId := ctx.Value(utils.ChatIDString).(string)
-	logging.Info("action-gate 对话系统提示词已加载...")
 
 	p, err := proxy.NewProxy(nil)
 	if err != nil {
@@ -274,7 +282,7 @@ func buildActionGateMessages(ctx context.Context, message string) []openaistyle.
 	}
 	messages = append(messages, openaistyle.ChatMessage{
 		Role:    openaistyle.RoleUser,
-		Content: "用户请求: " + message,
+		Content: message,
 	})
 	return messages
 }
@@ -431,4 +439,101 @@ func getMCPSimpleInfo() []byte {
 		return []byte("[]")
 	}
 	return js
+}
+
+func chatWithAitessistant(ctx context.Context, message string, agentList []string) error {
+	if len(agentList) == 0 {
+		return nil
+	}
+	unique := make([]string, 0, len(agentList))
+	seen := map[string]struct{}{}
+	for _, id := range agentList {
+		s := strings.TrimSpace(id)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		unique = append(unique, s)
+	}
+
+	// 使用 WaitGroup 等待所有 goroutine 完成
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(unique))
+
+	for _, aid := range unique {
+		wg.Add(1)
+		go func(agentID string) {
+			defer wg.Done()
+			info, err := dataoperation.GetAgent(agentID)
+			if err != nil || info == nil {
+				logging.Warn("aite agent not found: %s: %v", agentID, err)
+				errChan <- fmt.Errorf("agent not found: %s", agentID)
+				return
+			}
+			systemPrompt := strings.TrimSpace(fmt.Sprintf("%v", info["description"]))
+			if systemPrompt == "" {
+				return
+			}
+			p, err := proxy.NewProxy(nil)
+			if err != nil {
+				logging.Warn("aite proxy init failed: %v", err)
+				errChan <- fmt.Errorf("proxy init failed: %v", err)
+				return
+			}
+			// Build a minimal chat: agent persona + recent context + current user message.
+			messages := []openaistyle.ChatMessage{}
+			if systemPrompt != "" {
+				messages = append(messages, openaistyle.ChatMessage{
+					Role:    openaistyle.RoleSystem,
+					Content: systemPrompt,
+				})
+			}
+			for _, recent := range buildIntentRecentContext(ctx, message) {
+				role := strings.TrimSpace(recent.Role)
+				if role != openaistyle.RoleUser && role != openaistyle.RoleAssistant {
+					continue
+				}
+				if strings.TrimSpace(recent.Content) == "" {
+					continue
+				}
+				messages = append(messages, openaistyle.ChatMessage{Role: role, Content: recent.Content})
+			}
+			messages = append(messages, openaistyle.ChatMessage{
+				Role:    openaistyle.RoleUser,
+				Content: message,
+			})
+			ctx = context.WithValue(ctx, utils.AgentID, agentID)
+			fmt.Println(agentID)
+			var responeseAgent *proxy.ToolAndContent
+			if responeseAgent, err = p.CommunicateWithMessages(ctx, messages); err != nil {
+				logging.Warn("aite chat failed agent=%s: %v", agentID, err)
+				errChan <- fmt.Errorf("chat failed: %s: %v", agentID, err)
+			}
+			if responeseAgent != nil && responeseAgent.Content != "" {
+				chatId := ctx.Value(utils.ChatIDString).(string)
+				memory.AddAssistantContentMessage(chatId, fmt.Sprintf("From agentid %s: %s", agentID, responeseAgent.Content))
+
+			}
+
+		}(aid)
+	}
+
+	// 等待所有 goroutine 完成
+	wg.Wait()
+	close(errChan)
+
+	// 收集所有错误
+	var errors []error
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("multiple errors occurred: %v", errors)
+	}
+
+	return nil
 }

@@ -43,8 +43,9 @@
 }
 
 .dialog__header--tabs {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     gap: 6px;
     padding-top: 8px;
     padding-bottom: 8px;
@@ -52,6 +53,7 @@
 
 .dialog__tabs {
     display: flex;
+    flex: 1 1 auto;
     flex-wrap: nowrap;
     gap: 4px;
     min-width: 0;
@@ -59,6 +61,50 @@
     overflow-y: hidden;
     padding-bottom: 2px;
     scrollbar-width: thin;
+}
+
+.dialog__agents {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+    max-width: 42%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.dialog__agent-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 999px;
+    background: rgba(255, 246, 249, 0.82);
+    border: 1px solid rgba(224, 188, 201, 0.58);
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+    box-shadow: 0 4px 12px rgba(132, 89, 104, 0.08);
+}
+
+.dialog__agent-chip-avatar {
+    width: 22px;
+    height: 22px;
+    object-fit: cover;
+    border-radius: 999px;
+    display: block;
+}
+
+.dialog__agent-chip-label {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(102, 67, 80, 0.92);
 }
 
 .dialog__tabs::-webkit-scrollbar {
@@ -187,6 +233,12 @@
     padding-right: 16px;
 }
 
+.message-avatar__img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
 
 
 .dialog__input {
@@ -743,11 +795,68 @@
     min-width: 0;
     display: flex;
     align-items: flex-end;
+    position: relative;
     border-radius: 18px;
     border: 1px solid rgba(0, 0, 0, 0.08);
     background: var(--apple-surface-solid);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) inset;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dialog__textarea-overlay {
+    position: absolute;
+    inset: 0;
+    padding: 8px 12px 10px;
+    border-radius: 18px;
+    color: var(--apple-label);
+    font-size: 15px;
+    line-height: 1.5;
+    font-family: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.dialog__textarea-placeholder {
+    color: var(--apple-tertiary);
+    font-size: 14px;
+}
+
+.dialog__mention-chip {
+    position: relative;
+    display: inline;
+    padding: 0;
+    margin: 0 1px;
+    border-radius: 4px;
+    background: rgba(0, 122, 255, 0.10);
+    color: rgba(0, 90, 200, 0.95);
+    font-weight: inherit; /* keep width identical to normal text */
+    pointer-events: auto;
+}
+
+.dialog__mention-chip-text {
+    white-space: pre;
+}
+
+.dialog__mention-chip-x {
+    position: absolute;
+    right: -10px;
+    top: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(0, 122, 255, 0.12);
+    color: rgba(0, 90, 200, 0.85);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+}
+
+.dialog__mention-chip-x:hover {
+    color: rgba(0, 90, 200, 1);
 }
 
 .dialog__textarea-shell:focus-within {
@@ -766,16 +875,90 @@
     background: transparent;
     outline: none;
     resize: none;
-    color: var(--apple-label);
+    color: transparent;
+    caret-color: var(--apple-label);
     font-size: 15px;
     line-height: 1.5;
     font-family: inherit;
     box-sizing: border-box;
+    position: relative;
+    z-index: 1;
 }
 
-.dialog__textarea::placeholder {
-    color: var(--apple-tertiary);
+.dialog__mention-dropdown {
+    position: absolute;
+    min-width: 220px;
+    width: 260px;
+    max-height: 240px;
+    overflow: auto;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.10);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+    padding: 6px;
+    z-index: 5;
+}
+
+.dialog__mention-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--apple-label);
     font-size: 14px;
+    text-align: left;
+}
+
+.dialog__mention-item-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+}
+
+.dialog__mention-item:hover,
+.dialog__mention-item--active {
+    background: rgba(0, 122, 255, 0.12);
+}
+
+.dialog__mention-item-name {
+    font-weight: 700;
+}
+
+.dialog__mention-empty {
+    padding: 10px 12px;
+    color: var(--apple-secondary);
+    font-size: 13px;
+}
+
+.dialog__agent-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+}
+
+.dialog__agent-inline-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+}
+
+.dialog__agent-inline-name {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--apple-secondary);
 }
 
 .dialog__btn-send {
@@ -923,6 +1106,16 @@
     padding: 0;
     background: transparent;
     backdrop-filter: none;
+}
+
+.message-avatar__name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--apple-secondary);
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .clay-card {
