@@ -28,7 +28,7 @@ export function classifyUserMessage(text: string, opts: { isStreaming?: boolean 
 
   // 控制类：停生成等（走 StopChat，不新开便签）
   if (
-    /^(暂停|停|停止|别写了|别生成|等一下|等等|稍等|cancel|stop|halt|中止)$/i.test(t)
+    /^(暂停|停|停止|别写了|别生成|cancel|stop|halt|中止)$/i.test(t)
   ) {
     return 'control';
   }

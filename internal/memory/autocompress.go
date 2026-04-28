@@ -8,12 +8,28 @@ import (
 	"leiAgent/logging"
 )
 
-// AutoCompressEveryAssistantTurns 每累计多少次「助手带正文的回复」后触发一次记忆压缩（与 AddAssistantContentMessage 对齐）。
-const AutoCompressEveryAssistantTurns = 10
+var (
+	// AutoCompressEveryAssistantTurns 每累计多少次「助手带正文的回复」后触发一次记忆压缩（与 AddAssistantContentMessage 对齐）。
+	AutoCompressEveryAssistantTurns = 10
 
-// AutoCompressYAMLMessageThreshold 从 YAML 载入记忆时，若消息条数 **超过** 该值（即 >= 阈值+1）则触发一次压缩。
-// 例如设为 20 表示超过 20 条（21 条及以上）时压缩。
-const AutoCompressYAMLMessageThreshold = 20
+	// AutoCompressYAMLMessageThreshold 从 YAML 载入记忆时，若消息条数 **超过** 该值（即 >= 阈值+1）则触发一次压缩。
+	// 例如设为 20 表示超过 20 条（21 条及以上）时压缩。
+	AutoCompressYAMLMessageThreshold = 20
+)
+
+// SetAutoCompressEveryAssistantTurns updates the trigger frequency. n<=0 keeps current value.
+func SetAutoCompressEveryAssistantTurns(n int) {
+	if n > 0 {
+		AutoCompressEveryAssistantTurns = n
+	}
+}
+
+// SetAutoCompressYAMLMessageThreshold updates YAML auto-compress threshold. n<=0 keeps current value.
+func SetAutoCompressYAMLMessageThreshold(n int) {
+	if n > 0 {
+		AutoCompressYAMLMessageThreshold = n
+	}
+}
 
 var (
 	autoCompressHook   func(context.Context, string)

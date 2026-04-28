@@ -68,3 +68,19 @@ llm:
 # openclaw:
 #   env:
 #     BAIDU_API_KEY: "your-baidu-ai-search-api-key"
+
+# 可选：本地记忆压缩（用于减少喂给 LLM 的上下文 token；前端“本地记忆”展示仍使用未压缩消息）。
+# 产物写入工作目录下 compress/{chatID}.yaml，供后续 LLM 调用侧优先使用。
+# memory_compression:
+#   enabled: false
+#   persist_dir: "compress"
+#   trigger:
+#     every_assistant_turns: 10
+#     yaml_message_threshold: 20
+#   context:
+#     recent_tail_messages: 8
+#     system_card_role: "system"
+#     system_card_prefix: "【压缩记忆】\n"
+#   outputs:
+#     tldr_sentences: 3
+#     bullet_max: 10

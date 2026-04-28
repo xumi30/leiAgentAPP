@@ -48,8 +48,20 @@ func BootstrapWorkingDirectory() (string, error) {
 }
 
 func detectProjectRoot() string {
-	if wd, err := os.Getwd(); err == nil && looksLikeProjectRoot(wd) {
-		return wd
+	if wd, err := os.Getwd(); err == nil {
+		// When running `go test` the working directory is often a package subdir.
+		// Walk upwards to locate repo root.
+		dir := wd
+		for i := 0; i < 8; i++ {
+			if looksLikeProjectRoot(dir) {
+				return dir
+			}
+			next := filepath.Dir(dir)
+			if next == dir {
+				break
+			}
+			dir = next
+		}
 	}
 
 	exe, err := os.Executable()

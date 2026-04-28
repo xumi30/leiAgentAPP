@@ -12,7 +12,7 @@ const ChatInput = ({
   disabled = false,
   placeholder = "@提及用户, 或者直接发送消息只有默认工具人"
 }) => {
-  const [isComposing, setIsComposing] = useState(false);
+  const imeComposingRef = useRef(false);
   const inputRef = useRef(null);
   const shellRef = useRef(null);
 
@@ -163,6 +163,8 @@ const ChatInput = ({
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
+        if (imeComposingRef.current || e.nativeEvent?.isComposing) return;
+        if (e.keyCode === 229 || e.which === 229) return;
         if (mentionCandidates.length > 0) {
           e.preventDefault();
           applyMentionPick(mentionCandidates[mentionActiveIndex] ?? mentionCandidates[0]);
@@ -170,10 +172,11 @@ const ChatInput = ({
         }
       }
     }
-    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    if (imeComposingRef.current || e.nativeEvent?.isComposing) return;
+    if (e.keyCode === 229 || e.which === 229) return;
+    e.preventDefault();
+    handleSend();
   };
 
   const handleSend = () => {
@@ -204,8 +207,12 @@ const ChatInput = ({
             if (mentionOpen) updateMentionAnchor(ta);
           }}
           onKeyDown={handleKeyDown}
-          onCompositionStart={() => setIsComposing(true)}
-          onCompositionEnd={() => setIsComposing(false)}
+          onCompositionStart={() => {
+            imeComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            imeComposingRef.current = false;
+          }}
           placeholder=""
           disabled={disabled}
           className="dialog__textarea"
@@ -222,6 +229,7 @@ const ChatInput = ({
             if (mentionOpen) updateMentionAnchor(e.target);
           }}
           onBlur={() => {
+            imeComposingRef.current = false;
             setMentionOpen(false);
             setMentionQuery('');
             mentionAtRef.current = { start: -1, end: -1 };

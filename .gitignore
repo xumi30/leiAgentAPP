@@ -59,6 +59,6 @@ localmemory/
 frontend/.vite/
 .cache/
 
-# 用户画像
-/profiles/
+# Skills（技能目录，完全忽略）
+skills/
 

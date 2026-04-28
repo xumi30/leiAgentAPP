@@ -1,22 +1,41 @@
 import { apiCall, SendMessage, StopChat, SwitchChat, SendUserDisplayOnly } from './api';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 import type { Message } from '../types/chat';
-
+import {globalchannel} from '../../wailsjs/go/models'; 
 export class ChatService {
   
   /**
    * 发送消息到后端
    */
+/**
+   * 发送消息到后端
+   */
   static async sendMessage(
-    message: Omit<Message, 'messageId'>,
-    opts: { chatId: string; aite?: string[] } = { chatId: '' }
+    chatId: string,
+    content: string,
+    role: string = 'user',
+    fromAgentId?: string,
+    userToAgentList?: string[],
+    isAutoToTalk?: boolean,
+    needNewChatName?: boolean,
+    
   ): Promise<any> {
-    const chatId = String(opts?.chatId ?? '').trim();
+    const msg = globalchannel.Message.createFrom({
+      chatId: String(chatId ?? '').trim(),
+      content: String(content ?? '').trim(),
+      role: String(role ?? 'user').trim(),
+      fromAgentId: fromAgentId ? String(fromAgentId).trim() : undefined,
+      userToAgentList: Array.isArray(userToAgentList) ? userToAgentList.map(id => String(id).trim()) : undefined,
+      isAutoToTalk: Boolean(isAutoToTalk),
+      needNewChatName: Boolean(needNewChatName),
+    });
     return apiCall(
-      () => SendMessage(chatId, JSON.stringify({ content: message.content, aite: Array.isArray(opts?.aite) ? opts.aite : [] }), 'user'),
+      () => SendMessage(msg),
       '发送消息失败'
     );
   }
+
+
 
   /**
    * 停止当前聊天生成

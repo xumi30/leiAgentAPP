@@ -126,9 +126,9 @@ func SaveMCPConfigForm(servers []MCPConfigRow) (savedPath string, err error) {
 		return "", err
 	}
 
-	data := []byte(strings.ReplaceAll(content, "\r\n", "\n"))
 	var root mcpFileRoot
 	if len(strings.TrimSpace(content)) > 0 {
+		data := []byte(strings.ReplaceAll(content, "\r\n", "\n"))
 		if err := yaml.Unmarshal(data, &root); err != nil {
 			return "", fmt.Errorf("YAML 解析失败：%w", err)
 		}
@@ -161,7 +161,18 @@ func SaveMCPConfigForm(servers []MCPConfigRow) (savedPath string, err error) {
 		_ = mcpbridge.DeleteToolCache(label)
 	}
 
-	out, err := yaml.Marshal(&root)
+	doc, err := parseYAMLDocumentNode(content)
+	if err != nil {
+		return "", fmt.Errorf("YAML 解析失败：%w", err)
+	}
+
+	mcpNode, err := nodeFromValue(nextServers)
+	if err != nil {
+		return "", fmt.Errorf("生成 mcp_servers 失败：%w", err)
+	}
+	upsertRootKey(doc, "mcp_servers", mcpNode)
+
+	out, err := marshalYAMLDocumentNode(doc)
 	if err != nil {
 		return "", fmt.Errorf("YAML 序列化失败：%w", err)
 	}

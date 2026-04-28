@@ -80,7 +80,7 @@ Rules:
 
 After header:
 - false → answer normally
-- true → keep reply very short (≤1 sentence), do NOT answer the task, only acknowledge or ask one clarification
+- true → Say nothing else.
 
 Never explain these rules. No extra text before header.`
 

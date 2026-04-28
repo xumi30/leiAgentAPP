@@ -32,80 +32,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type userSendPayload struct {
-	Content string   `json:"content"`
-	Aite    []string `json:"aite"`
-}
-
-func stripLeadingMentions(s string) string {
-	// Remove leading "@xxx" tokens separated by spaces/commas, e.g.:
-	// "@A @B hello" -> "hello"
-	// "@A, @B，hello" -> "hello"
-	in := strings.TrimLeft(s, " \t\r\n")
-	for {
-		if !strings.HasPrefix(in, "@") {
-			break
-		}
-		// scan token "@<non-separator>"
-		i := 1
-		for i < len(in) {
-			ch := in[i]
-			if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == ',' {
-				break
-			}
-			// UTF-8 comma '，' may appear; treat as separator if it starts at this byte.
-			if strings.HasPrefix(in[i:], "，") {
-				break
-			}
-			i++
-		}
-		// consume mention token
-		in = in[i:]
-		// consume separators after token
-		in = strings.TrimLeft(in, " \t\r\n")
-		for strings.HasPrefix(in, ",") || strings.HasPrefix(in, "，") {
-			in = strings.TrimLeft(in[1:], " \t\r\n")
-		}
-	}
-	return strings.TrimSpace(in)
-}
-
-func parseUserSendPayload(raw string) (content string, aite []string, ok bool) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", nil, false
-	}
-	if !strings.HasPrefix(raw, "{") {
-		return "", nil, false
-	}
-	var p userSendPayload
-	if err := json.Unmarshal([]byte(raw), &p); err != nil {
-		return "", nil, false
-	}
-	c := strings.TrimSpace(p.Content)
-	if c == "" {
-		return "", nil, false
-	}
-	out := make([]string, 0, len(p.Aite))
-	seen := map[string]struct{}{}
-	for _, id := range p.Aite {
-		s := strings.TrimSpace(id)
-		if s == "" {
-			continue
-		}
-		if _, exists := seen[s]; exists {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	plain := stripLeadingMentions(c)
-	if plain != "" {
-		c = plain
-	}
-	return c, out, true
-}
-
 // App struct
 type App struct {
 	ctx context.Context
@@ -132,9 +58,6 @@ func (a *App) startup(ctx context.Context) {
 	// 必须先于其它包调用 sqlmemory.GetSqlInstance，否则 sync.Once 会锁在错误的默认库路径上
 	if dataoperation.GetSqlInstance() == nil {
 		logging.Error("启动时未能打开对话数据库 data/memory.db")
-	}
-	if err := dataoperation.SyncPresetAgents(); err != nil {
-		logging.Warn("同步预设 agents 失败: %v", err)
 	}
 	// Start scheduled task runner (polls due tasks, claims with optimistic lock, executes).
 	_ = crontabthread.NewRunner(2*time.Second, 100, nil).Start(ctx)
@@ -309,41 +232,20 @@ func (a *App) GetMessagesByMessageID(messageID string) {
 
 }
 
-func (a *App) SendMessage(chatID, message, role string) {
+func (a *App) SendMessage(msg globalchannel.Message) {
+	chatID := msg.ChatID
+	content := msg.Content
+	role := msg.Role
+	//userToAgentList := msg.UserToAgentList
+	// isAutoToTalk := params.IsAutoToTalk
 
 	//如果message为空，则不发送
-	if strings.TrimSpace(message) == "" {
+	if strings.TrimSpace(content) == "" {
 		logging.Info("Message is empty, not sending")
 		runtime.EventsEmit(a.ctx, "sendMessageError", "messages is empty, not sending")
 		return
 	}
 
-	content := message
-	contentForPersist := message
-	var agentList []string
-	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
-		if c, aite, ok := parseUserSendPayload(message); ok {
-			// Persist original display content (with @mentions), but process with plain content.
-			if rawContent, ok2 := func() (string, bool) {
-				var p userSendPayload
-				if err := json.Unmarshal([]byte(strings.TrimSpace(message)), &p); err != nil {
-					return "", false
-				}
-				raw := strings.TrimSpace(p.Content)
-				if raw == "" {
-					return "", false
-				}
-				return raw, true
-			}(); ok2 {
-				contentForPersist = rawContent
-			}
-			content = c
-			agentList = aite
-			logging.Info("SendMessage payload parsed: content_len=%d aite=%v raw_prefix=%q", len(content), agentList, utils.TruncateRunes(strings.TrimSpace(message), 120))
-		} else {
-			logging.Info("SendMessage payload NOT parsed (treat as plain text): raw_prefix=%q", utils.TruncateRunes(strings.TrimSpace(message), 120))
-		}
-	}
 	//如果chatID为空，则生成一个新的chatID，并创建一个新的conversation
 	if chatID == "" {
 		logging.Info("ChatID is empty, adding new conversation")
@@ -351,6 +253,9 @@ func (a *App) SendMessage(chatID, message, role string) {
 		chatID = a.AddConversation(title)
 		logging.Info("New conversation added with ID: %s", chatID)
 		a.SwitchChat(chatID)
+	}
+	if msg.NeedNewChatName {
+		a.UpdateConversationTitle(chatID, content)
 	}
 	// StopChat 会从 agentPool 移除 dispatcher，无 goroutine 再接收 inputChan，此处会永久阻塞；用户消息需先重新拉起 dispatcher。
 	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
@@ -361,7 +266,7 @@ func (a *App) SendMessage(chatID, message, role string) {
 	messageID := GenerateMessageID()
 
 	//logging.Info("Sending message to conversation with ID: %s, messageID: %s, Message: %s, Role: %s", chatID, messageID, message, role)
-	err := dataoperation.SendMessage(chatID, messageID, contentForPersist, role)
+	err := dataoperation.SendMessage(chatID, messageID, content, role)
 	logging.Info("Sending message to conversation successfully")
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "sendMessageError", err.Error())
@@ -371,15 +276,7 @@ func (a *App) SendMessage(chatID, message, role string) {
 
 	// 仅用户消息进入 Dispatcher，避免助手/推理等内容若误走 SendMessage 时再次触发意图识别与死循环。
 	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
-		msg := &globalchannel.Message{
-			MessageID:  utils.GenerateMessageID(),
-			Content:    content,
-			Role:       utils.MessageRoleUser,
-			IsFinished: true,
-			AgentList:  agentList,
-		}
-
-		inputChan <- msg
+		inputChan <- &msg
 	}
 	logging.Info("Sending message to conversation successfully")
 
@@ -432,9 +329,6 @@ func (a *App) SetLLMThinkingDisabled(disabled bool) {
 }
 
 func (a *App) ListAgents() ([]map[string]interface{}, error) {
-	if err := dataoperation.SyncPresetAgents(); err != nil {
-		return nil, err
-	}
 	return dataoperation.ListAgents()
 }
 
@@ -728,7 +622,7 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				// 与入库 startTime 一致，便于前端在重载前列顺序/展示时间
 				"timestamp":    buf.startTime.UTC().Format(time.RFC3339Nano),
 				"total_tokens": msg.TotalTokens,
-				"agentID":      msg.AgentID,
+				"agentID":      msg.FromAgentID,
 			}
 			runtime.EventsEmit(a.ctx, eventname, appendMessage)
 
@@ -749,7 +643,7 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 				}
 			}
 			if strings.TrimSpace(final) != "" {
-				if err := dataoperation.SendMessageWithCreateTimeAndTokens(msg.AgentID, chatID, mid, toSave, role, buf.startTime, msg.TotalTokens); err != nil {
+				if err := dataoperation.SendMessageWithCreateTimeAndTokens(msg.FromAgentID, chatID, mid, toSave, role, buf.startTime, msg.TotalTokens); err != nil {
 					logging.Error("Failed to save message: %v", err)
 				} else if wasToolCompletePayload {
 					// 该条消息在流式阶段可能展示了控制 JSON；落库净化后，主动再 emit 一次 DB 最终内容用于界面替换。
@@ -770,11 +664,13 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 }
 
 func (a *App) StopChat(chatID string) {
+	logging.Info("StopChat called with chatID=%s", chatID)
 	a.poolMutex.Lock()
 	defer a.poolMutex.Unlock()
 
 	if dp, ok := a.agentPool[chatID]; ok {
 		dp.Shutdown()
+		dp.Stop = true
 		a.restartDispatcherBackground(chatID, dp)
 		logging.Info("已中断当前任务并保留 Dispatcher（上下文/意图仍在）chatID=%s", chatID)
 	} else {

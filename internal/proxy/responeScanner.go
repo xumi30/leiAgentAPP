@@ -426,7 +426,7 @@ func (s *StreamScanner) Scan() bool {
 	for s.scanner.Scan() {
 		line := s.scanner.Text()
 
-		logging.Info("line: %s", line)
+		//logging.Info("line: %s", line)
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}

@@ -9,10 +9,6 @@ import (
 	"go.yaml.in/yaml/v2"
 )
 
-const llmFormYAMLHeader = `# 由应用界面保存生成。仅写入 llm_backends；未启用行（enabled: false）不参与故障转移。
-# 详细说明见项目内 config/config.example.yaml
-`
-
 // LLMConfigRow 供前端表格与 Wails 绑定（JSON camelCase）。
 type LLMConfigRow struct {
 	Name            string `json:"name"`
@@ -175,25 +171,6 @@ func GetLLMConfigFormState() (LLMConfigFormState, error) {
 	}, nil
 }
 
-func marshalLLMConfigForm(root mcpFileRoot, backends []LLMConfigRow) ([]byte, error) {
-	if len(backends) == 0 {
-		return nil, fmt.Errorf("多后端列表至少需一行")
-	}
-	root.EnableLLMConfig = true
-	rows := make([]llmYAML, 0, len(backends))
-	for _, b := range backends {
-		rows = append(rows, b.toYAML())
-	}
-	root.LLM = llmYAML{}
-	root.LLMBackends = rows
-	b, err := yaml.Marshal(&root)
-	if err != nil {
-		return nil, err
-	}
-	header := strings.TrimRight(llmFormYAMLHeader, "\n") + "\n\n"
-	return append([]byte(header), b...), nil
-}
-
 // SaveLLMConfigForm 将表格数据序列化为 YAML，校验并写入（与 SaveLLMConfigText 相同落盘规则）。
 func SaveLLMConfigForm(primary LLMConfigRow, backends []LLMConfigRow) (savedPath string, err error) {
 	_ = primary
@@ -201,15 +178,35 @@ func SaveLLMConfigForm(primary LLMConfigRow, backends []LLMConfigRow) (savedPath
 	if err != nil {
 		return "", err
 	}
-	var root mcpFileRoot
-	if strings.TrimSpace(content) != "" {
-		if err := yaml.Unmarshal([]byte(strings.ReplaceAll(content, "\r\n", "\n")), &root); err != nil {
-			return "", fmt.Errorf("YAML 解析失败：%w", err)
-		}
+
+	if len(backends) == 0 {
+		return "", fmt.Errorf("多后端列表至少需一行")
 	}
-	data, err := marshalLLMConfigForm(root, backends)
+
+	doc, err := parseYAMLDocumentNode(content)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("YAML 解析失败：%w", err)
+	}
+
+	rows := make([]llmYAML, 0, len(backends))
+	for _, b := range backends {
+		rows = append(rows, b.toYAML())
+	}
+	backendsNode, err := nodeFromValue(rows)
+	if err != nil {
+		return "", fmt.Errorf("生成 llm_backends 失败：%w", err)
+	}
+	enableNode, err := nodeFromValue(true)
+	if err != nil {
+		return "", fmt.Errorf("生成 enable_llm_config 失败：%w", err)
+	}
+
+	upsertRootKey(doc, "enable_llm_config", enableNode)
+	upsertRootKey(doc, "llm_backends", backendsNode)
+
+	data, err := marshalYAMLDocumentNode(doc)
+	if err != nil {
+		return "", fmt.Errorf("YAML 序列化失败：%w", err)
 	}
 	if err := ValidateLLMConfigYAML(data); err != nil {
 		return "", err

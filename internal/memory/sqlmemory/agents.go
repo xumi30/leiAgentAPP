@@ -407,23 +407,3 @@ func (m *SQLMemory) DeleteCustomAgent(agentID string) error {
 	}
 	return nil
 }
-
-func (m *SQLMemory) SyncPresetAgents() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if err := m.deleteLegacyDefaultAgentsLocked(); err != nil {
-		return err
-	}
-
-	for _, seed := range presetAgentSeeds {
-		avatarImage, err := fileToDataURI(seed.ImagePath)
-		if err != nil {
-			return err
-		}
-		if err := m.saveAgentLocked(seed.AgentID, seed.AgentName, avatarImage, seed.Description); err != nil {
-			return err
-		}
-	}
-	return nil
-}

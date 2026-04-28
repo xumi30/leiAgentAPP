@@ -112,7 +112,7 @@
 }
 
 .dialog__tabs::-webkit-scrollbar-thumb {
-    background: rgba(60, 60, 67, 0.22);
+    background: rgba(213, 238, 24, 0.22);
     border-radius: 999px;
 }
 
@@ -751,7 +751,7 @@
 
 /* 停止：默认不占位，出现后与发送同高对齐 */
 .dialog__btn-stop {
-    display: none;
+    display: inline-flex;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
@@ -2246,4 +2246,82 @@
 
 .dialogmessage_assistant .msg-json-snippet__action {
     color: rgba(175, 95, 138, 0.88);
+}
+
+.dialog__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dialog__toggle-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background-color: #ccc;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.dialog__toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.dialog__toggle--active .dialog__toggle-track {
+  background-color: #4CAF50;
+}
+
+.dialog__toggle--active .dialog__toggle-thumb {
+  transform: translateX(16px);
+}
+
+.dialog__toggle-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.dialog__toggle--active .dialog__toggle-label {
+  color: #4CAF50;
+}
+
+.dialogTitle {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-right: 8px;
+}
+
+.dialogTitle:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.dialog__tab-inline {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dialog__tab-main-title-inline {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -227,3 +227,23 @@ func (m *SQLMemory) AddAgentToConversation(chatID, agentID string) error {
 	next = append(next, agentID)
 	return m.ReplaceConversationAgents(chatID, next)
 }
+
+// ListConversationAgents 根据chatID返回该对话关联的agent ID列表
+func (m *SQLMemory) ListConversationAgents(chatID string) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	query := `SELECT agents FROM conversations WHERE id = ?`
+
+	var agentsRaw string
+	err := m.db.QueryRow(query, chatID).Scan(&agentsRaw)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			logging.Warn("Conversation with ID %s not found", chatID)
+			return nil, fmt.Errorf("conversation not found")
+		}
+		return nil, fmt.Errorf("failed to get conversation agents: %w", err)
+	}
+
+	return parseConversationAgents(agentsRaw), nil
+}

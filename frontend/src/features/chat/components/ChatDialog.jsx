@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useChatStore } from '../../../stores';
 import { useStreaming } from '../hooks/useStreaming';
 import { MessageBubble, ChatInput } from '../../../components';
@@ -7,8 +7,20 @@ import { AddAgentToConversation, AddConversation, GetConversationAgents, GetMess
 import { classifyUserMessage } from '../../../utils/messageClassify';
 import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime';
 import assistantAvatar from '../../../assets/images/aitx.png';
+import Tooltip from './tooltip/Tooltip';
+import MemoStrip from '../../dialog/components/MemoStrip';
+import { useMemoComposer } from '../../dialog/hooks/useMemoComposer';
 
 const DEFAULT_ASSISTANT_AGENT_ID = 'agentid_0';
+
+const AUTO_TO_TALK_LS_KEY = 'leiAgent.chatAutoToTalk';
+
+function readAutoToTalkFromLS() {
+  const raw = localStorage.getItem(AUTO_TO_TALK_LS_KEY);
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return false;
+}
 
 // 消息类型定义
 const MESSAGE_FIELDS = {
@@ -78,6 +90,19 @@ const ChatDialog = () => {
   const [inputValue, setInputValue] = useState('');
   const [streamPulse, setStreamPulse] = useState(null); // { chatID, messageID }
   const [aiteAgentIds, setAiteAgentIds] = useState(() => new Set());
+  const [isAutoToTalk, setIsAutoToTalk] = useState(() => readAutoToTalkFromLS());
+  const [memoStripOpen, setMemoStripOpen] = useState(false);
+  const [memoHint, setMemoHint] = useState('');
+  const [memoError, setMemoError] = useState('');
+  const memoHintTimerRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AUTO_TO_TALK_LS_KEY, String(isAutoToTalk));
+    } catch (e) {
+      console.warn('persist chatAutoToTalk:', e);
+    }
+  }, [isAutoToTalk]);
 
   const mentionOptions = useMemo(() => {
     const list = Array.isArray(conversationAgents) ? conversationAgents : [];
@@ -113,6 +138,28 @@ const ChatDialog = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const showTransientHint = useCallback((text, ms = 2200) => {
+    const t = String(text ?? '').trim();
+    if (!t) return;
+    setMemoHint(t);
+    if (memoHintTimerRef.current) window.clearTimeout(memoHintTimerRef.current);
+    memoHintTimerRef.current = window.setTimeout(() => {
+      setMemoHint('');
+      memoHintTimerRef.current = null;
+    }, ms);
+  }, []);
+
+  const showRuntimeError = useCallback((text, ms = 2600) => {
+    const t = String(text ?? '').trim();
+    if (!t) return;
+    setMemoError(t);
+    if (memoHintTimerRef.current) window.clearTimeout(memoHintTimerRef.current);
+    memoHintTimerRef.current = window.setTimeout(() => {
+      setMemoError('');
+      memoHintTimerRef.current = null;
+    }, ms);
+  }, []);
 
   // 流式输出：dialogAppend 追加、dialogStreamEnd 结束、chatTaskState 同步忙碌态
   useEffect(() => {
@@ -172,7 +219,7 @@ const ChatDialog = () => {
           return changed ? next : list;
         });
       }
-      
+
       setStreamPulse((prev) => {
         if (!prev) return prev;
         if (cid && prev.chatID !== cid) return prev;
@@ -223,6 +270,32 @@ const ChatDialog = () => {
       EventsOff('GetMessagesByMessageID');
     };
   }, [chatId, setMessages, startStreaming, stopStreaming]);
+
+  const memoListMessages = useMemo(() => {
+    const list = Array.isArray(currentMessages) ? currentMessages : [];
+    return list.filter((msg) => {
+      const hasText = String(msg?.content ?? '').trim() !== '';
+      const streamingHere =
+        Boolean(streamPulse)
+        && String(streamPulse?.chatID ?? '') === String(chatId ?? '')
+        && String(streamPulse?.messageID ?? '') === String(msg?.messageID ?? '');
+      return hasText || streamingHere;
+    });
+  }, [currentMessages, streamPulse, chatId]);
+
+  const memoComposer = useMemoComposer({
+    open: memoStripOpen,
+    messages: memoListMessages,
+    onClose: () => setMemoStripOpen(false),
+    onHint: (t) => showTransientHint(t),
+    onError: (t) => showRuntimeError(t),
+  });
+
+  const onMessagesMemoDismissMouseDown = useCallback((e) => {
+    if (!memoStripOpen || memoComposer.memoCheckSaving) return;
+    if (e.target !== e.currentTarget) return;
+    setMemoStripOpen(false);
+  }, [memoStripOpen, memoComposer.memoCheckSaving]);
 
   // 加载历史消息：侧栏切换会话时触发 conversationChanged
   useEffect(() => {
@@ -342,7 +415,28 @@ const ChatDialog = () => {
     startStreaming();
 
     // 发送消息到后端
-    const result = await ChatService.sendMessage(userMessage, { chatId: String(chatId ?? ''), aite: Array.from(aiteAgentIds) });
+    // 如果开启了自动对话，则在发送消息后停止聊天
+    if (isAutoToTalk) {
+      try {
+        await ChatService.stopChat(String(chatId ?? ''));
+      } catch (e) {
+        console.error('停止聊天失败:', e);
+      }
+    }
+    let needNewChatName = false;
+    if (conversationTitle === '新对话') {
+      needNewChatName = true;
+    }
+
+    const result = await ChatService.sendMessage(
+      String(chatId ?? ''),
+      processedContent,
+      'user',
+      undefined,
+      Array.from(aiteAgentIds),
+      isAutoToTalk,
+      needNewChatName,
+    );
 
     if (!result.success) {
       console.error('消息发送失败:', result.error);
@@ -359,10 +453,27 @@ const ChatDialog = () => {
     setInputValue(value);
     if (!String(value ?? '').trim()) setAiteAgentIds(new Set());
   };
+  const handleToggleAutoTalk = async () => {
+    const newState = !isAutoToTalk;
+    setIsAutoToTalk(newState);
+
+    if (!newState) {
+      try {
+        await ChatService.stopChat(String(chatId ?? ''));
+      } catch (e) {
+        console.error('停止聊天失败:', e);
+      }
+    }
+  };
+
 
   // 停止生成按钮
-  const handleStopGenerating = () => {
-    ChatService.stopChat(String(chatId ?? ''));
+  const handleStopGenerating = async () => {
+    try {
+      await ChatService.stopChat(String(chatId ?? ''));
+    } catch (e) {
+      console.error('停止聊天失败:', e);
+    }
     stopStreaming();
   };
 
@@ -374,7 +485,7 @@ const ChatDialog = () => {
             type="button"
             role="tab"
             aria-selected
-            className="dialog__tab dialog__tab--active dialog__tab--main dialog__tab--convo-tint"
+            className="dialogTitle"
             title={(conversationTitle || '主对话').trim() || '主对话'}
           >
             <span className="dialog__tab-inline" dir="auto">
@@ -383,6 +494,27 @@ const ChatDialog = () => {
               </span>
             </span>
           </button>
+
+          <Tooltip
+            content={isAutoToTalk ? "关闭自动对话：群员将停止自动参与对话" : "开启自动对话：群员将自动参与对话"}
+            position="top"
+          >
+            <button
+              type="button"
+              className={`dialog__tab dialog__toggle ${isAutoToTalk ? 'dialog__toggle--active' : ''}`}
+              onClick={handleToggleAutoTalk}
+              aria-pressed={isAutoToTalk}
+            >
+              <span className="dialog__toggle-track">
+                <span className="dialog__toggle-thumb" />
+              </span>
+              <span className="dialog__toggle-label">
+                {isAutoToTalk ? "群聊开启：开" : "群聊关闭：关"}
+              </span>
+            </button>
+          </Tooltip>
+
+
         </div>
 
         {Array.isArray(conversationAgents) && conversationAgents.length > 0 ? (
@@ -410,20 +542,32 @@ const ChatDialog = () => {
         ) : null}
       </div>
 
+      {memoHint ? (
+        <div className="dialog__classify-hint" role="status">{memoHint}</div>
+      ) : null}
+      {memoError ? (
+        <div className="dialog__classify-hint" role="alert">{memoError}</div>
+      ) : null}
+
       <div className="dialog__messages">
-        {currentMessages.map((message, index) => (
-          <MessageBubble
-            key={message?.messageID ?? `${message?.role ?? 'msg'}_${message?.timestamp ?? index}_${index}`}
-            message={message}
-            index={index}
-            messages={currentMessages}
-            isStreaming={
-              Boolean(streamPulse)
-              && String(streamPulse?.chatID ?? '') === String(chatId ?? '')
-              && String(streamPulse?.messageID ?? '') === String(message?.messageID ?? '')
-            }
-          />
-        ))}
+        <div onMouseDown={onMessagesMemoDismissMouseDown}>
+          {memoListMessages.map((message, index) => (
+            <MessageBubble
+              key={message?.messageID ?? `${message?.role ?? 'msg'}_${message?.timestamp ?? index}_${index}`}
+              message={message}
+              index={index}
+              messages={memoListMessages}
+              isStreaming={
+                Boolean(streamPulse)
+                && String(streamPulse?.chatID ?? '') === String(chatId ?? '')
+                && String(streamPulse?.messageID ?? '') === String(message?.messageID ?? '')
+              }
+              memoStripOpen={memoStripOpen}
+              memoChecked={memoComposer.memoMarkedIds?.has?.(String(message?.messageID ?? ''))}
+              onToggleMemo={memoComposer.tryToggleMemoMark}
+            />
+          ))}
+        </div>
 
         <div ref={messagesEndRef} />
       </div>
@@ -432,7 +576,7 @@ const ChatDialog = () => {
         <div className="dialog__input-row">
           <button
             type="button"
-            className={`dialog__btn-stop${stopVisible ? ' dialog__btn-stop--visible' : ''}`}
+            className="dialog__btn-stop dialog__btn-stop--visible"
             onClick={handleStopGenerating}
             aria-label="停止生成"
             title="停止生成"
@@ -456,9 +600,32 @@ const ChatDialog = () => {
               });
             }}
             disabled={taskBusy}
-            placeholder={taskBusy ? "正在生成回复..." : "输入您的消息..."}
+            placeholder={taskBusy ? "正在生成回复..." : "输入您的消息...@私聊..."}
           />
         </div>
+
+        <MemoStrip
+          open={memoStripOpen}
+          busy={memoComposer.memoCheckSaving}
+          markedCount={memoComposer.memoMarkedCount}
+          presets={memoComposer.allMemoComposePresets}
+          presetAddOpen={memoComposer.memoPresetAddOpen}
+          draftLabel={memoComposer.memoPresetDraftLabel}
+          draftText={memoComposer.memoPresetDraftText}
+          composeHint={memoComposer.memoComposeHint}
+          onToggleOpen={() => {
+            if (memoComposer.memoCheckSaving) return;
+            setMemoStripOpen((v) => !v);
+          }}
+          onSetComposeHint={memoComposer.setMemoComposeHint}
+          onSaveDirect={() => void memoComposer.saveDirectMemo()}
+          onSendLLM={() => void memoComposer.sendLLMMemo()}
+          onTogglePresetAdd={() => memoComposer.setMemoPresetAddOpen((v) => !v)}
+          onDraftLabel={memoComposer.setMemoPresetDraftLabel}
+          onDraftText={memoComposer.setMemoPresetDraftText}
+          onAddPreset={memoComposer.addCustomMemoPreset}
+          onRemovePreset={memoComposer.removeCustomMemoPreset}
+        />
       </div>
     </div>
   );

@@ -1,0 +1,362 @@
+{
+  "schema_version": "psych-profile-v2",
+  "person_id": "local-user",
+  "chat_id": "1777275993682538",
+  "updated_at": "2026-04-27T15:56:39+08:00",
+  "summary": "用户31岁，杭州产品经理，江西人。近期耳鸣痊愈，精力充沛且心情愉悦。偏好结构化思维与深度探索，对心学、哲学及魔幻现实主义创作有浓厚兴趣。刚完成墨尔本三日旅行规划并保存，随后要求基于个人经历创作融合心学与尼采哲学的奇幻小说。在工具执行失败后未表现出明显挫败，显示较高的情绪稳定性与目标导向性。",
+  "identity": {
+    "name": "",
+    "age_range": "30-39",
+    "gender": "",
+    "location": "杭州",
+    "occupation": "产品经理",
+    "industry": "互联网/科技",
+    "education": "",
+    "language": [
+      "Chinese"
+    ],
+    "technical_level": {},
+    "active_time_range": [
+      "07:00-10:00"
+    ]
+  },
+  "preferences": {
+    "interests": [
+      "爬山",
+      "做产品",
+      "旅游",
+      "吃辣",
+      "电影",
+      "武侠",
+      "哲学（心学）",
+      "阅读",
+      "创意写作",
+      "魔幻现实主义"
+    ],
+    "disliked_topics": [],
+    "content_preference": {
+      "depth": "high",
+      "tone": "respectful_intellectual"
+    },
+    "information_density_preference": "high",
+    "reasoning_depth_preference": "deep_framework_based",
+    "preferred_response_pattern": [
+      "structured_analysis",
+      "conceptual_clarity",
+      "creative_synthesis"
+    ],
+    "tool_usage_tendency": [
+      "file_management",
+      "longform_generation"
+    ],
+    "response_signals": {
+      "ambiguity_tolerance": {
+        "score": 0.38,
+        "confidence": 1,
+        "evidence": [
+          "频繁追问边界、例外和定义",
+          "更偏好清晰框架"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "need_for_structure": {
+        "score": 0.78,
+        "confidence": 1,
+        "evidence": [
+          "要求将计划保存到特定文件夹",
+          "偏好框架而不只是结论"
+        ],
+        "updated_at": "2026-04-27"
+      }
+    }
+  },
+  "psychology": {
+    "traits": {
+      "emotional_sensitivity": {
+        "score": 0.61,
+        "confidence": 1,
+        "evidence": [
+          "会显式讨论焦虑、迷茫或意义问题"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "introversion": {
+        "score": 0.58,
+        "confidence": 1,
+        "evidence": [
+          "更偏向深度书面表达而非高社交线索"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "openness": {
+        "score": 0.85,
+        "confidence": 1,
+        "evidence": [
+          "主动要求创作融合心学与尼采哲学的奇幻小说",
+          "持续讨论抽象主题和统一模型",
+          "对复杂概念保持兴趣"
+        ],
+        "updated_at": "2026-04-27"
+      }
+    },
+    "state": {
+      "confidence_level": {
+        "score": 0.5700000000000001,
+        "confidence": 1,
+        "evidence": [
+          "既能提出清晰框架，也会继续验证方向"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "decision_readiness": {
+        "score": 0.44,
+        "confidence": 1,
+        "evidence": [
+          "更偏向继续探索再决定"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "energy_level": {
+        "score": 0.7343168474475072,
+        "confidence": 1,
+        "evidence": [
+          "保持连续深度交流",
+          "我现在精力充沛"
+        ],
+        "updated_at": "2026-04-27"
+      },
+      "mood": {
+        "score": 0.8,
+        "confidence": 0.9,
+        "evidence": [
+          "最近很开心"
+        ],
+        "updated_at": "2026-04-27"
+      },
+      "stress_level": {
+        "score": 0.4,
+        "confidence": 0.8,
+        "evidence": [
+          "耳鸣痊愈",
+          "精力充沛",
+          "最近很开心",
+          "面对工具报错未表现焦虑"
+        ],
+        "updated_at": "2026-04-27"
+      }
+    },
+    "motivations": {
+      "achievement_drive": {
+        "score": 0.64,
+        "confidence": 1,
+        "evidence": [
+          "希望建立自己的系统和方法"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "autonomy_need": {
+        "score": 0.76,
+        "confidence": 1,
+        "evidence": [
+          "偏好理解机制后自行判断",
+          "不喜欢被简单下结论"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "meaning_seeking": {
+        "score": 0.88,
+        "confidence": 1,
+        "evidence": [
+          "阅读《有无之境》探讨存在与境界",
+          "要求小说结合王阳明心学与尼采权力意志",
+          "频繁讨论意义、本质、存在和系统"
+        ],
+        "updated_at": "2026-04-27"
+      },
+      "security_need": {
+        "score": 0.52,
+        "confidence": 1,
+        "evidence": [
+          "在关键决策上会追问风险与边界"
+        ],
+        "updated_at": "2026-04-25"
+      }
+    },
+    "behavior_style": {
+      "analysis_before_action": {
+        "score": 0.82,
+        "confidence": 1,
+        "evidence": [
+          "通常先拆框架再行动",
+          "偏好先澄清概念和边界",
+          "在创作中强调逻辑结构与哲学思辨的结合"
+        ],
+        "updated_at": "2026-04-27"
+      },
+      "exploration_tendency": {
+        "score": 0.31999999999999995,
+        "confidence": 1,
+        "evidence": [
+          "在提问前更倾向继续展开和比较"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "iteration_preference": {
+        "score": 0.32,
+        "confidence": 1,
+        "evidence": [
+          "用户消息数=2",
+          "多轮迭代出现频繁"
+        ],
+        "updated_at": "2026-04-25"
+      },
+      "persistence_level": {
+        "score": 0.20000000000000004,
+        "confidence": 1,
+        "evidence": [
+          "累计用户消息=2"
+        ],
+        "updated_at": "2026-04-25"
+      }
+    },
+    "observations": {
+      "recurrent_themes": [
+        "身心状态改善后的积极反馈",
+        "哲学与内心境界的探索",
+        "个人经历与创意投射",
+        "结构化落地与执行"
+      ],
+      "unresolved_conflicts": [],
+      "emotional_triggers": [
+        "生理不适（耳鸣已缓解）",
+        "信息过载（曾反馈'太吵了'）"
+      ],
+      "soothing_patterns": [
+        "寻求倾听",
+        "分享个人喜好以建立连接",
+        "通过结构化输出获得掌控感"
+      ],
+      "resistance_patterns": [
+        "空泛鸡汤",
+        "跳步结论",
+        "没有证据的绝对化判断"
+      ],
+      "identity_narrative": "一位31岁、精力充沛的杭州产品经理，江西人。从近期的耳鸣困扰中恢复，心态积极。热爱旅行与户外运动，同时对王阳明心学等深层哲学议题有浓厚兴趣，追求精神境界的提升。具备将理性产品思维与感性哲学思考融合的创造力。"
+    }
+  },
+  "memory": [
+    {
+      "time": "2026-04-25",
+      "type": "health_emotion",
+      "importance": 3,
+      "summary": "用户因耳鸣感到烦躁，表达倾诉意愿。",
+      "evidence": [
+        "今天有点烦",
+        "有点耳鸣"
+      ]
+    },
+    {
+      "time": "2026-04-27",
+      "type": "identity_location",
+      "importance": 3,
+      "summary": "用户明确告知并强调其所在地为杭州。",
+      "evidence": [
+        "记住我在杭州 我在杭州 我在杭州"
+      ]
+    },
+    {
+      "time": "2026-04-27",
+      "type": "identity_personal",
+      "importance": 3,
+      "summary": "用户分享了籍贯、年龄、职业及多项兴趣爱好。",
+      "evidence": [
+        "我是江西人",
+        "我31岁",
+        "我喜欢做产品",
+        "我去过十几个国家"
+      ]
+    },
+    {
+      "time": "2026-04-27",
+      "type": "health_status_update",
+      "importance": 3,
+      "summary": "用户耳鸣痊愈，精力充沛，心情开心。",
+      "evidence": [
+        "我耳鸣好了",
+        "我现在精力充沛",
+        "最近很开心"
+      ]
+    },
+    {
+      "time": "2026-04-27",
+      "type": "intellectual_interest",
+      "importance": 3,
+      "summary": "用户阅读陈来《有无之境》，关注心学与哲学。",
+      "evidence": [
+        "我读了一本书叫有无之境"
+      ]
+    },
+    {
+      "time": "2026-04-27",
+      "type": "task_execution",
+      "importance": 4,
+      "summary": "用户要求规划墨尔本三天旅行并保存至本地文件系统。",
+      "evidence": [
+        "帮我规划一下明天过去的三天旅行",
+        "把计划写到/规划文件夹下"
+      ]
+    },
+    {
+      "time": "2026-04-27",
+      "type": "creative_intent",
+      "importance": 5,
+      "summary": "用户要求基于个人经历创作融合心学与尼采哲学的奇幻小说，主角设定为产品经理。",
+      "evidence": [
+        "写个小说到小说文件夹下,开始幻想我的旅游",
+        "主角是一位31岁的产品经理...结合王阳明心学的“知行合一”与尼采的“权力意志”"
+      ]
+    }
+  ],
+  "predictions": {
+    "likely_next_topics": [
+      "小说后续章节生成",
+      "心学与产品管理的结合探讨",
+      "墨尔本旅行细节确认",
+      "哲学概念的进一步拆解",
+      "精力充沛时的新计划"
+    ],
+    "likely_next_action": "继续生成小说后续章节或探讨心学在产品中的应用",
+    "signals": {
+      "churn_risk": {
+        "score": 0.15,
+        "confidence": 1,
+        "evidence": [
+          "目前仍有较强探索与追问倾向",
+          "主动分享个人信息以深化关系",
+          "情绪积极，精力充沛",
+          "主动分享深度阅读内容"
+        ],
+        "updated_at": "2026-04-27"
+      },
+      "return_probability": {
+        "score": 0.76,
+        "confidence": 1,
+        "evidence": [
+          "存在持续迭代和深度交流模式"
+        ],
+        "updated_at": "2026-04-25"
+      }
+    }
+  },
+  "source_meta": {
+    "user_message_count_analyzed": 10,
+    "assistant_message_count": 64,
+    "last_message_at": "2026-04-27T07:55:45Z",
+    "generated_from": "conversation_history + llm_inference + rules",
+    "evidence_window": [
+      "session_frequency=frequent",
+      "avg_message_length=12",
+      "avg_depth=7.4"
+    ]
+  }
+}

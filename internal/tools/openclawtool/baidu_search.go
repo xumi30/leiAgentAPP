@@ -22,7 +22,7 @@ func NewBaiduSearchTool() tools.Tool {
 }
 
 func (t *BaiduSearchTool) Name() string {
-	return "openclaw_baidu_search"
+	return "baidu_search"
 }
 
 func (t *BaiduSearchTool) Description() string {

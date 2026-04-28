@@ -335,10 +335,11 @@ export default function Dialog() {
         <div className="dialog__input-row">
           <button
             type="button"
-            className={`dialog__btn-stop${stopVisible ? ' dialog__btn-stop--visible' : ''}`}
+            className="dialog__btn-stop dialog__btn-stop--visible"
             onClick={stopDialog}
             aria-label="停止生成"
             title="停止生成"
+            disabled={!stopVisible}
           >
             <span className="dialog__btn-stop-icon" aria-hidden>⏹</span>
             <span className="dialog__btn-stop-text">停止</span>

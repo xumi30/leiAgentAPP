@@ -11,6 +11,7 @@ require (
 	github.com/teambition/rrule-go v1.8.2
 	github.com/wailsapp/wails/v2 v2.12.0
 	go.yaml.in/yaml/v2 v2.4.4
+	go.yaml.in/yaml/v3 v3.0.4
 	modernc.org/sqlite v1.48.0
 )
 

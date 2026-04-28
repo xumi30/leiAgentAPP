@@ -63,13 +63,16 @@ var defaultConfig = ChannelConfig{
 }
 
 type Message struct {
-	AgentID     string
-	MessageID   string
-	Content     string
-	Role        string
-	IsFinished  bool
-	TotalTokens int
-	AgentList   []string
+	ChatID          string   `json:"chatId,omitempty"`
+	FromAgentID     string   `json:"fromAgentId,omitempty"`
+	MessageID       string   `json:"messageId,omitempty"`
+	Content         string   `json:"content,omitempty"`
+	Role            string   `json:"role,omitempty"`
+	IsFinished      bool     `json:"isFinished,omitempty"`
+	TotalTokens     int      `json:"totalTokens,omitempty"`
+	UserToAgentList []string `json:"userToAgentList,omitempty"`
+	IsAutoToTalk    bool     `json:"isAutoToTalk,omitempty"`
+	NeedNewChatName bool     `json:"needNewChatName,omitempty"`
 }
 
 // 全局单例实例
@@ -321,7 +324,7 @@ func SendAssitantMessageOnce(ctx context.Context, msg string, totalTokens ...int
 		tok = totalTokens[0]
 	}
 	mg := Message{
-		AgentID:     agentIDFromCtx(ctx),
+		FromAgentID: agentIDFromCtx(ctx),
 		MessageID:   messageid,
 		Content:     msg,
 		Role:        utils.MessageRoleAssistant,
@@ -347,11 +350,11 @@ func SendUserMessageOnce(ctx context.Context, msg string) {
 		return
 	}
 	dialogOutChan <- &Message{
-		AgentID:    agentIDFromCtx(ctx),
-		MessageID:  messageid,
-		Content:    msg,
-		Role:       utils.MessageRoleUser,
-		IsFinished: true,
+		FromAgentID: agentIDFromCtx(ctx),
+		MessageID:   messageid,
+		Content:     msg,
+		Role:        utils.MessageRoleUser,
+		IsFinished:  true,
 	}
 
 }
@@ -365,7 +368,7 @@ func SendAssitantMessageStream(ctx context.Context, msg string, messageid string
 	}
 
 	dialogOutChan <- &Message{
-		AgentID:     agentIDFromCtx(ctx),
+		FromAgentID: agentIDFromCtx(ctx),
 		MessageID:   messageid,
 		Content:     msg,
 		Role:        utils.MessageRoleAssistant,
@@ -384,11 +387,11 @@ func SendAReasonningMessageStream(ctx context.Context, msg string, messageid str
 	}
 
 	reasonOutChan <- &Message{
-		AgentID:    agentIDFromCtx(ctx),
-		MessageID:  messageid,
-		Content:    msg,
-		Role:       utils.MessageRoleReasoning,
-		IsFinished: isFinish,
+		FromAgentID: agentIDFromCtx(ctx),
+		MessageID:   messageid,
+		Content:     msg,
+		Role:        utils.MessageRoleReasoning,
+		IsFinished:  isFinish,
 	}
 
 }
@@ -404,10 +407,10 @@ func SendTaskState(ctx context.Context, busy bool) {
 		content = "busy"
 	}
 	taskStateChan <- &Message{
-		AgentID:    agentIDFromCtx(ctx),
-		MessageID:  utils.GenerateMessageID(),
-		Content:    content,
-		Role:       "task_state",
-		IsFinished: !busy,
+		FromAgentID: agentIDFromCtx(ctx),
+		MessageID:   utils.GenerateMessageID(),
+		Content:     content,
+		Role:        "task_state",
+		IsFinished:  !busy,
 	}
 }

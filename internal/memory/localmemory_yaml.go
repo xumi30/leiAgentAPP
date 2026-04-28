@@ -69,11 +69,18 @@ func PersistLocalMemoryToYAMLFile(chatID string) error {
 			ToolCalls:  m.ToolCalls,
 		})
 	}
-	data, err := yaml.Marshal(&out)
+	path, err := localMemoryFilePath(cid)
 	if err != nil {
 		return err
 	}
-	path, err := localMemoryFilePath(cid)
+	// If there is nothing to persist, remove stale empty snapshot to reduce noise.
+	if len(out.Messages) == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	data, err := yaml.Marshal(&out)
 	if err != nil {
 		return err
 	}
@@ -86,6 +93,77 @@ func PersistLocalMemoryToYAMLFile(chatID string) error {
 		return err
 	}
 	logging.Info("已写入本地记忆快照: %s", path)
+	return nil
+}
+
+// CleanupEmptyLocalMemoryYAML removes localmemory/{chatID}.yaml when it is empty
+// (file is empty or YAML contains messages: []).
+func CleanupEmptyLocalMemoryYAML(chatID string) error {
+	cid := strings.TrimSpace(chatID)
+	if cid == "" {
+		return nil
+	}
+	path, err := localMemoryFilePath(cid)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		_ = os.Remove(path)
+		return nil
+	}
+	var root localMemoryYAMLRoot
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return err
+	}
+	if len(root.Messages) == 0 {
+		_ = os.Remove(path)
+	}
+	return nil
+}
+
+// CleanupEmptyLocalMemoryYAMLDir scans localmemory/*.yaml and removes files that are empty
+// or contain `messages: []`. This is best-effort housekeeping and should never fail the main flow.
+func CleanupEmptyLocalMemoryYAMLDir() error {
+	dir, err := LocalMemoryDir()
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, ent := range entries {
+		if ent == nil || ent.IsDir() {
+			continue
+		}
+		name := ent.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".yaml") {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if len(strings.TrimSpace(string(data))) == 0 {
+			_ = os.Remove(path)
+			continue
+		}
+		var root localMemoryYAMLRoot
+		if err := yaml.Unmarshal(data, &root); err != nil {
+			continue
+		}
+		if len(root.Messages) == 0 {
+			_ = os.Remove(path)
+		}
+	}
 	return nil
 }
 
@@ -110,6 +188,12 @@ func LoadLocalMemoryFromYAMLFile(chatID string) error {
 	var root localMemoryYAMLRoot
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return err
+	}
+	if len(root.Messages) == 0 {
+		// Best-effort cleanup for empty snapshots.
+		_ = os.Remove(path)
+		GetLocalMemory().Clear(cid)
+		return nil
 	}
 	lm := GetLocalMemory()
 	lm.Clear(cid)

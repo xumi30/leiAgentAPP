@@ -130,3 +130,11 @@ func AddAgentToConversation(chatID, agentID string) error {
 	}
 	return sql.AddAgentToConversation(chatID, agentID)
 }
+
+func ListAgentsInConversation(chatID string) ([]string, error) {
+	sql := GetSqlInstance()
+	if sql == nil {
+		return nil, fmt.Errorf("无法获取数据库实例")
+	}
+	return sql.ListConversationAgents(chatID)
+}

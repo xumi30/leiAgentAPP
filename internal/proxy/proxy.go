@@ -87,7 +87,12 @@ func (p *Proxy) Communicate(ctx context.Context) (*ToolAndContent, error) {
 	if override, ok := ctx.Value(utils.MemoryMessagesOverrideString).([]*memory.Message); ok && len(override) > 0 {
 		sourceMessages = override
 	} else {
-		sourceMessages = memory.GetLocalMemory().GetMessages(chatID)
+		raw := memory.GetLocalMemory().GetMessages(chatID)
+		if built, ok, err := BuildMemoryMessagesForLLM(chatID, raw); err == nil && ok && len(built) > 0 {
+			sourceMessages = built
+		} else {
+			sourceMessages = raw
+		}
 	}
 
 	return p.communicateWithChatMessages(ctx, convertMessages(sourceMessages))

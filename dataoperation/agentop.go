@@ -2,14 +2,6 @@ package dataoperation
 
 import "fmt"
 
-func SyncPresetAgents() error {
-	sql := GetSqlInstance()
-	if sql == nil {
-		return fmt.Errorf("无法获取数据库实例")
-	}
-	return sql.SyncPresetAgents()
-}
-
 func ListAgents() ([]map[string]interface{}, error) {
 	sql := GetSqlInstance()
 	if sql == nil {
