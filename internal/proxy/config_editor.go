@@ -30,7 +30,52 @@ func DefaultConfigWritePath() string {
 	return appruntime.ResolvePath(filepath.Join("config", "config.yaml"))
 }
 
-// ReadLLMConfigForUI 读取用于编辑器展示的内容。若尚无配置文件，则返回示例内容与建议保存路径，usingExample 为 true。
+// EnsureConfigYAMLFromExample copies config.example.yaml to the default config path
+// when no config file is present yet (same discovery rules as resolveConfigPath / ReadLLMConfigForUI).
+// If the example file is missing, creates an empty config.yaml as a last resort.
+func EnsureConfigYAMLFromExample() error {
+	if _, ok := resolveConfigPath(); ok {
+		return nil
+	}
+	dest := DefaultConfigWritePath()
+	if abs, err := filepath.Abs(dest); err == nil {
+		dest = abs
+	}
+
+	exampleCandidates := []string{
+		appruntime.ResolvePath(filepath.Join("config", "config.example.yaml")),
+		filepath.Clean(filepath.Join("config", "config.example.yaml")),
+	}
+	if exe, err := os.Executable(); err == nil {
+		exampleCandidates = append(exampleCandidates, filepath.Join(filepath.Dir(exe), "config", "config.example.yaml"))
+	}
+
+	var data []byte
+	for _, c := range exampleCandidates {
+		b, err := os.ReadFile(c)
+		if err == nil {
+			data = b
+			break
+		}
+	}
+	if len(data) == 0 && len(bundledConfigYAML) > 0 {
+		data = bundledConfigYAML
+	}
+
+	dir := filepath.Dir(dest)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("创建配置目录失败：%w", err)
+		}
+	}
+	if err := os.WriteFile(dest, data, 0o600); err != nil {
+		return fmt.Errorf("写入 %s 失败：%w", dest, err)
+	}
+	return nil
+}
+
+// ReadLLMConfigForUI 读取用于编辑器展示的内容。若尚无配置文件：优先用 config.example.yaml 作为草稿；
+// 连示例也不存在时返回空内容（保存时会写入新 config.yaml），usingExample 为 true。
 func ReadLLMConfigForUI() (content string, savePath string, usingExample bool, err error) {
 	savePath = DefaultConfigWritePath()
 	if abs, e := filepath.Abs(savePath); e == nil {
@@ -49,15 +94,17 @@ func ReadLLMConfigForUI() (content string, savePath string, usingExample bool, e
 			examplePathCandidates = append(examplePathCandidates, filepath.Join(filepath.Dir(exe), "config", "config.example.yaml"))
 		}
 
-		var lastErr error
 		for _, c := range examplePathCandidates {
 			example, e := os.ReadFile(c)
 			if e == nil {
 				return string(example), savePath, true, nil
 			}
-			lastErr = e
 		}
-		return "", savePath, true, fmt.Errorf("未找到 config/config.yaml，且无法读取 config/config.example.yaml：%w", lastErr)
+		if len(bundledConfigYAML) > 0 {
+			return string(bundledConfigYAML), savePath, true, nil
+		}
+		// 兜底：与 EnsureConfigYAMLFromExample 一致，无示例时用空文档，后续 Save 会新建 config.yaml
+		return "", savePath, true, nil
 	}
 	if abs, e := filepath.Abs(p); e == nil {
 		savePath = abs

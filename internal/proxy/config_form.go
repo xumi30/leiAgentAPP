@@ -96,7 +96,6 @@ func jsonIntAny(m map[string]json.RawMessage, keys ...string) int {
 
 // LLMConfigFormState 为 GetLLMConfigFormState 的返回值。
 type LLMConfigFormState struct {
-	ConfigEnabled bool           `json:"configEnabled"`
 	Primary       LLMConfigRow   `json:"primary"`
 	Backends      []LLMConfigRow `json:"backends"`
 	Path          string         `json:"path"`
@@ -161,9 +160,12 @@ func GetLLMConfigFormState() (LLMConfigFormState, error) {
 			backends = []LLMConfigRow{llm}
 		}
 	}
+	for i := range backends {
+		backends[i].BaseURL = NormalizeProxyLbBaseURLForDisplay(backends[i].Name, backends[i].BaseURL)
+		backends[i].Model = NormalizeProxyLbModelForDisplay(backends[i].Name, backends[i].Model)
+	}
 
 	return LLMConfigFormState{
-		ConfigEnabled: root.EnableLLMConfig,
 		Primary:       LLMConfigRow{Enabled: true},
 		Backends:      backends,
 		Path:          path,
@@ -196,12 +198,6 @@ func SaveLLMConfigForm(primary LLMConfigRow, backends []LLMConfigRow) (savedPath
 	if err != nil {
 		return "", fmt.Errorf("生成 llm_backends 失败：%w", err)
 	}
-	enableNode, err := nodeFromValue(true)
-	if err != nil {
-		return "", fmt.Errorf("生成 enable_llm_config 失败：%w", err)
-	}
-
-	upsertRootKey(doc, "enable_llm_config", enableNode)
 	upsertRootKey(doc, "llm_backends", backendsNode)
 
 	data, err := marshalYAMLDocumentNode(doc)

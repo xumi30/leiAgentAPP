@@ -19,9 +19,6 @@ frontend/wailsjs/
 # Dependencies
 node_modules
 
-# Local secrets（可复制 config/config.example.yaml）
-config/config.yaml
-
 # Logs
 logs/
 *.log

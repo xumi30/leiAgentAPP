@@ -11,13 +11,14 @@ import (
 
 // LLMConnectionStatus 供前端展示：基于配置加载 + 对 OpenAI 兼容 /models 的轻量探测。
 type LLMConnectionStatus struct {
-	OK         bool   `json:"ok"`         // 配置有效且 /models 返回 2xx
-	Reachable  bool   `json:"reachable"`  // 收到任意 HTTP 响应（非网络错误）
-	Phase      string `json:"phase"`      // no_config | config_error | gemini_skip | no_probe | connected | http_error | unreachable
-	Message    string `json:"message"`
-	ConfigPath string `json:"configPath"`
-	Backend    string `json:"backend,omitempty"`
-	HTTPStatus int    `json:"httpStatus,omitempty"`
+	OK            bool   `json:"ok"`        // 配置有效且 /models 返回 2xx
+	Reachable     bool   `json:"reachable"` // 收到任意 HTTP 响应（非网络错误）
+	Phase         string `json:"phase"`     // no_config | config_error | gemini_skip | no_probe | connected | http_error | unreachable
+	Message       string `json:"message"`
+	ConfigPath    string `json:"configPath"`
+	Backend       string `json:"backend,omitempty"`
+	HTTPStatus    int    `json:"httpStatus,omitempty"`
+	IsProxyLbAuth bool   `json:"isProxyLbAuth,omitempty"` // 当前配置是否像 Proxy-LB 登录会话（canonical name+URL+token）
 }
 
 func chatURLToModelsURL(chatURL string) (string, bool) {
@@ -40,41 +41,41 @@ func chatURLToModelsURL(chatURL string) (string, bool) {
 func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 	backends, err := loadModelConfigs()
 	if err != nil {
-		return LLMConnectionStatus{
+		return mergeProxyLbUIStatus(LLMConnectionStatus{
 			OK: false, Phase: "config_error", Message: err.Error(), ConfigPath: "built-in",
-		}
+		})
 	}
 	if len(backends) == 0 {
-		return LLMConnectionStatus{
+		return mergeProxyLbUIStatus(LLMConnectionStatus{
 			OK: false, Phase: "config_error", Message: "内置配置中没有任何可用 LLM 后端", ConfigPath: "built-in",
-		}
+		})
 	}
 
 	info := backends[0]
 	label := info.logLabel()
 	if strings.EqualFold(info.provider, "gemini") {
-		return LLMConnectionStatus{
+		return mergeProxyLbUIStatus(LLMConnectionStatus{
 			OK: true, Reachable: true, Phase: "gemini_skip", Message: "配置有效（Gemini 未做 HTTP 探测）",
 			ConfigPath: "built-in", Backend: label,
-		}
+		})
 	}
 
 	modelsURL, canProbe := chatURLToModelsURL(info.url)
 	if !canProbe {
-		return LLMConnectionStatus{
+		return mergeProxyLbUIStatus(LLMConnectionStatus{
 			OK: true, Reachable: true, Phase: "no_probe",
-			Message: "配置已加载；base_url 非标准 Chat Completions 路径，无法自动探测连通性",
+			Message:    "配置已加载；base_url 非标准 Chat Completions 路径，无法自动探测连通性",
 			ConfigPath: "built-in", Backend: label,
-		}
+		})
 	}
 
 	client := &http.Client{Timeout: 12 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
 	if err != nil {
-		return LLMConnectionStatus{
+		return mergeProxyLbUIStatus(LLMConnectionStatus{
 			OK: false, Phase: "unreachable", Message: fmt.Sprintf("构造探测请求失败：%v", err),
 			ConfigPath: "built-in", Backend: label,
-		}
+		})
 	}
 	switch strings.ToLower(strings.TrimSpace(info.provider)) {
 	case "gemini":
@@ -85,10 +86,10 @@ func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return LLMConnectionStatus{
+		return mergeProxyLbUIStatus(LLMConnectionStatus{
 			OK: false, Phase: "unreachable", Message: fmt.Sprintf("网络不可达：%v", err),
 			ConfigPath: "built-in", Backend: label,
-		}
+		})
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
@@ -116,5 +117,10 @@ func CheckLLMConnectionStatus(ctx context.Context) LLMConnectionStatus {
 		out.Phase = "http_error"
 		out.Message = fmt.Sprintf("探测返回 HTTP %d，请检查 base_url 与服务商文档", st)
 	}
-	return out
+	return mergeProxyLbUIStatus(out)
+}
+
+func mergeProxyLbUIStatus(s LLMConnectionStatus) LLMConnectionStatus {
+	s.IsProxyLbAuth = IsProxyLbAuthSession()
+	return s
 }

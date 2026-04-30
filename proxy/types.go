@@ -25,7 +25,7 @@ type Backend struct {
 // Config is the resolved configuration used by Client.
 type Config struct {
 	Backends []Backend
-	// SourcePath tells where configuration was loaded from (config.yaml or defaultBackend.yaml).
+	// SourcePath is the resolved config file path (config.yaml).
 	SourcePath string
 }
 

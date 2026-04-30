@@ -5,7 +5,7 @@ import { MessageBubble, ChatInput } from '../../../components';
 import { ChatService } from '../../../services/chatService';
 import { AddAgentToConversation, AddConversation, GetConversationAgents, GetMessages, ListAgents, SwitchChat } from '../../../services/api';
 import { classifyUserMessage } from '../../../utils/messageClassify';
-import { GetMCPConfigFormState, GetOpenClawSkillState } from '../../../../wailsjs/go/main/App';
+import { GetMCPConfigFormState, GetOpenClawSkillState, RespondShellApproval } from '../../../../wailsjs/go/main/App';
 import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime';
 import assistantAvatar from '../../../assets/images/aitx.png';
 import Tooltip from './tooltip/Tooltip';
@@ -95,6 +95,8 @@ const ChatDialog = () => {
   const [memoStripOpen, setMemoStripOpen] = useState(false);
   const [memoHint, setMemoHint] = useState('');
   const [memoError, setMemoError] = useState('');
+  /** 待确认的 shell：后台阻塞直到用户 RespondShellApproval（仅当前会话显示横幅）*/
+  const [shellApproval, setShellApproval] = useState(null);
   const [mcpOptions, setMcpOptions] = useState([]);
   const [skillOptions, setSkillOptions] = useState([]);
   const memoHintTimerRef = useRef(null);
@@ -335,6 +337,38 @@ const ChatDialog = () => {
       EventsOff('GetMessagesByMessageID');
     };
   }, [chatId, setMessages, startStreaming, stopStreaming]);
+
+  useEffect(() => {
+    const onShellApprovalRequest = (data) => {
+      const cid = String(data?.chatID ?? '').trim();
+      const reqId = String(data?.requestId ?? '').trim();
+      const cmd = String(data?.command ?? '');
+      if (!cid || !reqId) return;
+      setShellApproval({ chatID: cid, requestId: reqId, command: cmd });
+    };
+    EventsOn('shellApprovalRequest', onShellApprovalRequest);
+    return () => {
+      EventsOff('shellApprovalRequest');
+    };
+  }, []);
+
+  const shellApprovalVisible =
+    shellApproval &&
+    String(shellApproval.chatID ?? '').trim() !== '' &&
+    String(shellApproval.chatID ?? '').trim() === String(chatId ?? '').trim();
+
+  const resolveShellApproval = useCallback(async (approve) => {
+    if (!shellApproval?.requestId) return;
+    const cid = String(shellApproval.chatID ?? '').trim();
+    const rid = String(shellApproval.requestId ?? '').trim();
+    if (!cid || !rid) return;
+    try {
+      await RespondShellApproval(cid, rid, Boolean(approve));
+    } catch (e) {
+      console.error('RespondShellApproval:', e);
+    }
+    setShellApproval(null);
+  }, [shellApproval]);
 
   const memoListMessages = useMemo(() => {
     const list = Array.isArray(currentMessages) ? currentMessages : [];
@@ -592,7 +626,7 @@ const ChatDialog = () => {
               >
                 <img
                   className="dialog__agent-chip-avatar"
-                  src={String(agent?.avatar_image ?? '')}
+                  src={String(agent?.avatar_image ?? '').trim() || assistantAvatar}
                   onError={(e) => {
                     if (e.currentTarget?.src !== assistantAvatar) e.currentTarget.src = assistantAvatar;
                   }}
@@ -612,6 +646,29 @@ const ChatDialog = () => {
       ) : null}
       {memoError ? (
         <div className="dialog__classify-hint" role="alert">{memoError}</div>
+      ) : null}
+
+      {shellApprovalVisible ? (
+        <div className="shell-approval-banner" role="dialog" aria-label="确认执行 shell 命令">
+          <div className="shell-approval-banner__title">助手请求在本机执行命令，请确认</div>
+          <pre className="shell-approval-banner__cmd">{shellApproval.command}</pre>
+          <div className="shell-approval-banner__actions">
+            <button
+              type="button"
+              className="shell-approval-banner__btn shell-approval-banner__btn--secondary"
+              onClick={() => void resolveShellApproval(false)}
+            >
+              拒绝
+            </button>
+            <button
+              type="button"
+              className="shell-approval-banner__btn shell-approval-banner__btn--primary"
+              onClick={() => void resolveShellApproval(true)}
+            >
+              允许执行
+            </button>
+          </div>
+        </div>
       ) : null}
 
       <div className="dialog__messages">
@@ -643,11 +700,10 @@ const ChatDialog = () => {
             type="button"
             className="dialog__btn-stop dialog__btn-stop--visible"
             onClick={handleStopGenerating}
-            aria-label="停止生成"
-            title="停止生成"
+            disabled={!stopVisible}
           >
             <span className="dialog__btn-stop-icon" aria-hidden>⏹</span>
-            <span className="dialog__btn-stop-text">停止</span>
+            <span className="dialog__btn-stop-text">{stopVisible ? '跑马中' : '摸鱼中'}</span>
           </button>
 
           <ChatInput

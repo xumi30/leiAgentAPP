@@ -94,7 +94,11 @@ func LoadMemoryCompressionConfig() (ResolvedMemoryCompressionConfig, error) {
 	if cfgPath == "" {
 		return cfg, nil
 	}
-	cfg.Source = "file"
+	if isBundledYAMLPathMarker(cfgPath) {
+		cfg.Source = "embedded"
+	} else {
+		cfg.Source = "file"
+	}
 	cfg.LoadedAt = time.Now()
 
 	mc := root.MemoryCompression

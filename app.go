@@ -16,6 +16,7 @@ import (
 
 	"leiAgent/dataoperation"
 
+	"leiAgent/internal/bashpolicy"
 	"leiAgent/internal/crontabthread"
 	"leiAgent/internal/dispatcher"
 	"leiAgent/internal/doclib"
@@ -25,6 +26,7 @@ import (
 	"leiAgent/internal/openclawskill"
 	"leiAgent/internal/profile"
 	"leiAgent/internal/proxy"
+	"leiAgent/internal/shellapproval"
 	"leiAgent/internal/tools/noveltool"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -55,6 +57,15 @@ func (a *App) startup(ctx context.Context) {
 	a.agentPool = make(map[string]*dispatcher.Dispatcher)
 	a.poolLastUsed = make(map[string]time.Time)
 	a.ctx = ctx
+	shellapproval.NotifyUI = func(chatID, requestID, command string) {
+		runtime.EventsEmit(a.ctx, "shellApprovalRequest", map[string]interface{}{
+			"chatID":    chatID,
+			"requestId": requestID,
+			"command":   command,
+		})
+	}
+	proxy.InitShellSafetyFromConfig()
+
 	// 必须先于其它包调用 sqlmemory.GetSqlInstance，否则 sync.Once 会锁在错误的默认库路径上
 	if dataoperation.GetSqlInstance() == nil {
 		logging.Error("启动时未能打开对话数据库 data/memory.db")
@@ -84,6 +95,16 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}()
 }
+
+// focusMainWindow 将主窗口置前并取消最小化；供单实例模式下第二次启动时由已运行实例调用。
+func (a *App) focusMainWindow() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowUnminimise(a.ctx)
+	runtime.Show(a.ctx)
+}
+
 func (a *App) ListConversation() []map[string]interface{} {
 	// 模拟对话数据
 	conversations := dataoperation.ListConverstions()
@@ -282,6 +303,25 @@ func (a *App) SendMessage(msg globalchannel.Message) {
 	logging.Info("Sending message to conversation successfully")
 
 }
+// GetShellSafetyFormState 返回黑名单表格（命令 / 解释 / 危险度 / 是否启用）及配置路径。
+func (a *App) GetShellSafetyFormState() (proxy.ShellSafetyFormState, error) {
+	return proxy.GetShellSafetyFormState()
+}
+
+// SaveShellSafetyForm 写入 config.yaml 的 shell_safety.rules 并重载运行时策略。
+func (a *App) SaveShellSafetyForm(rules []bashpolicy.Rule) (string, error) {
+	return proxy.SaveShellSafetyForm(rules)
+}
+
+// AssessShellCommandRisk 调用已配置大模型为黑名单条目估算 high/medium/low；LLM 不可用时由前端提示用户自行判定。
+func (a *App) AssessShellCommandRisk(command string) proxy.ShellCommandRiskResult {
+	return proxy.AssessShellCommandRisk(context.Background(), command)
+}
+
+// RespondShellApproval 由前端在用户确认或拒绝本地 shell 命令后调用。
+func (a *App) RespondShellApproval(chatID, requestID string, approve bool) error {
+	return shellapproval.Respond(chatID, requestID, approve)
+}
 
 // SendUserDisplayOnly 将用户消息写入对话并通知前端，但不送入 Dispatcher（用于「暂停」等控制话术，避免再次触发意图识别）。
 func (a *App) SendUserDisplayOnly(chatID, message string) {
@@ -364,11 +404,12 @@ func (a *App) GetReasoningMessage(chatID string) []map[string]interface{} {
 
 // ProxyAuthRequest forwards an auth request (login/register/send-code) to the
 // proxy-lb server from Go to avoid CORS issues in the Wails webview.
-// For login/register, if a token is returned the LLM config is updated automatically.
+// For login/register, if a token is returned, append or refresh the canonical
+// proxy-lb row at the end of llm_backends (merge into existing YAML on disk).
 func (a *App) ProxyAuthRequest(path string, body map[string]interface{}) (map[string]interface{}, error) {
 	username, _ := body["username"].(string)
 	logging.Info("ProxyAuthRequest: path=%s username=%s", path, username)
-	url := "http://127.0.0.1:7077" + path
+	url := proxy.DefaultProxyLBOrigin + path
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("序列化请求失败: %w", err)
@@ -382,53 +423,69 @@ func (a *App) ProxyAuthRequest(path string, body map[string]interface{}) (map[st
 	defer resp.Body.Close()
 	respBytes, _ := io.ReadAll(resp.Body)
 	var result map[string]interface{}
-	if err := json.Unmarshal(respBytes, &result); err != nil {
+	unmarshalErr := json.Unmarshal(respBytes, &result)
+	if unmarshalErr != nil {
 		result = map[string]interface{}{"raw": string(respBytes)}
 	}
 	result["_statusCode"] = resp.StatusCode
-	logging.Info("ProxyAuthRequest: path=%s status=%d", path, resp.StatusCode)
+	yamlPri := proxy.LLMYAMLConfigTakesPriority()
+	if unmarshalErr != nil {
+		snippet := string(respBytes)
+		if len(snippet) > 2048 {
+			snippet = snippet[:2048] + "...(truncated)"
+		}
+		logging.Info("ProxyAuthRequest: path=%s status=%d bytes=%d unmarshalOK=false yamlPriority=%v err=%v rawSnippet=%q",
+			path, resp.StatusCode, len(respBytes), yamlPri, unmarshalErr, snippet)
+	} else {
+		safe := make(map[string]interface{}, len(result))
+		for k, v := range result {
+			switch k {
+			case "token":
+				if s, ok := v.(string); ok && s != "" {
+					safe[k] = fmt.Sprintf("<redacted len=%d>", len(s))
+				} else {
+					safe[k] = v
+				}
+			default:
+				safe[k] = v
+			}
+		}
+		safeJSON, _ := json.Marshal(safe)
+		logging.Info("ProxyAuthRequest: path=%s status=%d bytes=%d unmarshalOK=true yamlPriority=%v body=%s",
+			path, resp.StatusCode, len(respBytes), yamlPri, string(safeJSON))
+	}
 
-	// 登录或注册成功后，自动写入 LLM 配置
+	// 登录或注册成功后写入本机 YAML：在已有 llm_backends 末尾追加或刷新 proxy-lb 行（不改前面的用户后端）
+	// 响应 JSON 形状与 proxy-lb/internal/app/router.go 一致：成功时含 token 字符串字段。
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		token, _ := result["token"].(string)
+		token := ""
+		if unmarshalErr == nil {
+			token = proxy.ProxyLBLoginRegisterToken(result)
+		}
 		if token != "" {
 			if saveErr := a.saveAuthConfig(token); saveErr != nil {
 				logging.Error("登录成功但写入配置失败: %v", saveErr)
+			} else if yamlPri {
+				logging.Info("ProxyAuthRequest: 已在 llm_backends 末尾写入 proxy-lb（当前 YAML 中另有 LLM 配置）")
+			}
+		} else if path == "/auth/login" || path == "/auth/register" {
+			if unmarshalErr != nil {
+				logging.Warn("ProxyAuthRequest: path=%s status=%d 响应体非 JSON（%v），无法读取 token", path, resp.StatusCode, unmarshalErr)
+			} else {
+				logging.Warn("ProxyAuthRequest: path=%s status=%d 响应中缺少字符串字段 token（见 proxy-lb router POST /auth/login 的 gin.H username+token），未写入配置", path, resp.StatusCode)
 			}
 		}
 	}
 	return result, nil
 }
 
-// saveAuthConfig 将认证 token 写入 LLM 配置的第一条后端。
+// saveAuthConfig 将认证 token 追加为 llm_backends 末尾的 canonical proxy-lb 行（兜底 LLM），与是否已有其它 YAML 后端无关。
 func (a *App) saveAuthConfig(token string) error {
 	state, err := proxy.GetLLMConfigFormState()
 	if err != nil {
 		return fmt.Errorf("读取配置失败: %w", err)
 	}
-	currentRows := state.Backends
-	nextRow := proxy.LLMConfigRow{
-		Name:            "proxy-lb",
-		APIKey:          strings.TrimSpace(token),
-		BaseURL:         "http://127.0.0.1:7077/v1/chat/completions",
-		Model:           "qwen",
-		Provider:        "",
-		StreamMode:      "both",
-		MaxOutputTokens: 0,
-		Enabled:         true,
-	}
-	var nextRows []proxy.LLMConfigRow
-	if len(currentRows) > 0 {
-		merged := currentRows[0]
-		merged.Name = nextRow.Name
-		merged.APIKey = nextRow.APIKey
-		merged.BaseURL = nextRow.BaseURL
-		merged.Model = nextRow.Model
-		merged.StreamMode = nextRow.StreamMode
-		nextRows = append([]proxy.LLMConfigRow{merged}, currentRows[1:]...)
-	} else {
-		nextRows = []proxy.LLMConfigRow{nextRow}
-	}
+	nextRows := proxy.AppendProxyLbFallbackBackend(state.Backends, token)
 	_, err = proxy.SaveLLMConfigForm(proxy.LLMConfigRow{}, nextRows)
 	return err
 }
@@ -633,26 +690,24 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 
 			final := buf.content.String()
 			toSave := final
-			wasToolCompletePayload := false
 			// 工具续问模式：落库前把 tool-complete JSON 净化为最终 content，避免刷新后看到控制 JSON。
 			if role == utils.MessageRoleAssistant {
 				if payload, ok := utils.ParseToolCompletePayload(final); ok {
 					if s := strings.TrimSpace(payload.Content); s != "" {
 						toSave = s
-						wasToolCompletePayload = true
 					}
 				}
 			}
+			saved := false
 			if strings.TrimSpace(final) != "" {
 				if err := dataoperation.SendMessageWithCreateTimeAndTokens(msg.FromAgentID, chatID, mid, toSave, role, buf.startTime, msg.TotalTokens); err != nil {
 					logging.Error("Failed to save message: %v", err)
-				} else if wasToolCompletePayload {
-					// 该条消息在流式阶段可能展示了控制 JSON；落库净化后，主动再 emit 一次 DB 最终内容用于界面替换。
-					a.GetMessagesByMessageID(mid)
+				} else {
+					saved = true
 				}
 			}
-			// 添加：主动触发消息更新，确保Markdown正确渲染
-			if role == utils.MessageRoleAssistant || role == utils.MessageRoleReasoning {
+			// 仅在实际落库成功后补拉 DB 记录（空正文/未保存时库里无行，避免 message not found 噪声）
+			if saved && (role == utils.MessageRoleAssistant || role == utils.MessageRoleReasoning) {
 				a.GetMessagesByMessageID(mid)
 			}
 			emitDialogStreamEnd(mid)
@@ -740,6 +795,11 @@ func (a *App) shutdown(_ context.Context) {
 // GetLLMConnectionStatus 加载配置并对首个 OpenAI 兼容后端请求 /v1/models（或 /models）做轻量探测。
 func (a *App) GetLLMConnectionStatus() proxy.LLMConnectionStatus {
 	return proxy.CheckLLMConnectionStatus(context.Background())
+}
+
+// ClearProxyLbAuth 清除 config 中与桌面端 Proxy-LB 登录匹配的 api_key。
+func (a *App) ClearProxyLbAuth() error {
+	return proxy.ClearProxyLbAuthCredentials()
 }
 
 // GetLLMResolvedConfigPath 返回当前使用的配置文件绝对路径；未找到时为空。

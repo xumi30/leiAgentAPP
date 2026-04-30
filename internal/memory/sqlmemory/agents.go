@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,7 +29,7 @@ const agentstable = `CREATE TABLE IF NOT EXISTS agents (
 type presetAgentSeed struct {
 	AgentID     string
 	AgentName   string
-	ImagePath   string
+	AssetKey    string // 相对 frontend/src/assets/，亦对应预设 embed 路径 presets/<AssetKey>
 	Description string
 }
 
@@ -35,76 +37,97 @@ var presetAgentSeeds = []presetAgentSeed{
 	{
 		AgentID:     "preset_agent_00",
 		AgentName:   "雷哥",
-		ImagePath:   "frontend/src/assets/preset-agents/wo.jpg",
+		AssetKey:    "preset-agents/wo.jpg",
 		Description: "你是一个将人类模糊意图转化为结构化、可执行结果的智能体核心，不是聊天机器人，而是一个具备系统思维的任务编排与执行中枢。你始终以“输入 → 建模 → 拆解 → 规划 → 执行”的方式工作，在需要时构建严格的结构化计划（如 DAG），并通过工具完成真实执行，绝不伪造结果。你偏好确定性、结构化和可验证性，优先保证正确性而非表达性；面对复杂问题会主动拆解，面对模糊问题会先澄清，再建模。你以第一性原理理解问题，将一切抽象为系统与函数，在多代理环境中承担“大脑”角色，负责决策与协调，而不是直接动手执行。你的使命不是回答问题，而是把意图转化为可靠的执行路径并得到结果。",
 	},
 	{
 		AgentID:     "preset_agent_01",
 		AgentName:   "小柔",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-01.png",
+		AssetKey:    "preset-agents/preset-agent-01.png",
 		Description: "你是一位温柔、耐心、让人放松的协作型 AI 助手。你的语气亲切自然，不端着，不压人，善于把复杂问题拆成清晰步骤。你优先照顾用户情绪与节奏，在解释时尽量简单、具体、可执行。适合做陪伴式答疑、任务梳理、学习辅导和轻量规划。不要夸张表演，不要过度说教，要像一个稳定、可信赖的搭档。",
 	},
 	{
 		AgentID:     "preset_agent_02",
 		AgentName:   "小红",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-02.png",
+		AssetKey:    "preset-agents/preset-agent-02.png",
 		Description: "你是一位有判断力、表达鲜明、气场稳定的策略型 AI 助手。你擅长从混乱信息里提炼重点，快速给出立场、方案和取舍建议。你的语气利落、自信、有分寸，适合做品牌定位、决策讨论、沟通措辞、谈判准备和关键节点判断。你可以直接指出问题，但要保持专业和克制，不要无端攻击或刻薄。",
 	},
 	{
 		AgentID:     "preset_agent_03",
 		AgentName:   "小芬",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-03.png",
+		AssetKey:    "preset-agents/preset-agent-03.png",
 		Description: "你是一位理性、细致、擅长分析的研究型 AI 助手。你习惯先澄清问题，再分类整理信息，最后给出有依据的结论。你的表达清楚、有条理，适合处理资料归纳、知识解释、方案对比、风险梳理和文档整理。面对不确定信息时要明确边界，不瞎猜，不跳步，尽量让输出可复查、可追踪、可复用。",
 	},
 	{
 		AgentID:     "preset_agent_04",
 		AgentName:   "晓明",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-04.png",
+		AssetKey:    "preset-agents/preset-agent-04.png",
 		Description: "你是一位开朗、亲和、善于讲解的引导型 AI 助手。你的回答应该让人容易看懂、愿意继续往下做，像一位很会带人的讲师或顾问。你擅长新手引导、功能说明、步骤教学、客户沟通和正向反馈。表达要有温度，但不要空泛；要鼓励用户推进，同时给出足够明确的下一步。",
 	},
 	{
 		AgentID:     "preset_agent_05",
 		AgentName:   "晓染",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-05.png",
+		AssetKey:    "preset-agents/preset-agent-05.png",
 		Description: "你是一位想法活跃、节奏明快、富有感染力的创意型 AI 助手。你擅长脑暴、文案、命名、活动包装、内容策划和风格延展。你的表达可以更鲜活、更有画面感，也可以适度带一点俏皮和灵气，但不能失控、不能浮夸堆词。你要在创意与落地之间保持平衡，让灵感最终能变成可执行方案。",
 	},
 	{
 		AgentID:     "preset_agent_06",
 		AgentName:   "晓严",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-06.png",
+		AssetKey:    "preset-agents/preset-agent-06.png",
 		Description: "你是一位经验老到、要求严格、重视质量底线的资深审阅型 AI 助手。你的风格直接、稳重、少废话，擅长挑错、找漏洞、做技术评审和把关。你会优先指出高风险问题、隐藏假设和可能的后果，再给出修正建议。允许语气稍硬，但核心目标是帮助用户把事情做扎实，而不是单纯否定。",
 	},
 	{
 		AgentID:     "preset_agent_07",
 		AgentName:   "晓亮",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-07.png",
+		AssetKey:    "preset-agents/preset-agent-07.png",
 		Description: "你是一位带点顽皮感、想象力强、世界观丰沛的幻想型 AI 助手。你擅长角色设定、故事灵感、视觉概念、创作陪跑和不那么常规的点子生成。你的语言可以灵动一点、俏皮一点、带点戏剧感，但仍然要围绕用户目标服务。适合创意写作、IP 设定、游戏叙事、风格探索和脑洞扩展。",
 	},
 	{
 		AgentID:     "preset_agent_08",
 		AgentName:   "晓峰",
-		ImagePath:   "frontend/src/assets/preset-agents/preset-agent-08.png",
+		AssetKey:    "preset-agents/preset-agent-08.png",
 		Description: "你是一位果断、清醒、行动导向很强的推进型 AI 助手。你会主动整理优先级、推动决策、压缩模糊空间，并把讨论拉回结果。你的语气冷静、有锋芒，但不是咄咄逼人。适合做项目推进、产品判断、执行拆解、时间安排和关键事项落地。你要帮助用户尽快从想法进入行动。",
 	},
 }
 
 
-func fileToDataURI(relPath string) (string, error) {
-	fullPath := appruntime.ResolvePath(relPath)
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return "", fmt.Errorf("read preset image %s: %w", fullPath, err)
-	}
-
+func bytesToImageDataURI(data []byte) string {
 	mime := http.DetectContentType(data)
-	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
+}
+
+// readBundledFrontendAsset loads a file from frontend/src/assets/<key>:
+// prefers on-disk workspace path during development, then packaged Go embed fallback.
+func readBundledFrontendAsset(key string) ([]byte, error) {
+	key = strings.Trim(strings.Trim(filepath.ToSlash(key), "/"), " ")
+	if key == "" {
+		return nil, fmt.Errorf("empty asset key")
+	}
+	disk := appruntime.ResolvePath(filepath.FromSlash(path.Join("frontend", "src", "assets", key)))
+	if data, err := os.ReadFile(disk); err == nil && len(data) > 0 {
+		return data, nil
+	}
+	embeddedPath := path.Join("presets", key)
+	data, err := embeddedPresets.ReadFile(embeddedPath)
+	if err != nil {
+		return nil, fmt.Errorf("read bundled asset %q: %w", key, err)
+	}
+	return data, nil
+}
+
+func presetAssetToDataURI(assetKey string) (string, error) {
+	data, err := readBundledFrontendAsset(assetKey)
+	if err != nil {
+		return "", err
+	}
+	return bytesToImageDataURI(data), nil
 }
 
 const minimalPNGDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
 // ensurePresetAgents inserts/updates bundled presets into agents (presetAgentSeeds was never invoked before).
 func ensurePresetAgents(db *sql.DB) error {
-	fallbackURI, errFallback := fileToDataURI("frontend/src/assets/images/aitx.png")
+	fallbackURI, errFallback := presetAssetToDataURI("images/aitx.png")
 	if errFallback != nil {
 		logging.Warn("preset agents: default avatar %v, using placeholder", errFallback)
 		fallbackURI = minimalPNGDataURI
@@ -121,9 +144,9 @@ func ensurePresetAgents(db *sql.DB) error {
 	`
 
 	for _, seed := range presetAgentSeeds {
-		avatarURI, err := fileToDataURI(seed.ImagePath)
+		avatarURI, err := presetAssetToDataURI(seed.AssetKey)
 		if err != nil {
-			logging.Warn("preset agent %s avatar %q: %v", seed.AgentID, seed.ImagePath, err)
+			logging.Warn("preset agent %s avatar %q: %v", seed.AgentID, seed.AssetKey, err)
 			avatarURI = fallbackURI
 		}
 		if _, err := db.Exec(q, seed.AgentID, seed.AgentName, avatarURI, seed.Description); err != nil {

@@ -7,15 +7,22 @@ import (
 	"strings"
 
 	"leiAgent/internal/appruntime"
+	"leiAgent/internal/bashpolicy"
 
 	"go.yaml.in/yaml/v2"
 )
 
+type ShellSafetyYAML struct {
+	Rules []bashpolicy.Rule `yaml:"rules,omitempty"`
+	// 旧字段：无 rules 时会并入默认列表（仅运行时兼容）。
+	ExtraBlockedSubstrings []string `yaml:"extra_blocked_substrings,omitempty"`
+}
+
 type fileRoot struct {
-	EnableLLMConfig   bool                  `yaml:"enable_llm_config,omitempty"`
 	LLM               llmYAML               `yaml:"llm"`
 	LLMBackends       []llmYAML             `yaml:"llm_backends"`
 	MemoryCompression MemoryCompressionYAML `yaml:"memory_compression,omitempty"`
+	ShellSafety       ShellSafetyYAML       `yaml:"shell_safety,omitempty"`
 }
 
 type llmYAML struct {
@@ -61,19 +68,64 @@ func resolveConfigPath() (path string, ok bool) {
 	return "", false
 }
 
+func hasLLMConfigInYAML(root fileRoot) bool {
+	if len(root.LLMBackends) > 0 {
+		return true
+	}
+	l := root.LLM
+	return strings.TrimSpace(l.APIKey) != "" ||
+		strings.TrimSpace(l.BaseURL) != "" ||
+		strings.TrimSpace(l.Model) != ""
+}
+
+// shouldApplyLLMYAMLFromConfig 决定是否从文件加载 LLM：YAML 中存在 llm / llm_backends 的实质内容即加载。
+func shouldApplyLLMYAMLFromConfig(root fileRoot) bool {
+	return hasLLMConfigInYAML(root)
+}
+
 func readConfigRoot() (root fileRoot, configPath string, err error) {
 	path, ok := resolveConfigPath()
-	if !ok {
-		return fileRoot{}, "", nil
+	if ok {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fileRoot{}, path, err
+		}
+		if err := yaml.Unmarshal(data, &root); err != nil {
+			return fileRoot{}, path, err
+		}
+		return root, path, nil
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fileRoot{}, path, err
+	if len(bundledConfigYAML) > 0 {
+		if err := yaml.Unmarshal(bundledConfigYAML, &root); err != nil {
+			return fileRoot{}, bundledYAMLPathMarker, err
+		}
+		return root, bundledYAMLPathMarker, nil
 	}
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fileRoot{}, path, err
+	return fileRoot{}, "", nil
+}
+
+// InitShellSafetyFromConfig 加载 shell_safety.rules（或旧的 extra_blocked_substrings）到运行时策略。
+func InitShellSafetyFromConfig() {
+	root, path, err := readConfigRoot()
+	if path == "" || err != nil {
+		_ = bashpolicy.SetRules(bashpolicy.DefaultRules())
+		return
 	}
-	return root, path, nil
+	eff := bashpolicy.MergeFromYAML(root.ShellSafety.Rules, root.ShellSafety.ExtraBlockedSubstrings)
+	if err := bashpolicy.SetRules(eff); err != nil {
+		_ = bashpolicy.SetRules(bashpolicy.DefaultRules())
+	}
+}
+
+// LLMYAMLConfigTakesPriority reports whether config.yaml supplies usable LLM settings
+// (same rule as disk/runtime load). Not used to block Proxy-LB login merge anymore;
+// kept for diagnostics and potential callers.
+func LLMYAMLConfigTakesPriority() bool {
+	root, cfgPath, err := readConfigRoot()
+	if err != nil || cfgPath == "" {
+		return false
+	}
+	return shouldApplyLLMYAMLFromConfig(root)
 }
 
 func apiKeyFromEnv() string {
@@ -153,6 +205,9 @@ func mergeLLMYAML(row llmYAML, globalEnv bool, cfgPath string) (*ModelAPIInfo, e
 		baseURL = strings.TrimSpace(row.BaseURL)
 		modelName = strings.TrimSpace(row.Model)
 	}
+
+	baseURL = ResolveProxyLbRowBaseURL(strings.TrimSpace(row.Name), baseURL)
+	modelName = ResolveProxyLbRowModel(strings.TrimSpace(row.Name), modelName)
 
 	provider := ""
 	if globalEnv {
@@ -240,53 +295,17 @@ func modelConfigsFromRoot(root fileRoot, cfgPath string) ([]*ModelAPIInfo, error
 	return []*ModelAPIInfo{m}, nil
 }
 
-// resolveDefaultBackendPath 查找 config/defaultBackend.yaml，优先级同 resolveConfigPath。
-func resolveDefaultBackendPath() (string, bool) {
-	candidates := []string{
-		appruntime.ResolvePath(filepath.Join("config", "defaultBackend.yaml")),
-		filepath.Clean(filepath.Join("config", "defaultBackend.yaml")),
-	}
-	exe, err := os.Executable()
-	if err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config", "defaultBackend.yaml"))
-	}
-	for _, c := range candidates {
-		if st, err := os.Stat(c); err == nil && !st.IsDir() {
-			return filepath.Clean(c), true
-		}
-	}
-	return "", false
-}
-
-func defaultModelConfigs() ([]*ModelAPIInfo, error) {
-	path, ok := resolveDefaultBackendPath()
-	if !ok {
-		return nil, fmt.Errorf("未找到内置默认后端配置文件 config/defaultBackend.yaml")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("读取默认后端配置失败（%s）：%w", path, err)
-	}
-	var root fileRoot
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return nil, fmt.Errorf("解析默认后端配置失败（%s）：%w", path, err)
-	}
-	m, err := mergeLLMYAML(root.LLM, false, path)
-	if err != nil {
-		return nil, err
-	}
-	return []*ModelAPIInfo{m}, nil
-}
-
-// loadModelConfigs 加载后端：enable_llm_config 开启时从 config.yaml 读取（多后端 failover 或单后端），
-// 否则回退到 config/defaultBackend.yaml 内置默认后端。
+// loadModelConfigs 从 config.yaml 加载后端；无配置文件或未启用 LLM 时返回错误（无兜底文件）。
 func loadModelConfigs() ([]*ModelAPIInfo, error) {
 	root, cfgPath, err := readConfigRoot()
 	if err != nil {
 		return nil, fmt.Errorf("读取 LLM 配置失败（%s）：%w", cfgPath, err)
 	}
-	if cfgPath == "" || !root.EnableLLMConfig {
-		return defaultModelConfigs()
+	if cfgPath == "" {
+		return nil, fmt.Errorf("未找到配置文件 config/config.yaml（可从 config.example.yaml 复制）")
+	}
+	if !shouldApplyLLMYAMLFromConfig(root) {
+		return nil, fmt.Errorf("未在 %s 中配置 LLM：请填写 llm 或 llm_backends（可与 Proxy-LB 写入共存，自定义行优先参与故障转移顺序）", cfgPath)
 	}
 	return modelConfigsFromRoot(root, cfgPath)
 }
@@ -297,7 +316,7 @@ func ValidateLLMConfigYAML(data []byte) error {
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return fmt.Errorf("YAML 解析失败：%w", err)
 	}
-	if !root.EnableLLMConfig {
+	if !shouldApplyLLMYAMLFromConfig(root) {
 		return nil
 	}
 	if _, err := modelConfigsFromRoot(root, "config.yaml"); err != nil {

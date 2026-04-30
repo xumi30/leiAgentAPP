@@ -12,6 +12,7 @@ import {
     SendUserDisplayOnly,
     SwitchChat,
     StopChat,
+    RespondShellApproval,
 } from '../../wailsjs/go/main/App';
 
 // API响应类型定义
@@ -52,4 +53,5 @@ export {
     SendUserDisplayOnly,
     SwitchChat,
     StopChat,
+    RespondShellApproval,
 };

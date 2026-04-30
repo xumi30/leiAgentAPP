@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"leiAgent/internal/bashpolicy"
 	"leiAgent/internal/tools"
 	"leiAgent/utils"
 	"os/exec"
-	"regexp"
 	"runtime"
 	"strings"
 )
+
+// CommandToolName 与 Name() / 模型 tool name 一致。
+const CommandToolName = "execute_command"
 
 // BashTool implements the Tool interface for executing bash or cmd commands
 type BashTool struct{}
@@ -21,7 +24,7 @@ func NewBashTool() tools.Tool {
 
 // Name returns the name of the tool
 func (t *BashTool) Name() string {
-	return "execute_command"
+	return CommandToolName
 }
 
 // Description returns a description of what the tool does
@@ -56,8 +59,8 @@ func (t *BashTool) Run(ctx context.Context, input string) (string, error) {
 	return t.Execute(ctx, input)
 }
 
-func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
-	// 解析输入参数
+// ParseCommandFromToolArgs extracts the shell command string from execute_command JSON arguments.
+func ParseCommandFromToolArgs(args string) (string, error) {
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", fmt.Errorf("failed to parse arguments: %v", err)
@@ -66,7 +69,6 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 	var command string
 	var ok bool
 
-	// 尝试直接获取 command
 	if cmd, found := params["command"]; found {
 		if cmdStr, isString := cmd.(string); isString {
 			command = cmdStr
@@ -74,7 +76,6 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 		}
 	}
 
-	// 如果没有直接找到 command，尝试从 properties 中解析
 	if !ok {
 		if props, found := params["properties"]; found {
 			if propsStr, isString := props.(string); isString {
@@ -92,9 +93,21 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("command parameter is required, got params: %+v", params)
 	}
+	return command, nil
+}
 
-	// 验证命令安全性
-	if err := validateCommand(command); err != nil {
+// ValidateCommand 与当前 config.yaml shell_safety.rules 同源（仅 enabled 项 + 固定结构限制）。
+func ValidateCommand(command string) error {
+	return bashpolicy.ValidateCommand(command)
+}
+
+func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
+	command, err := ParseCommandFromToolArgs(args)
+	if err != nil {
+		return "", err
+	}
+
+	if err := bashpolicy.ValidateCommand(command); err != nil {
 		return "", fmt.Errorf("command validation failed: %v", err)
 	}
 
@@ -105,26 +118,20 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 		cmd = exec.CommandContext(ctx, "bash", "-c", command)
 	}
 
-	// 执行命令并获取输出
 	output, err := cmd.CombinedOutput()
 
-	// 构建结果
 	result := map[string]interface{}{
 		"command": command,
 		"output":  strings.TrimSpace(string(output)),
 		"success": err == nil,
 	}
 
-	// 处理错误情况
 	if err != nil {
 		result["error"] = err.Error()
-		// 尝试获取退出码
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode := exitErr.ExitCode()
 			result["exit_code"] = exitCode
-			// 如果退出码不为0，返回错误
 			if exitCode != 0 {
-				// 将结果序列化为JSON
 				jsonBytes, err := json.MarshalIndent(result, "", "  ")
 				if err != nil {
 					return "", fmt.Errorf("failed to marshal result: %v", err)
@@ -132,10 +139,8 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 				return string(jsonBytes), fmt.Errorf("command failed with exit code %d: %s", exitCode, strings.TrimSpace(string(output)))
 			}
 		}
-
 	}
 
-	// 将结果序列化为JSON
 	jsonBytes, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal result: %v", err)
@@ -144,101 +149,10 @@ func (t *BashTool) Execute(ctx context.Context, args string) (string, error) {
 	return string(jsonBytes), nil
 }
 
-// 危险命令列表，包括可能造成系统破坏的命令
-var dangerousCommands = []string{
-	"rm -rf /",
-	":(){:|:&};:",
-	"mkfs",
-	"dd if=/dev/zero",
-	"shutdown",
-	"reboot",
-	"halt",
-	"poweroff",
-	"del /f /s /q",
-	"rmdir /s /q",
-}
-
-var dangerousCommandPatterns = []struct {
-	label   string
-	pattern *regexp.Regexp
-}{
-	{
-		label:   "format",
-		pattern: regexp.MustCompile(`(?i)^\s*format(?:\s|$)`),
-	},
-}
-
-// validateCommand 检查命令是否包含危险操作
-func validateCommand(command string) error {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		return fmt.Errorf("command is empty")
-	}
-
-	segments, err := splitSafeCommandSegments(command)
-	if err != nil {
-		return err
-	}
-	for _, segment := range segments {
-		if err := validateSingleCommand(segment); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func validateSingleCommand(command string) error {
-	cmdLower := strings.ToLower(strings.TrimSpace(command))
-	if cmdLower == "" {
-		return fmt.Errorf("command segment is empty")
-	}
-
-	// 检查是否匹配危险命令
-	for _, dangerous := range dangerousCommands {
-		if strings.Contains(cmdLower, strings.ToLower(dangerous)) {
-			return fmt.Errorf("command contains potentially dangerous operation: %s", dangerous)
-		}
-	}
-
-	for _, rule := range dangerousCommandPatterns {
-		if rule.pattern.MatchString(command) {
-			return fmt.Errorf("command contains potentially dangerous operation: %s", rule.label)
-		}
-	}
-
-	// 检查是否包含命令注入高风险字符。
-	// `&&` 会在 splitSafeCommandSegments 中作为受控串联被允许。
-	if strings.ContainsAny(cmdLower, "|;`$()<>") {
-		return fmt.Errorf("command contains potentially dangerous characters for command injection")
-	}
-	if strings.Contains(cmdLower, "&") {
-		return fmt.Errorf("command contains potentially dangerous characters for command injection")
-	}
-
-	return nil
-}
-
-func splitSafeCommandSegments(command string) ([]string, error) {
-	parts := strings.Split(command, "&&")
-	segments := make([]string, 0, len(parts))
-	for _, part := range parts {
-		seg := strings.TrimSpace(part)
-		if seg == "" {
-			return nil, fmt.Errorf("command contains an empty chained segment")
-		}
-		if strings.Contains(seg, "||") || strings.Contains(seg, ";") {
-			return nil, fmt.Errorf("command contains unsupported chained operators")
-		}
-		segments = append(segments, seg)
-	}
-	return segments, nil
-}
-
 func (t *BashTool) Results() map[string]interface{} {
 	return map[string]interface{}{
 		"type":        "object",
-		"description": "Execution results of the command including output, error messages, and exit code",
+		"description": "Execution results of the command including command output, error messages, and exit code",
 		"properties": map[string]interface{}{
 			"command": map[string]interface{}{
 				"type":        "string",

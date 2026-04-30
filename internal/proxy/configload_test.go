@@ -78,7 +78,7 @@ func TestModelConfigsFromRootRequiresEnabledBackend(t *testing.T) {
 	}
 }
 
-func TestValidateLLMConfigYAMLSkipsWhenFeatureDisabled(t *testing.T) {
+func TestValidateLLMConfigYAMLSkipsWhenNoLLMBlock(t *testing.T) {
 	data := []byte(`
 mcp_servers:
   - label: "demo"

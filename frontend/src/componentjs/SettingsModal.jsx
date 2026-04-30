@@ -1,21 +1,55 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AssessShellCommandRisk,
+  ClearProxyLbAuth,
   DeleteOpenClawSkill,
   GetLLMConfigFormState,
   GetMCPConfigFormState,
   GetMCPHubPluginDetail,
   GetMCPHubStatus,
   GetOpenClawSkillState,
+  GetShellSafetyFormState,
   InstallOpenClawSkill,
   InstallOpenClawSkillDeps,
   PrepareMCPHubDeployment,
   RegisterMCPHub,
   SaveLLMConfigForm,
   SaveMCPConfigForm,
+  SaveShellSafetyForm,
   SearchMCPHub,
   ValidateMCPConfigRow,
 } from '../../wailsjs/go/main/App';
+import ProxyLbAuthModal, { hasProxyLbSessionFromBackends } from './ProxyLbAuthModal.jsx';
 import '../componentcss/SettingsModal.css';
+
+function shellSeverityLevel(s) {
+  const x = String(s ?? '').trim().toLowerCase();
+  if (x === 'high' || x === '高' || x === 'h') return 'high';
+  if (x === 'low' || x === '低' || x === 'l') return 'low';
+  if (x === 'pending' || x === '待定' || x === 'tbd') return 'pending';
+  return 'medium';
+}
+
+function shellSeverityHintLabel(s) {
+  const x = String(s ?? '').trim().toLowerCase();
+  if (x === 'high' || x === '高' || x === 'h') return '高';
+  if (x === 'low' || x === '低' || x === 'l') return '低';
+  if (x === 'pending' || x === '待定' || x === 'tbd') return '待定';
+  return '中';
+}
+
+/** LLM 表中由 Proxy-LB 登录写入的内置行：仅展示、不可编辑 */
+function isProxyLbDisplayRow(row) {
+  return String(row?.name ?? '').trim().toLowerCase() === 'proxy-lb';
+}
+
+/** 登录后 API Key 列展示占位符，不露出真实 token */
+const PROXY_LB_APIKEY_DISPLAY = 'proxylb';
+
+function proxyLbApiKeyFieldValue(row, locked) {
+  if (!locked) return String(row.apiKey ?? '');
+  return String(row.apiKey ?? '').trim() ? PROXY_LB_APIKEY_DISPLAY : '';
+}
 
 const FALLBACK_HUB_CATEGORIES = [
   'business',
@@ -259,7 +293,6 @@ function hubRatingText(item) {
 
 export default function SettingsModal({ open, onClose, onSaved }) {
   const [activeTab, setActiveTab] = useState('mcp');
-  const [llmConfigEnabled, setLlmConfigEnabled] = useState(false);
   const [backends, setBackends] = useState(() => []);
   const [mcpServers, setMcpServers] = useState(() => []);
   const [mcpStatuses, setMcpStatuses] = useState(() => []);
@@ -269,6 +302,18 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const [usingExample, setUsingExample] = useState(false);
   const [loadErr, setLoadErr] = useState('');
   const [saveErr, setSaveErr] = useState('');
+  const [shellRules, setShellRules] = useState(() => []);
+  const [shellPath, setShellPath] = useState('');
+  const [shellLoadErr, setShellLoadErr] = useState('');
+  const [shellReady, setShellReady] = useState(false);
+  const [shellRiskBusyIndex, setShellRiskBusyIndex] = useState(null);
+  const [shellAiNotice, setShellAiNotice] = useState('');
+  const [shellRiskModalOpen, setShellRiskModalOpen] = useState(false);
+  const [shellRiskModalData, setShellRiskModalData] = useState({
+    comment: '',
+    riskLevel: '',
+    error: '',
+  });
   const [saving, setSaving] = useState(false);
   const [hubStatus, setHubStatus] = useState(() => emptyHubStatus());
   const [hubRegisterName, setHubRegisterName] = useState('leiagentapp');
@@ -293,15 +338,20 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const [skillNotice, setSkillNotice] = useState('');
   const [skillErr, setSkillErr] = useState('');
   const [skillBusyPath, setSkillBusyPath] = useState('');
+  const [proxyLbModalOpen, setProxyLbModalOpen] = useState(false);
+  const [proxyLbAuthFailed, setProxyLbAuthFailed] = useState(false);
+  const [proxyLbLogoutConfirmOpen, setProxyLbLogoutConfirmOpen] = useState(false);
+  const [proxyLbLogoutBusy, setProxyLbLogoutBusy] = useState(false);
 
   const lastValidatedRef = useRef([]);
+  const shellLastRowRef = useRef(null);
+  const shellScrollAfterAppendRef = useRef(false);
 
   const loadLLMOnly = useCallback(async () => {
     setLoadErr('');
     try {
       const llmState = await GetLLMConfigFormState();
       const llmList = Array.isArray(llmState.backends) ? llmState.backends : [];
-      setLlmConfigEnabled(!!llmState.configEnabled);
       setBackends(llmList.length > 0 ? llmList.map(mapBackendRow) : []);
       setSavePath(llmState.path ?? '');
       setUsingExample(!!llmState.usingExample);
@@ -309,6 +359,35 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       setLoadErr(String(e?.message || e));
     }
   }, []);
+
+  const proxyLbHasSession = useMemo(() => hasProxyLbSessionFromBackends(backends), [backends]);
+
+  useEffect(() => {
+    if (proxyLbHasSession) setProxyLbAuthFailed(false);
+  }, [proxyLbHasSession]);
+
+  const handleProxyLbButtonClick = useCallback(() => {
+    if (proxyLbHasSession) {
+      setProxyLbLogoutConfirmOpen(true);
+      return;
+    }
+    setProxyLbAuthFailed(false);
+    setProxyLbModalOpen(true);
+  }, [proxyLbHasSession]);
+
+  const handleProxyLbLogoutConfirm = useCallback(async () => {
+    setProxyLbLogoutBusy(true);
+    try {
+      await ClearProxyLbAuth();
+      setProxyLbLogoutConfirmOpen(false);
+      await loadLLMOnly();
+      onSaved?.();
+    } catch (e) {
+      console.error('ClearProxyLbAuth:', e);
+    } finally {
+      setProxyLbLogoutBusy(false);
+    }
+  }, [loadLLMOnly, onSaved]);
 
   const loadNonLLM = useCallback(async () => {
     try {
@@ -366,11 +445,6 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   }, [open, loadLLMOnly, loadNonLLM]);
 
   useEffect(() => {
-    if (llmConfigEnabled || activeTab !== 'llm') return;
-    setActiveTab('mcp');
-  }, [activeTab, llmConfigEnabled]);
-
-  useEffect(() => {
     if (open) return;
     setHubQuery('');
     setHubCategory('');
@@ -386,7 +460,107 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     setSkillNotice('');
     setSkillErr('');
     setSkillBusyPath('');
+    setShellRules([]);
+    setShellPath('');
+    setShellLoadErr('');
+    setShellReady(false);
+    setShellAiNotice('');
+    setShellRiskBusyIndex(null);
+    setShellRiskModalOpen(false);
+    setShellRiskModalData({ comment: '', riskLevel: '', error: '' });
   }, [open]);
+
+  const assessShellRiskForRow = useCallback(
+    async (index) => {
+      const cmd = String(shellRules[index]?.command ?? '').trim();
+      if (!cmd) {
+        setShellAiNotice('请先填写命令后再请求 AI 评估。');
+        return;
+      }
+      setShellRiskBusyIndex(index);
+      setShellAiNotice('');
+      try {
+        const r = await AssessShellCommandRisk(cmd);
+        const ok = Boolean(r?.ok ?? r?.OK);
+        if (!ok) {
+          const errMsg = String(
+            r?.message ??
+              r?.Message ??
+              '大模型当前不可用，无法自动评估危险度，请自行判定。',
+          );
+          setShellRiskModalData({ comment: '', riskLevel: '', error: errMsg });
+          setShellRiskModalOpen(true);
+          return;
+        }
+        const rawRisk = String(
+          r?.risklevel ?? r?.riskLevel ?? r?.severity ?? r?.Severity ?? 'medium',
+        ).toLowerCase();
+        const sev = rawRisk === 'high' || rawRisk === 'medium' || rawRisk === 'low' ? rawRisk : 'medium';
+        const comment = String(r?.comment ?? r?.Comment ?? '').trim();
+        setShellRules((p) =>
+          p.map((x, j) =>
+            j === index
+              ? {
+                  ...x,
+                  severity: sev,
+                  ...(comment ? { description: comment } : {}),
+                }
+              : x,
+          ),
+        );
+        setShellAiNotice('');
+        setShellRiskModalData({ comment, riskLevel: sev, error: '' });
+        setShellRiskModalOpen(true);
+      } catch (e) {
+        const m = String(e?.message ?? e ?? '').trim();
+        const errMsg = m ? `评估失败（${m}），请自行判定危险度。` : '大模型当前不可用，无法自动评估危险度，请自行判定。';
+        setShellRiskModalData({ comment: '', riskLevel: '', error: errMsg });
+        setShellRiskModalOpen(true);
+      } finally {
+        setShellRiskBusyIndex(null);
+      }
+    },
+    [shellRules],
+  );
+
+  const handleAddShellRow = useCallback(() => {
+    if (!shellReady || shellLoadErr) return;
+    shellScrollAfterAppendRef.current = true;
+    setShellRules((prev) => [
+      ...prev,
+      { command: '', description: '', severity: 'pending', enabled: true, matchKind: 'substring' },
+    ]);
+  }, [shellLoadErr, shellReady]);
+
+  useEffect(() => {
+    if (!shellScrollAfterAppendRef.current) return;
+    shellScrollAfterAppendRef.current = false;
+    requestAnimationFrame(() => {
+      shellLastRowRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth', inline: 'nearest' });
+    });
+  }, [shellRules]);
+
+  useEffect(() => {
+    if (!open || activeTab !== 'shell') return undefined;
+    let cancelled = false;
+    setShellLoadErr('');
+    setShellReady(false);
+    setShellAiNotice('');
+    void (async () => {
+      try {
+        const st = await GetShellSafetyFormState();
+        if (cancelled) return;
+        setShellPath(String(st?.path || ''));
+        setShellRules(Array.isArray(st?.rules) ? st.rules : []);
+        setShellReady(true);
+      } catch (e) {
+        if (!cancelled) setShellLoadErr(String(e?.message || e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeTab]);
 
   const refreshSkills = useCallback(async () => {
     const nextSkillState = await GetOpenClawSkillState();
@@ -460,6 +634,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
 
   const updateBackend = (index, field, value) => {
     setBackends((prev) => {
+      if (isProxyLbDisplayRow(prev[index])) return prev;
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
       return next;
@@ -471,7 +646,10 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   };
 
   const removeBackendRow = (index) => {
-    setBackends((prev) => prev.filter((_, i) => i !== index));
+    setBackends((prev) => {
+      if (isProxyLbDisplayRow(prev[index])) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const updateMcpServer = (index, field, value) => {
@@ -642,6 +820,14 @@ export default function SettingsModal({ open, onClose, onSaved }) {
       if (activeTab === 'mcp') {
         const validatedRows = await validateAllMcpServers();
         await SaveMCPConfigForm(validatedRows);
+      } else if (activeTab === 'shell') {
+        await SaveShellSafetyForm(shellRules.map((r) => ({
+          command: String(r?.command ?? ''),
+          description: String(r?.description ?? ''),
+          severity: String(r?.severity ?? '').trim().toLowerCase() || 'medium',
+          enabled: Boolean(r?.enabled),
+          matchKind: String(r?.matchKind ?? r?.match_kind ?? 'substring').toLowerCase() === 'regex' ? 'regex' : 'substring',
+        })));
       } else {
         await SaveLLMConfigForm({}, backends);
       }
@@ -798,51 +984,136 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const hubDeploymentOptions = Array.isArray(hubSelectedDetail?.deploymentOptions) ? hubSelectedDetail.deploymentOptions : [];
   const availableHubCategories = hubCategories.length > 0 ? hubCategories : FALLBACK_HUB_CATEGORIES;
 
-  const colInputs = (row, index) => (
+  const colInputs = (row, index, lbVariant) => {
+    const locked = isProxyLbDisplayRow(row);
+    const ti = locked ? -1 : 0;
+    const cell = (child) =>
+      locked ? (
+        <div className={`settings-table__proxy-lb-cell settings-table__proxy-lb-cell--${lbVariant}`}>{child}</div>
+      ) : (
+        child
+      );
+    return (
     <>
       <td className="settings-table__cell-check">
-        <input
-          type="checkbox"
-          className="settings-table__check"
-          checked={row.enabled}
-          onChange={(e) => updateBackend(index, 'enabled', e.target.checked)}
-          title="启用后参与故障转移"
-          aria-label="启用此后端"
-        />
+        {cell(
+          <input
+            type="checkbox"
+            className="settings-table__check"
+            checked={row.enabled}
+            onChange={(e) => updateBackend(index, 'enabled', e.target.checked)}
+            disabled={locked}
+            tabIndex={ti}
+            title={locked ? 'Proxy-LB 行为登录会话管理' : '启用后参与故障转移'}
+            aria-label="启用此后端"
+          />,
+        )}
       </td>
       <td>
-        <input className="settings-table__input" value={row.name} onChange={(e) => updateBackend(index, 'name', e.target.value)} placeholder="标识" spellCheck={false} autoComplete="off" />
+        {cell(
+          <input
+            className="settings-table__input"
+            value={row.name}
+            onChange={(e) => updateBackend(index, 'name', e.target.value)}
+            readOnly={locked}
+            tabIndex={ti}
+            placeholder="标识"
+            spellCheck={false}
+            autoComplete="off"
+          />,
+        )}
       </td>
       <td>
-        <input className="settings-table__input" type="password" value={row.apiKey} onChange={(e) => updateBackend(index, 'apiKey', e.target.value)} placeholder="api_key" spellCheck={false} autoComplete="off" />
+        {cell(
+          <input
+            className="settings-table__input"
+            type={locked && String(row.apiKey ?? '').trim() ? 'text' : 'password'}
+            value={proxyLbApiKeyFieldValue(row, locked)}
+            onChange={(e) => updateBackend(index, 'apiKey', e.target.value)}
+            readOnly={locked}
+            tabIndex={ti}
+            placeholder="api_key"
+            spellCheck={false}
+            autoComplete="off"
+          />,
+        )}
       </td>
       <td>
-        <input className="settings-table__input" value={row.baseUrl} onChange={(e) => updateBackend(index, 'baseUrl', e.target.value)} placeholder="base_url" spellCheck={false} autoComplete="off" />
+        {cell(
+          <input
+            className="settings-table__input"
+            value={row.baseUrl}
+            onChange={(e) => updateBackend(index, 'baseUrl', e.target.value)}
+            readOnly={locked}
+            tabIndex={ti}
+            placeholder="base_url"
+            spellCheck={false}
+            autoComplete="off"
+          />,
+        )}
       </td>
       <td>
-        <input className="settings-table__input" value={row.model} onChange={(e) => updateBackend(index, 'model', e.target.value)} placeholder="model" spellCheck={false} autoComplete="off" />
+        {cell(
+          <input
+            className="settings-table__input"
+            value={row.model}
+            onChange={(e) => updateBackend(index, 'model', e.target.value)}
+            readOnly={locked}
+            tabIndex={ti}
+            placeholder="model"
+            spellCheck={false}
+            autoComplete="off"
+          />,
+        )}
       </td>
       <td>
-        <input className="settings-table__input" value={row.provider} onChange={(e) => updateBackend(index, 'provider', e.target.value)} placeholder="留空 / gemini" spellCheck={false} autoComplete="off" />
+        {cell(
+          <input
+            className="settings-table__input"
+            value={row.provider}
+            onChange={(e) => updateBackend(index, 'provider', e.target.value)}
+            readOnly={locked}
+            tabIndex={ti}
+            placeholder="留空 / gemini"
+            spellCheck={false}
+            autoComplete="off"
+          />,
+        )}
       </td>
       <td>
-        <input className="settings-table__input" value={row.streamMode} onChange={(e) => updateBackend(index, 'streamMode', e.target.value)} placeholder="nonstream | stream | both" spellCheck={false} autoComplete="off" />
+        {cell(
+          <input
+            className="settings-table__input"
+            value={row.streamMode}
+            onChange={(e) => updateBackend(index, 'streamMode', e.target.value)}
+            readOnly={locked}
+            tabIndex={ti}
+            placeholder="nonstream | stream | both"
+            spellCheck={false}
+            autoComplete="off"
+          />,
+        )}
       </td>
       <td>
-        <input
-          className="settings-table__input settings-table__input--num"
-          type="number"
-          min={0}
-          value={row.maxOutputTokens || ''}
-          onChange={(e) => {
-            const v = e.target.value;
-            updateBackend(index, 'maxOutputTokens', v === '' ? 0 : parseInt(v, 10) || 0);
-          }}
-          placeholder="0=默认"
-        />
+        {cell(
+          <input
+            className="settings-table__input settings-table__input--num"
+            type="number"
+            min={0}
+            readOnly={locked}
+            tabIndex={ti}
+            value={row.maxOutputTokens || ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              updateBackend(index, 'maxOutputTokens', v === '' ? 0 : parseInt(v, 10) || 0);
+            }}
+            placeholder="0=默认"
+          />,
+        )}
       </td>
     </>
-  );
+    );
+  };
 
   return (
     <div className="settings-overlay" role="presentation" onMouseDown={onClose}>
@@ -853,11 +1124,10 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         </div>
 
         <div className="settings-tabs" role="tablist" aria-label="设置分组">
-          {llmConfigEnabled ? (
-            <button type="button" className={`settings-tabs__btn ${activeTab === 'llm' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('llm')}>LLM</button>
-          ) : null}
+          <button type="button" className={`settings-tabs__btn ${activeTab === 'llm' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('llm')}>LLM</button>
           <button type="button" className={`settings-tabs__btn ${activeTab === 'mcp' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('mcp')}>MCP</button>
           <button type="button" className={`settings-tabs__btn ${activeTab === 'skills' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('skills')}>Skills</button>
+          <button type="button" className={`settings-tabs__btn ${activeTab === 'shell' ? 'settings-tabs__btn--active' : ''}`} onClick={() => setActiveTab('shell')}>终端与安全</button>
         </div>
 
         <p className="settings-sheet__path">
@@ -880,14 +1150,22 @@ export default function SettingsModal({ open, onClose, onSaved }) {
               <code className="settings-sheet__path-value">{skillState.skillsRoot}</code>
             </>
           ) : null}
+          {activeTab === 'shell' ? (
+            <>
+              <span className="settings-sheet__path-label">配置</span>
+              <code className="settings-sheet__path-value">{String(shellPath || savePath || '未解析到路径')}</code>
+            </>
+          ) : null}
         </p>
 
         <p className="settings-sheet__note">
           {activeTab === 'skills'
             ? '支持粘贴 ClawHub 安装命令，安装后 leiAgent 会扫描 ./skills 并将已支持的 skill 映射为本地工具。当前竖切片支持 baidu-search。'
+            : activeTab === 'shell'
+              ? '终端黑名单表；点「保存」写入 config.yaml。（管道/重定向等结构限制仍为程序内置。）'
             : activeTab === 'mcp'
             ? 'MCP 页支持从 LobeHub MCP Hub 搜索并安装配置，也保留手动 JSON 导入与表单编辑。安装后可直接点击服务进入详情页进行测试、修改和删除。'
-            : '按顺序故障转移；仅勾选启用的行会参与。每行须填写 base_url、model。某行未填 API Key 时，若文件中 llm.api_key 已填写会回退使用该 Key，否则用环境变量。'}
+            : '按顺序故障转移；可将自填 API 排在 proxy-lb 行之前以优先使用。仅勾选启用的行会参与。'}
         </p>
 
         {loadErr ? <div className="settings-sheet__error">{loadErr}</div> : null}
@@ -921,14 +1199,42 @@ export default function SettingsModal({ open, onClose, onSaved }) {
                   {backends.length === 0 ? (
                     <tr><td colSpan={9} className="settings-table__empty">暂无行，点击「添加一行」配置多后端。</td></tr>
                   ) : (
-                    backends.map((row, i) => (
-                      <tr key={i}>
-                        {colInputs(row, i)}
+                    backends.map((row, i) => {
+                      const locked = isProxyLbDisplayRow(row);
+                      const lbVariant = locked
+                        ? (proxyLbHasSession ? 'ok' : proxyLbAuthFailed ? 'fail' : 'idle')
+                        : null;
+                      return (
+                      <tr
+                        key={i}
+                        className={
+                          locked
+                            ? `settings-table__tr--proxy-lb-readonly settings-table__tr--proxy-lb--${lbVariant}`
+                            : undefined
+                        }
+                      >
+                        {colInputs(row, i, lbVariant)}
                         <td className="settings-table__actions">
-                          <button type="button" className="settings-table__remove" onClick={() => removeBackendRow(i)} aria-label="删除此行">删除</button>
+                          {locked ? (
+                            <div className={`settings-table__proxy-lb-cell settings-table__proxy-lb-cell--${lbVariant}`}>
+                              <button
+                                type="button"
+                                className="settings-table__remove"
+                                disabled
+                                tabIndex={-1}
+                                title="Proxy-LB 行请在 PROXYLB 中登出以清除"
+                                aria-label="此行不可删除"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          ) : (
+                            <button type="button" className="settings-table__remove" onClick={() => removeBackendRow(i)} aria-label="删除此行">删除</button>
+                          )}
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1039,6 +1345,106 @@ export default function SettingsModal({ open, onClose, onSaved }) {
                 </tbody>
               </table>
             </div>
+          </div>
+        ) : activeTab === 'shell' ? (
+          <div className="settings-sheet__scroll">
+            {shellLoadErr ? <div className="settings-sheet__error">{shellLoadErr}</div> : null}
+            {!shellLoadErr && !shellReady ? <div className="settings-table__empty">加载表格…</div> : null}
+            {!shellLoadErr && shellReady ? (
+              <div className="settings-list-block">
+                <p className="settings-sheet__hint" style={{ margin: '0 0 10px', fontSize: '12px' }}>
+                  填写命令后点此行的「AI 评估」用大模型估算危险度提示；大模型不可用时会提示自行判定。
+                </p>
+                {shellAiNotice ? <div className="settings-sheet__hint" style={{ marginBottom: 10 }}>{shellAiNotice}</div> : null}
+                <table className="settings-table settings-table--wide settings-table-shell">
+                  <thead>
+                    <tr>
+                      <th className="settings-table-shell__idx" scope="col">
+                        序号
+                      </th>
+                      <th>命令</th>
+                      <th>解释</th>
+                      <th className="settings-table-shell__narrow" title="仅提示，不可修改；新增行为「待定」，可用 AI 评估">危险度</th>
+                      <th className="settings-table-shell__narrow">开启黑名单</th>
+                      <th className="settings-table__th-actions" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shellRules.map((row, i) => {
+                      const sevLvl = shellSeverityLevel(row.severity);
+                      return (
+                      <tr key={`shell-${i}`} ref={i === shellRules.length - 1 ? shellLastRowRef : undefined}>
+                        <td className="settings-table-shell__idx-cell">{i + 1}</td>
+                        <td>
+                          <input
+                            className="settings-table__input"
+                            value={String(row.command ?? '')}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setShellRules((p) => p.map((x, j) => (j === i ? { ...x, command: v } : x)));
+                            }}
+                            spellCheck={false}
+                            placeholder={String(row.matchKind ?? '') === 'regex' ? '正则' : ''}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="settings-table__input"
+                            value={String(row.description ?? '')}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setShellRules((p) => p.map((x, j) => (j === i ? { ...x, description: v } : x)));
+                            }}
+                            spellCheck={false}
+                          />
+                        </td>
+                        <td className="settings-table-shell__hint-cell">
+                          <span
+                            className="settings-table-shell__severity-hint"
+                            title={`危险度 ${shellSeverityHintLabel(row.severity)}（信号灯：左黑右红，中为黄）`}
+                            role="group"
+                            aria-label={`危险度 ${shellSeverityHintLabel(row.severity)}`}
+                          >
+                            <span className="settings-shell-lights" aria-hidden>
+                              <span
+                                className={`settings-shell-lights__dot settings-shell-lights__dot--low${sevLvl === 'low' ? ' settings-shell-lights__dot--active' : ''}`}
+                              />
+                              <span
+                                className={`settings-shell-lights__dot settings-shell-lights__dot--medium${sevLvl === 'medium' ? ' settings-shell-lights__dot--active' : ''}`}
+                              />
+                              <span
+                                className={`settings-shell-lights__dot settings-shell-lights__dot--high${sevLvl === 'high' ? ' settings-shell-lights__dot--active' : ''}`}
+                              />
+                            </span>
+                            <span className="settings-table-shell__severity-hint-label">{shellSeverityHintLabel(row.severity)}</span>
+                          </span>
+                        </td>
+                        <td className="settings-table-shell__check-cell">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row.enabled)}
+                            onChange={(e) => setShellRules((p) => p.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))}
+                            aria-label={`第 ${i + 1} 行启用黑名单`}
+                          />
+                        </td>
+                        <td className="settings-table__actions settings-table__actions--icons">
+                          <button
+                            type="button"
+                            className="settings-btn settings-btn--secondary settings-btn--small"
+                            disabled={shellRiskBusyIndex === i}
+                            onClick={() => void assessShellRiskForRow(i)}
+                          >
+                            {shellRiskBusyIndex === i ? '评估中…' : 'AI 评估'}
+                          </button>
+                          <button type="button" className="settings-table__remove" onClick={() => setShellRules((p) => p.filter((_, j) => j !== i))}>删除</button>
+                        </td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="settings-sheet__scroll settings-sheet__scroll--mcp">
@@ -1284,10 +1690,46 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         )}
 
         <div className="settings-sheet__actions">
-          <button type="button" className="settings-btn settings-btn--secondary" onClick={onClose}>取消</button>
-          <button type="button" className="settings-btn settings-btn--primary" onClick={handleSave} disabled={saving}>
-            {saving ? '保存中…' : '保存并校验'}
-          </button>
+          <div className="settings-sheet__actions-start">
+            {activeTab === 'llm' ? (
+              <button
+                type="button"
+                className="settings-btn settings-btn--secondary settings-btn--proxy settings-btn--proxy-lb"
+                onClick={handleProxyLbButtonClick}
+                title={
+                  proxyLbHasSession
+                    ? 'Proxy-LB 已登录（token 已写入配置），点此登出'
+                    : proxyLbAuthFailed
+                      ? '上次登录/注册或验证请求失败，点此重试'
+                      : '未登录：点此登录或注册'
+                }
+              >
+                <span
+                  className={`settings-proxy-lb-dot settings-proxy-lb-dot--${
+                    proxyLbHasSession ? 'ok' : proxyLbAuthFailed ? 'fail' : 'idle'
+                  }`}
+                  aria-hidden
+                />
+                PROXYLB
+              </button>
+            ) : null}
+            {activeTab === 'shell' ? (
+              <button
+                type="button"
+                className="settings-btn settings-btn--secondary"
+                onClick={handleAddShellRow}
+                disabled={saving || !shellReady || !!shellLoadErr}
+              >
+                添加一行
+              </button>
+            ) : null}
+          </div>
+          <div className="settings-sheet__actions-end">
+            <button type="button" className="settings-btn settings-btn--secondary" onClick={onClose}>取消</button>
+            <button type="button" className="settings-btn settings-btn--primary" onClick={handleSave} disabled={saving}>
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1359,6 +1801,120 @@ export default function SettingsModal({ open, onClose, onSaved }) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {shellRiskModalOpen ? (
+        <div
+          className="auth-modal-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShellRiskModalOpen(false);
+          }}
+        >
+          <div
+            className="auth-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shell-risk-modal-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="auth-modal__head">
+              <div>
+                <p id="shell-risk-modal-title" className="auth-modal__title">
+                  {shellRiskModalData.error ? 'AI 评估' : 'AI 评估结果'}
+                </p>
+                {!shellRiskModalData.error ? (
+                  <p className="auth-modal__desc" style={{ marginTop: 6 }}>
+                    危险度（risklevel）：
+                    <strong style={{ color: '#0f172a', marginLeft: 4 }}>
+                      {shellRiskModalData.riskLevel || '—'}（{shellSeverityHintLabel(shellRiskModalData.riskLevel)}）
+                    </strong>
+                  </p>
+                ) : (
+                  <p className="auth-modal__desc" style={{ marginTop: 6, color: '#b91c1c' }}>
+                    {shellRiskModalData.error}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="auth-modal__secondary-btn auth-modal__close"
+                onClick={() => setShellRiskModalOpen(false)}
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
+            {!shellRiskModalData.error && shellRiskModalData.comment ? (
+              <p
+                style={{
+                  margin: '0 0 4px',
+                  fontSize: 14,
+                  lineHeight: 1.55,
+                  color: '#334155',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {shellRiskModalData.comment}
+              </p>
+            ) : null}
+            {!shellRiskModalData.error && !shellRiskModalData.comment ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>（模型未返回 comment）</p>
+            ) : null}
+            <div className="auth-modal__actions">
+              <button type="button" className="auth-modal__primary-btn" onClick={() => setShellRiskModalOpen(false)}>
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {proxyLbLogoutConfirmOpen ? (
+        <div
+          className="auth-modal-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (!proxyLbLogoutBusy && e.target === e.currentTarget) setProxyLbLogoutConfirmOpen(false);
+          }}
+        >
+          <div
+            className="auth-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="proxy-lb-settings-logout-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="auth-modal__head">
+              <div>
+                <p id="proxy-lb-settings-logout-title" className="auth-modal__title">登出 Proxy-LB</p>
+                <p className="auth-modal__desc">将清除本机保存的令牌。</p>
+              </div>
+              <button type="button" className="auth-modal__secondary-btn auth-modal__close" onClick={() => { if (!proxyLbLogoutBusy) setProxyLbLogoutConfirmOpen(false); }} aria-label="关闭">×</button>
+            </div>
+            <div className="auth-modal__actions">
+              <button type="button" className="auth-modal__secondary-btn" disabled={proxyLbLogoutBusy} onClick={() => setProxyLbLogoutConfirmOpen(false)}>取消</button>
+              <button type="button" className="auth-modal__primary-btn" disabled={proxyLbLogoutBusy} onClick={() => void handleProxyLbLogoutConfirm()}>
+                {proxyLbLogoutBusy ? '处理中…' : '确认登出'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {proxyLbModalOpen ? (
+        <ProxyLbAuthModal
+          open
+          onClose={() => setProxyLbModalOpen(false)}
+          hasProxySession={hasProxyLbSessionFromBackends(backends)}
+          onAuthOutcome={({ success }) => {
+            if (!success) setProxyLbAuthFailed(true);
+          }}
+          onCompleted={() => {
+            void loadLLMOnly();
+            onSaved?.();
+          }}
+        />
       ) : null}
     </div>
   );

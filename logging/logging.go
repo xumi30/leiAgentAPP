@@ -32,6 +32,8 @@ const (
 	defaultAsyncQueueSize = 2048
 	defaultFlushInterval  = 250 * time.Millisecond
 	defaultBufferSize     = 256 * 1024
+	// defaultLogRetentionDays 轮转后的归档日志保留天数，超过则从磁盘删除。
+	defaultLogRetentionDays = 15
 )
 
 // Logger 保持现有调用方式的日志封装，底层使用 zerolog + buffered async writer。
@@ -238,6 +240,9 @@ func NewLogger(name, filePath string, level LogLevel, maxSize int64) *Logger {
 	}
 
 	loggers[key] = logger
+	if logger.filePath != "" && logger.file != nil {
+		cleanupOldRotatedLogs(logger.filePath, defaultLogRetentionDays*24*time.Hour)
+	}
 	return logger
 }
 
@@ -295,6 +300,31 @@ func openLogFile(path string) (*os.File, int64, error) {
 	return file, info.Size(), nil
 }
 
+// cleanupOldRotatedLogs 删除与 logFilePath 同目录、形如 "basename.*" 的轮转归档文件中，
+// 修改时间早于 (now - retain) 的文件；不删除当前正在写入的 basename 本身。
+func cleanupOldRotatedLogs(logFilePath string, retain time.Duration) {
+	if retain <= 0 || strings.TrimSpace(logFilePath) == "" {
+		return
+	}
+	dir := filepath.Dir(logFilePath)
+	base := filepath.Base(logFilePath)
+	pattern := filepath.Join(dir, base+".*")
+	matches, err := filepath.Glob(pattern)
+	if err != nil || len(matches) == 0 {
+		return
+	}
+	cutoff := time.Now().Add(-retain)
+	for _, p := range matches {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(p)
+		}
+	}
+}
+
 // rotateFile 日志文件轮转
 func (l *Logger) rotateFile() error {
 	l.mu.Lock()
@@ -326,6 +356,7 @@ func (l *Logger) rotateFile() error {
 	l.file = file
 	l.writer = newAsyncBufferedWriter(file, size)
 	l.rebuildLoggerLocked()
+	cleanupOldRotatedLogs(l.filePath, defaultLogRetentionDays*24*time.Hour)
 	return nil
 }
 

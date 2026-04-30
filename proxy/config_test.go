@@ -49,7 +49,7 @@ func TestResolveConfigPath_EnvTakesPrecedence(t *testing.T) {
 	// Ensure env path is accepted only if it points to a file.
 	tmp := t.TempDir()
 	p := tmp + "/config.yaml"
-	if err := os.WriteFile(p, []byte("enable_llm_config: false\n"), 0o600); err != nil {
+	if err := os.WriteFile(p, []byte("# temp config\n"), 0o600); err != nil {
 		t.Fatalf("write temp config: %v", err)
 	}
 	t.Setenv("LEIAGENT_CONFIG_PATH", p)

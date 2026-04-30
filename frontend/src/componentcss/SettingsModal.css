@@ -238,6 +238,66 @@
   border-bottom: none;
 }
 
+/* LLM 表：proxy-lb 只读行 — 蒙层三色与 .settings-proxy-lb-dot--{ok|idle|fail} 一致 */
+.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--ok td {
+  background: rgba(52, 199, 89, 0.12);
+}
+
+.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--idle td {
+  background: rgba(174, 174, 178, 0.14);
+}
+
+.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--fail td {
+  background: rgba(28, 28, 30, 0.08);
+}
+
+.settings-table__proxy-lb-cell {
+  position: relative;
+  display: block;
+  min-height: 34px;
+}
+
+.settings-table__proxy-lb-cell::after {
+  content: '';
+  position: absolute;
+  inset: -3px -2px;
+  border-radius: 6px;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.settings-table__proxy-lb-cell--ok::after {
+  background: rgba(52, 199, 89, 0.2);
+}
+
+.settings-table__proxy-lb-cell--idle::after {
+  background: rgba(174, 174, 178, 0.22);
+}
+
+.settings-table__proxy-lb-cell--fail::after {
+  background: rgba(28, 28, 30, 0.18);
+}
+
+.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--ok .settings-table__input {
+  color: #1d7a3a;
+  cursor: default;
+}
+
+.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--idle .settings-table__input {
+  color: #636366;
+  cursor: default;
+}
+
+.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--fail .settings-table__input {
+  color: #3a3a3c;
+  cursor: default;
+}
+
+.settings-table tbody tr.settings-table__tr--proxy-lb-readonly .settings-table__check:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .settings-table__input {
   width: 100%;
   min-width: 0;
@@ -950,9 +1010,20 @@
 
 .settings-sheet__actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 10px;
   margin-top: 14px;
+}
+
+.settings-sheet__actions-start {
+  flex: 0 0 auto;
+}
+
+.settings-sheet__actions-end {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .settings-btn {
@@ -974,6 +1045,39 @@
   cursor: default;
 }
 
+.settings-btn--proxy {
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  padding: 9px 14px;
+}
+
+.settings-btn--proxy-lb {
+  display: inline-flex;
+  align-items: center;
+}
+
+.settings-proxy-lb-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.settings-proxy-lb-dot--ok {
+  background-color: #34c759;
+}
+
+.settings-proxy-lb-dot--idle {
+  background-color: #aeaeb2;
+}
+
+.settings-proxy-lb-dot--fail {
+  background-color: #1c1c1e;
+}
+
 .settings-btn--secondary {
   background: rgba(120, 120, 128, 0.12);
   color: #1d1d1f;
@@ -985,7 +1089,109 @@
   box-shadow: 0 4px 14px rgba(0, 122, 255, 0.35);
 }
 
-@media (max-width: 640px) {
+
+.settings-table-shell .settings-table__input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.settings-table-shell__idx,
+.settings-table-shell__idx-cell {
+  width: 52px;
+  min-width: 52px;
+  max-width: 64px;
+  text-align: center;
+  vertical-align: middle;
+  padding-left: 6px;
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;
+  color: #8e8e93;
+  font-size: 12.5px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.settings-table-shell thead .settings-table-shell__idx {
+  font-weight: 600;
+  color: #aeaeb2;
+}
+
+.settings-table-shell__narrow {
+  width: 118px;
+  white-space: nowrap;
+}
+
+.settings-table-shell__hint-cell {
+  vertical-align: middle;
+  color: #636366;
+  font-size: 13px;
+}
+
+.settings-table-shell__severity-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.settings-table-shell__severity-hint-label {
+  min-width: 2em;
+}
+
+.settings-shell-lights {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.settings-shell-lights__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  opacity: 0.22;
+  box-sizing: border-box;
+  transition: opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-shell-lights__dot--low {
+  background: linear-gradient(160deg, #3a3a3c 0%, #1c1c1e 100%);
+}
+
+.settings-shell-lights__dot--medium {
+  background: linear-gradient(160deg, #ffe082 0%, #f9a825 100%);
+}
+
+.settings-shell-lights__dot--high {
+  background: linear-gradient(160deg, #ff7961 0%, #e53935 100%);
+}
+
+.settings-shell-lights__dot--active {
+  opacity: 1;
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 0 8px rgba(0, 0, 0, 0.12);
+}
+
+.settings-shell-lights__dot--high.settings-shell-lights__dot--active {
+  box-shadow:
+    0 0 0 1px rgba(183, 28, 28, 0.35),
+    0 0 10px rgba(229, 57, 53, 0.45);
+}
+
+.settings-shell-lights__dot--medium.settings-shell-lights__dot--active {
+  box-shadow:
+    0 0 0 1px rgba(245, 127, 23, 0.35),
+    0 0 10px rgba(249, 168, 37, 0.4);
+}
+
+.settings-shell-lights__dot--low.settings-shell-lights__dot--active {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 720px) {
   .settings-import__actions {
     flex-direction: column;
   }

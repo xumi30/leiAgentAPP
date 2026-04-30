@@ -3,13 +3,16 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/proxy"
+	"leiAgent/internal/shellapproval"
 	"leiAgent/internal/tools"
+	"leiAgent/internal/tools/bashfunction"
 	"leiAgent/logging"
 	"leiAgent/utils"
 	"regexp"
@@ -299,7 +302,20 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			err error
 		)
 		if flag {
-			str, err = functl.Execute(ctx, tool.Function.Arguments)
+			if toolname == bashfunction.CommandToolName {
+				cmdLine, perr := bashfunction.ParseCommandFromToolArgs(tool.Function.Arguments)
+				if perr != nil {
+					str, err = "", perr
+				} else if verr := bashfunction.ValidateCommand(cmdLine); verr != nil {
+					str, err = "", fmt.Errorf("command validation failed: %w", verr)
+				} else if apprErr := shellapproval.WaitApprove(ctx, chatId, utils.GenerateMessageID(), cmdLine); apprErr != nil {
+					str, err = "", apprErr
+				} else {
+					str, err = functl.Execute(ctx, tool.Function.Arguments)
+				}
+			} else {
+				str, err = functl.Execute(ctx, tool.Function.Arguments)
+			}
 		} else if _, ok := mcpbridge.ResolveDynamicTool(toolname); ok {
 			str, err = mcpbridge.ExecuteDynamicTool(ctx, toolname, tool.Function.Arguments)
 		} else {
@@ -310,7 +326,14 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		}
 		elapsed := time.Since(start)
 		if err != nil {
-			outStr = fmt.Sprintf("工具%s执行失败: %v (elapsed=%s)", toolname, err, elapsed)
+			switch {
+			case errors.Is(err, shellapproval.ErrDenied):
+				outStr = fmt.Sprintf("工具%s未执行: 用户拒绝运行该 shell 命令 (elapsed=%s)", toolname, elapsed)
+			case errors.Is(err, context.Canceled):
+				outStr = fmt.Sprintf("工具%s未执行: 任务已中断 (elapsed=%s)", toolname, elapsed)
+			default:
+				outStr = fmt.Sprintf("工具%s执行失败: %v (elapsed=%s)", toolname, err, elapsed)
+			}
 			logging.Error("%s", outStr)
 			memory.AddToolMessage(chatId, tool.ID, outStr)
 			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))

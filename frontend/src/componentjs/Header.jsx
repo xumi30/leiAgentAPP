@@ -3,7 +3,7 @@ import '../componentcss/Header.css';
 
 function shortConnectionLabel(loading, status) {
   if (loading) return '检测中…';
-  if (!status) return '未知';
+  if (!status) return '未检测';
   if (status.ok) {
     if (status.phase === 'connected') return '已连接';
     return '配置正常';
@@ -25,9 +25,19 @@ export default function Header({
   thinkingDisabled,
   onThinkingDisabledChange,
 }) {
+  const neverProbed = !connectionLoading && !connectionStatus;
   const ok = !connectionLoading && connectionStatus?.ok;
   const label = shortConnectionLabel(connectionLoading, connectionStatus);
   const detail = connectionStatus?.message ?? '';
+  const badgeTitle = (() => {
+    if (connectionLoading) return label;
+    if (!connectionStatus) return '未检测 · 点击触发一次探测（以发消息时的实际结果为准）';
+    if (connectionStatus.ok && connectionStatus.phase === 'connected') {
+      const tail = '点击刷新连通性探测';
+      return detail ? `${detail} · ${tail}` : tail;
+    }
+    return detail || label;
+  })();
 
   return (
     <header className="app-header">
@@ -131,14 +141,14 @@ export default function Header({
 
         <div className="header-connection">
           <div
-            className={`status-indicator clay-card ${connectionLoading ? 'checking' : ok ? 'connected' : 'disconnected'}`}
-            title={detail || label}
+            className={`status-indicator clay-card ${connectionLoading ? 'checking' : neverProbed ? 'idle' : ok ? 'connected' : 'disconnected'}`}
+            title={badgeTitle}
             role={typeof onRefreshConnection === 'function' ? 'button' : undefined}
             tabIndex={typeof onRefreshConnection === 'function' ? 0 : undefined}
             onClick={onRefreshConnection}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRefreshConnection?.(); } }}
           >
-            <span className={`status-dot ${connectionLoading ? 'pending' : ok ? 'active' : 'error'}`} />
+            <span className={`status-dot ${connectionLoading ? 'pending' : neverProbed ? 'neutral' : ok ? 'active' : 'error'}`} />
             <span className="status-text">{label}</span>
             <span className="status-refresh-icon" aria-hidden>↻</span>
           </div>

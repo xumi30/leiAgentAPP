@@ -61,5 +61,36 @@ echo "==> stage config example"
 mkdir -p "$ROOT/build/bin/config"
 cp "$ROOT/config/config.example.yaml" "$ROOT/build/bin/config/config.example.yaml"
 
+echo "==> linux-dist (binary + freedesktop icons + user installer)"
+DIST="$ROOT/build/linux-dist"
+rm -rf "$DIST"
+mkdir -p "$DIST/bin/config" "$DIST/share/icons/hicolor/256x256/apps" "$DIST/share/icons/hicolor/48x48/apps"
+cp "$ROOT/build/bin/leiAgent" "$DIST/bin/leiAgent"
+chmod +x "$DIST/bin/leiAgent"
+cp "$ROOT/config/config.example.yaml" "$DIST/bin/config/config.example.yaml"
+ICON_SRC="$ROOT/build/appicon.png"
+if [[ -f "$ICON_SRC" ]]; then
+	cp "$ICON_SRC" "$DIST/share/icons/hicolor/256x256/apps/leiagent.png"
+	cp "$ICON_SRC" "$DIST/share/icons/hicolor/48x48/apps/leiagent.png"
+else
+	echo "WARN: $ICON_SRC 不存在，linux-dist 将无菜单图标资源（请放置应用 PNG）" >&2
+fi
+cp "$ROOT/scripts/linux-install-desktop-user.sh" "$DIST/install-desktop-user.sh"
+chmod +x "$DIST/install-desktop-user.sh"
+cat >"$DIST/README-LINUX.txt" <<'README'
+leiAgent Linux 发行目录
+======================
+
+• bin/leiAgent          主程序（在「文件管理器」里仍会显示系统默认的可执行文件图标，这是 Linux 常态。）
+• install-desktop-user.sh  一键注册到当前用户菜单并安装图标（推荐）
+
+使用步骤：
+1. 安装 GTK / WebKit2GTK（见 Wails Linux 文档）。
+2. 在本目录执行:  ./install-desktop-user.sh
+   之后从应用菜单启动「leiAgent」，将显示正确图标。
+3. 或直接运行: ./bin/leiAgent
+
+README
 echo "==> Output: $ROOT/build/bin/leiAgent"
+echo "    Linux bundle: $ROOT/build/linux-dist/  （见 README-LINUX.txt）"
 echo "    Ensure runtime deps are installed (GTK/WebKit2GTK) per Wails Linux docs."

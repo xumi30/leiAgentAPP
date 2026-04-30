@@ -221,6 +221,22 @@
     transition: var(--transition-smooth);
   }
   
+  .status-indicator.idle[role="button"] {
+    cursor: pointer;
+  }
+
+  .status-indicator.idle .status-text {
+    color: var(--light-text);
+  }
+
+  .status-dot.neutral {
+    background-color: #aeaeb2;
+  }
+
+  .status-indicator.connected[role="button"] {
+    cursor: pointer;
+  }
+
   .status-indicator.connected .status-text {
     color: #1d7a3a;
   }

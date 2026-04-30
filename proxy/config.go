@@ -11,9 +11,8 @@ import (
 )
 
 type fileRoot struct {
-	EnableLLMConfig bool      `yaml:"enable_llm_config,omitempty"`
-	LLM             llmYAML   `yaml:"llm"`
-	LLMBackends     []llmYAML `yaml:"llm_backends"`
+	LLM         llmYAML   `yaml:"llm"`
+	LLMBackends []llmYAML `yaml:"llm_backends"`
 }
 
 type llmYAML struct {
@@ -48,21 +47,6 @@ func resolveConfigPath() (string, bool) {
 		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config", "config.yaml"))
 	}
 
-	for _, c := range candidates {
-		if st, err := os.Stat(c); err == nil && !st.IsDir() {
-			return filepath.Clean(c), true
-		}
-	}
-	return "", false
-}
-
-func resolveDefaultBackendPath() (string, bool) {
-	candidates := []string{
-		filepath.Clean(filepath.Join("config", "defaultBackend.yaml")),
-	}
-	if exe, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config", "defaultBackend.yaml"))
-	}
 	for _, c := range candidates {
 		if st, err := os.Stat(c); err == nil && !st.IsDir() {
 			return filepath.Clean(c), true
@@ -129,6 +113,20 @@ func parseStreamMode(s string) (int, bool) {
 	default:
 		return StreamModeBoth, true
 	}
+}
+
+func hasLLMConfigInYAML(root fileRoot) bool {
+	if len(root.LLMBackends) > 0 {
+		return true
+	}
+	l := root.LLM
+	return strings.TrimSpace(l.APIKey) != "" ||
+		strings.TrimSpace(l.BaseURL) != "" ||
+		strings.TrimSpace(l.Model) != ""
+}
+
+func shouldApplyLLMYAMLFromConfig(root fileRoot) bool {
+	return hasLLMConfigInYAML(root)
 }
 
 func mergeLLMRow(row llmYAML, globalEnv bool) (Backend, error) {
@@ -220,50 +218,28 @@ func configFromRoot(root fileRoot) (Config, error) {
 	return Config{Backends: []Backend{b}}, nil
 }
 
-// LoadConfig loads a resolved configuration with the same precedence rules as
-// the original multi-backend logic:
-// - if config/config.yaml exists AND enable_llm_config is true, use it
-// - otherwise fall back to config/defaultBackend.yaml
+// LoadConfig loads LLM backends from config/config.yaml when that file exists
+// and shouldApplyLLMYAMLFromConfig(root) is true. There is no fallback file.
 func LoadConfig() (Config, error) {
 	cfgPath, ok := resolveConfigPath()
-	if ok {
-		data, err := os.ReadFile(cfgPath)
-		if err != nil {
-			return Config{}, fmt.Errorf("read config: %w", err)
-		}
-		var root fileRoot
-		if err := yaml.Unmarshal(data, &root); err != nil {
-			return Config{}, fmt.Errorf("parse config yaml: %w", err)
-		}
-		if root.EnableLLMConfig {
-			cfg, err := configFromRoot(root)
-			if err != nil {
-				return Config{}, err
-			}
-			cfg.SourcePath = cfgPath
-			return cfg, nil
-		}
-	}
-
-	defPath, ok := resolveDefaultBackendPath()
 	if !ok {
-		return Config{}, errors.New("default backend config not found (config/defaultBackend.yaml)")
+		return Config{}, errors.New("config not found: need config/config.yaml with LLM settings")
 	}
-	data, err := os.ReadFile(defPath)
+	data, err := os.ReadFile(cfgPath)
 	if err != nil {
-		return Config{}, fmt.Errorf("read default backend: %w", err)
+		return Config{}, fmt.Errorf("read config: %w", err)
 	}
 	var root fileRoot
 	if err := yaml.Unmarshal(data, &root); err != nil {
-		return Config{}, fmt.Errorf("parse default backend yaml: %w", err)
+		return Config{}, fmt.Errorf("parse config yaml: %w", err)
 	}
-	// default backend should not accept global env overrides by design.
-	b, err := mergeLLMRow(root.LLM, false)
+	if !shouldApplyLLMYAMLFromConfig(root) {
+		return Config{}, fmt.Errorf("no LLM block in %s: add llm or llm_backends", cfgPath)
+	}
+	cfg, err := configFromRoot(root)
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{
-		Backends:   []Backend{b},
-		SourcePath: defPath,
-	}, nil
+	cfg.SourcePath = cfgPath
+	return cfg, nil
 }

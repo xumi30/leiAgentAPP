@@ -23,7 +23,6 @@ import { EventsOff, EventsOn } from '../wailsjs/runtime/runtime';
 
 // 状态管理（待重构为stores）
 const THINKING_LS_KEY = 'leiAgent.llmThinkingDisabled';
-const CONNECTION_POLL_MS = 45000;
 
 function readThinkingDisabledFromLS() {
   const raw = localStorage.getItem(THINKING_LS_KEY);
@@ -100,20 +99,6 @@ function App() {
   // 初始化
   useEffect(() => {
     loadData();
-
-    // 连接状态轮询
-    const interval = setInterval(async () => {
-      try {
-        const newStatus = await GetLLMConnectionStatus();
-        setStatus(newStatus);
-      } catch (error) {
-        console.error('轮询连接状态失败:', error);
-      }
-    }, CONNECTION_POLL_MS);
-
-    return () => {
-      clearInterval(interval);
-    };
   }, [loadData]);
 
   // 保存禁用思考状态
