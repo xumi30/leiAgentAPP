@@ -12,9 +12,9 @@ import (
 )
 
 type fileRoot struct {
-	EnableLLMConfig bool      `yaml:"enable_llm_config,omitempty"`
-	LLM             llmYAML   `yaml:"llm"`
-	LLMBackends     []llmYAML `yaml:"llm_backends"`
+	EnableLLMConfig   bool                  `yaml:"enable_llm_config,omitempty"`
+	LLM               llmYAML               `yaml:"llm"`
+	LLMBackends       []llmYAML             `yaml:"llm_backends"`
 	MemoryCompression MemoryCompressionYAML `yaml:"memory_compression,omitempty"`
 }
 

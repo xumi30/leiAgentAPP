@@ -219,19 +219,38 @@ func (d *Dispatcher) handleMessage(ctx context.Context, msg *globalchannel.Messa
 
 	round := 0
 	for msg.IsAutoToTalk {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		if d.Stop {
 			return
 		}
 		if message != "继续对话controller" {
 			go d.processMessageWithIntent(ctx, message)
 			// 先等待一轮对话，再继续自动对话
-			time.Sleep(time.Duration(3+rand.Intn(4)) * time.Second)
+			if !sleepWithContext(ctx, time.Duration(3+rand.Intn(4))*time.Second) {
+				return
+			}
 			if d.isPlanning {
-				time.Sleep(time.Duration(15+rand.Intn(10)) * time.Second)
+				if !sleepWithContext(ctx, time.Duration(15+rand.Intn(10))*time.Second) {
+					return
+				}
 				d.isPlanning = false
 			}
-			time.Sleep(time.Duration(1+rand.Intn(4)) * time.Second)
+			if !sleepWithContext(ctx, time.Duration(1+rand.Intn(4))*time.Second) {
+				return
+			}
 
+		}
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		if d.Stop {
+			return
 		}
 		// 根据chatid获取agent列表
 		logging.Info("自动对话模式，获取对话agent列表")
@@ -244,6 +263,11 @@ func (d *Dispatcher) handleMessage(ctx context.Context, msg *globalchannel.Messa
 
 			// 随机顺序调用handleAgentChat
 			for _, agentid := range selectedAgentIDs {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
 				if d.Stop {
 					return
 				}
@@ -252,7 +276,9 @@ func (d *Dispatcher) handleMessage(ctx context.Context, msg *globalchannel.Messa
 				handleAgentChat(ctx, message, agentid)
 				logging.Info("处理agent聊天: %s", agentid)
 
-				time.Sleep(time.Duration(4+rand.Intn(3)) * time.Second)
+				if !sleepWithContext(ctx, time.Duration(4+rand.Intn(3))*time.Second) {
+					return
+				}
 
 				// 每4轮验证一次话题偏移
 				if round%4 == 0 {
@@ -260,11 +286,24 @@ func (d *Dispatcher) handleMessage(ctx context.Context, msg *globalchannel.Messa
 				}
 			}
 		}
-		time.Sleep(time.Duration(1+rand.Intn(5)) * time.Second)
+		if !sleepWithContext(ctx, time.Duration(1+rand.Intn(5))*time.Second) {
+			return
+		}
 		message = "继续对话controller"
 	}
 	d.processMessageWithIntent(ctx, message)
 
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func (d *Dispatcher) handleActionGateChat(ctx context.Context, message string) (needAction bool, handled bool, err error) {

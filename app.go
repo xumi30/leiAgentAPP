@@ -255,7 +255,8 @@ func (a *App) SendMessage(msg globalchannel.Message) {
 		a.SwitchChat(chatID)
 	}
 	if msg.NeedNewChatName {
-		a.UpdateConversationTitle(chatID, content)
+		title := proxy.GenerateConversationTitle(context.Background(), content)
+		a.UpdateConversationTitle(chatID, title)
 	}
 	// StopChat 会从 agentPool 移除 dispatcher，无 goroutine 再接收 inputChan，此处会永久阻塞；用户消息需先重新拉起 dispatcher。
 	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
@@ -803,6 +804,11 @@ func (a *App) SearchMCPHub(query, category string, page, pageSize int) (proxy.MC
 // GetMCPHubPluginDetail 获取指定 MCP Hub 条目的详情与部署方式。
 func (a *App) GetMCPHubPluginDetail(identifier string) (proxy.MCPHubPluginDetail, error) {
 	return proxy.GetMCPHubPluginDetail(identifier)
+}
+
+// PrepareMCPHubDeployment 将 Hub 部署项转换为本地 MCP 配置；源码型 MCP 会先下载、安装依赖并构建。
+func (a *App) PrepareMCPHubDeployment(detail proxy.MCPHubPluginDetail, option proxy.MCPHubDeploymentOption, existingRows []proxy.MCPConfigRow) (proxy.MCPHubInstallResult, error) {
+	return proxy.PrepareMCPHubDeployment(detail, option, existingRows)
 }
 
 // GetOpenClawSkillState 扫描当前工作区已安装的 OpenClaw/ClawHub skills。

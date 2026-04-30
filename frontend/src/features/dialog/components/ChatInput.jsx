@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import assistantAvatar from '../../../assets/images/aitx.png';
 import { INPUT_TEXTAREA_MAX_HEIGHT_PX, MENTION_DROPDOWN_MAX } from '../constants';
 import { useMention } from '../hooks/useMention';
@@ -43,6 +43,15 @@ export default function ChatInput({
   } = useMention({ candidates: mentionOptions });
 
   const knownNames = useMemo(() => new Set((mentionOptions || []).map((a) => String(a?.agent_name ?? ''))), [mentionOptions]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || String(value ?? '') !== '') return;
+    el.style.height = '';
+    el.scrollTop = 0;
+    const overlay = textareaShellRef.current?.querySelector?.('.dialog__textarea-overlay');
+    if (overlay) overlay.scrollTop = 0;
+  }, [value]);
 
   const removeMentionAt = useCallback((start, end) => {
     const s = Number(start);
@@ -253,4 +262,3 @@ export default function ChatInput({
     </div>
   );
 }
-

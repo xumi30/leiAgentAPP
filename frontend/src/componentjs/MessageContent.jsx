@@ -322,6 +322,12 @@ function splitDocMarkdownLinks(text) {
   return out.length ? out : [{ kind: 'md', text }];
 }
 
+/** @param {string} text */
+function hasDocMarkdownLinks(text) {
+  const linked = linkifyLocalDocumentPaths(text);
+  return /\[[^\]]*]\(\s*doc:[^)]+\)/i.test(linked);
+}
+
 /** @param {string} raw */
 function decodeDocLinkTarget(raw) {
   const s = String(raw || '').trim();
@@ -354,6 +360,9 @@ function DocLinkChip({ label, target }) {
 function MarkdownSlicesWithDocLinks({ text }) {
   const linked = linkifyLocalDocumentPaths(text);
   const segs = splitDocMarkdownLinks(linked);
+  if (!segs.some((seg) => seg.kind === 'doc')) {
+    return <ReactMarkdown components={mdComponents}>{linked}</ReactMarkdown>;
+  }
   return (
     <>
       {segs.map((seg, i) => {
@@ -622,11 +631,17 @@ export default function MessageContent({
                   </pre>
                 );
               }
+              const hasDocChips = hasDocMarkdownLinks(p.value);
               const md = p.value.trim() ? (
                 <MarkdownSlicesWithDocLinks text={p.value} />
               ) : null;
               return md ? (
-                <div key={`m-${idx}`} className="message-markdown message-markdown--with-doc-chips message-markdown--in-flow">
+                <div
+                  key={`m-${idx}`}
+                  className={
+                    `message-markdown${hasDocChips ? ' message-markdown--with-doc-chips' : ''} message-markdown--in-flow`
+                  }
+                >
                   {md}
                 </div>
               ) : null;

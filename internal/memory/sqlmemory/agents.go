@@ -87,18 +87,6 @@ var presetAgentSeeds = []presetAgentSeed{
 	},
 }
 
-var legacyDefaultAgentDescriptions = []string{
-	"你是一位温柔冷静的中文助理，回答要清晰、克制、可靠，优先给出可执行建议。",
-	"你是一位有创造力的灵感型助手，擅长发散想法、包装表达，并保持语言轻盈自然。",
-	"你是一位结构化很强的项目助理，善于拆解任务、整理步骤，并提醒风险和依赖。",
-	"你是一位偏产品思维的 agent，回答时关注用户目标、交互体验和落地优先级。",
-	"你是一位表达鲜明的品牌型助手，擅长写文案、定风格，并保持结果有记忆点。",
-	"你是一位理性审阅型 agent，习惯先核对事实，再指出问题、边界条件和潜在回归。",
-	"你是一位偏技术实现的工程助手，重视稳定性、可维护性和端到端闭环。",
-	"你是一位陪伴式协作 agent，语气友好耐心，善于把复杂问题讲简单并持续推进。",
-}
-
-var legacyPresetAgentIDs = []string{"小柔", "小红", "小芬", "晓明", "晓染", "晓严", "晓亮", "晓峰"}
 
 func fileToDataURI(relPath string) (string, error) {
 	fullPath := appruntime.ResolvePath(relPath)
@@ -190,32 +178,6 @@ func (m *SQLMemory) saveAgentLocked(agentID, agentName, avatarImage, description
 	return nil
 }
 
-func (m *SQLMemory) deleteLegacyDefaultAgentsLocked() error {
-	if len(legacyDefaultAgentDescriptions) == 0 {
-		return nil
-	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(legacyDefaultAgentDescriptions)), ",")
-	args := make([]interface{}, 0, len(legacyDefaultAgentDescriptions)+1)
-	args = append(args, "data:image/svg+xml%")
-	for _, desc := range legacyDefaultAgentDescriptions {
-		args = append(args, desc)
-	}
-	query := fmt.Sprintf(`DELETE FROM agents WHERE avatar_image LIKE ? AND description IN (%s)`, placeholders)
-	if _, err := m.db.Exec(query, args...); err != nil {
-		return fmt.Errorf("delete legacy default agents: %w", err)
-	}
-	if len(legacyPresetAgentIDs) > 0 {
-		idPlaceholders := strings.TrimRight(strings.Repeat("?,", len(legacyPresetAgentIDs)), ",")
-		idArgs := make([]interface{}, 0, len(legacyPresetAgentIDs))
-		for _, id := range legacyPresetAgentIDs {
-			idArgs = append(idArgs, id)
-		}
-		if _, err := m.db.Exec(fmt.Sprintf(`DELETE FROM agents WHERE agent_id IN (%s)`, idPlaceholders), idArgs...); err != nil {
-			return fmt.Errorf("delete legacy preset agents: %w", err)
-		}
-	}
-	return nil
-}
 
 func (m *SQLMemory) SaveAgent(agentID, avatarImage, description string) error {
 	return m.SaveAgentWithName(agentID, agentID, avatarImage, description)

@@ -5,6 +5,7 @@ import { MessageBubble, ChatInput } from '../../../components';
 import { ChatService } from '../../../services/chatService';
 import { AddAgentToConversation, AddConversation, GetConversationAgents, GetMessages, ListAgents, SwitchChat } from '../../../services/api';
 import { classifyUserMessage } from '../../../utils/messageClassify';
+import { GetMCPConfigFormState, GetOpenClawSkillState } from '../../../../wailsjs/go/main/App';
 import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime';
 import assistantAvatar from '../../../assets/images/aitx.png';
 import Tooltip from './tooltip/Tooltip';
@@ -94,6 +95,8 @@ const ChatDialog = () => {
   const [memoStripOpen, setMemoStripOpen] = useState(false);
   const [memoHint, setMemoHint] = useState('');
   const [memoError, setMemoError] = useState('');
+  const [mcpOptions, setMcpOptions] = useState([]);
+  const [skillOptions, setSkillOptions] = useState([]);
   const memoHintTimerRef = useRef(null);
 
   useEffect(() => {
@@ -114,6 +117,45 @@ const ChatDialog = () => {
       }))
       .filter((a) => a.agent_id && a.agent_name);
   }, [conversationAgents]);
+
+  const loadCommandOptions = useCallback(async () => {
+    try {
+      const [mcpState, skillState] = await Promise.all([
+        GetMCPConfigFormState().catch(() => null),
+        GetOpenClawSkillState().catch(() => null),
+      ]);
+
+      const servers = Array.isArray(mcpState?.servers) ? mcpState.servers : [];
+      setMcpOptions(
+        servers
+          .map((row) => ({
+            ...row,
+            label: String(row?.label ?? '').trim(),
+            cachedTools: Array.isArray(row?.cachedTools) ? row.cachedTools : [],
+          }))
+          .filter((row) => row.label),
+      );
+
+      const skills = Array.isArray(skillState?.skills) ? skillState.skills : [];
+      setSkillOptions(
+        skills
+          .map((skill) => ({
+            ...skill,
+            name: String(skill?.name ?? '').trim(),
+            description: String(skill?.description ?? skill?.statusDetail ?? '').trim(),
+          }))
+          .filter((skill) => skill.name && skill.supported !== false),
+      );
+    } catch (e) {
+      console.error('load command picker options:', e);
+      setMcpOptions([]);
+      setSkillOptions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCommandOptions();
+  }, [loadCommandOptions]);
 
 
 
@@ -590,6 +632,9 @@ const ChatDialog = () => {
             onChange={handleInputChange}
             onSend={handleSendMessage}
             mentionOptions={mentionOptions}
+            mcpOptions={mcpOptions}
+            skillOptions={skillOptions}
+            onFocus={() => void loadCommandOptions()}
             onMentionPicked={(picked) => {
               const id = getAgentID(picked);
               if (!id) return;

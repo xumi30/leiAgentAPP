@@ -1,0 +1,358 @@
+{
+  "label": "lostintangent-gistpad-mcp",
+  "ok": true,
+  "state": "ok",
+  "message": "发现 16 个工具",
+  "checked_at": "2026-04-30T10:04:05+08:00",
+  "tools": [
+    {
+      "name": "list_gist_comments",
+      "description": "List all comments on a gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "add_gist_comment",
+      "description": "Add a comment to a gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "body": {
+            "description": "The comment text",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "body"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_gist_comment",
+      "description": "Delete a comment from a gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "comment_id": {
+            "description": "The ID of the comment to delete",
+            "type": "string"
+          },
+          "gist_id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gist_id",
+          "comment_id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "edit_gist_comment",
+      "description": "Update the content of an existing gist comment",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "body": {
+            "description": "The new comment text",
+            "type": "string"
+          },
+          "comment_id": {
+            "description": "The ID of the comment to edit",
+            "type": "string"
+          },
+          "gist_id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gist_id",
+          "comment_id",
+          "body"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "update_gist_file",
+      "description": "Update the content of a file in a gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "content": {
+            "description": "The new content for the file",
+            "type": "string"
+          },
+          "filename": {
+            "description": "The name of the file to update",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "content"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "add_gist_file",
+      "description": "Add a new file to a gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "content": {
+            "description": "The content for the new file",
+            "type": "string"
+          },
+          "filename": {
+            "description": "The name of the new file",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "content"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_gist_file",
+      "description": "Delete a file from a gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "filename": {
+            "description": "The name of the file to delete",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "filename"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "rename_gist_file",
+      "description": "Rename a file in a gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          },
+          "new_filename": {
+            "description": "The new name for the file",
+            "type": "string"
+          },
+          "old_filename": {
+            "description": "The current name of the file",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "old_filename",
+          "new_filename"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "edit_gist_file",
+      "description": "Edit a file in a gist using find-and-replace. More efficient than update_gist_file for targeted changes. The old_string must uniquely identify the text to replace - if multiple matches exist, the edit will fail unless replace_all is true.",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "filename": {
+            "description": "The name of the file to edit",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          },
+          "new_string": {
+            "description": "The replacement text. Use empty string to delete. For insertions, include the original text plus new content.",
+            "type": "string"
+          },
+          "old_string": {
+            "description": "The exact text to find and replace. Must match precisely, including whitespace, indentation, and newlines. Include surrounding context to ensure uniqueness (e.g., full lines).",
+            "type": "string"
+          },
+          "replace_all": {
+            "default": false,
+            "description": "Replace all occurrences (true) or require unique match (false, default). When false, edit fails if old_string appears more than once.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "old_string",
+          "new_string"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_gists",
+      "description": "List all of your GitHub Gists (excluding daily notes, prompts, and archived gists)",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_gist",
+      "description": "Get the full contents of a GitHub Gist by ID (including file contents).",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_gist",
+      "description": "Create a new GitHub Gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "content": {
+            "description": "Contents of the new file",
+            "type": "string"
+          },
+          "description": {
+            "description": "Description of the Gist",
+            "type": "string"
+          },
+          "filename": {
+            "default": "README.md",
+            "description": "Name of the file to create. This defaults to README.md, and so only specify it if explicity requested by the user, or you need to create a non-markdown file.",
+            "type": "string"
+          },
+          "public": {
+            "default": false,
+            "description": "Whether the Gist should be public (Defaults to false)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "description",
+          "content"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_gist",
+      "description": "Delete a GitHub Gist by ID",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "update_gist_description",
+      "description": "Update a GitHub Gist's description",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "description": {
+            "description": "The new description for the Gist",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the Gist to update",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "description"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "duplicate_gist",
+      "description": "Create a copy of an existing gist",
+      "input_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "id": {
+            "description": "The ID of the gist",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "refresh_gists",
+      "description": "Refresh the server's cache of gists, to ensure it picks up any changes made by external clients.",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      }
+    }
+  ]
+}

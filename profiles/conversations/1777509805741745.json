@@ -1,7 +1,7 @@
 {
   "schema_version": "psych-profile-v2",
   "person_id": "local-user",
-  "chat_id": "",
+  "chat_id": "1777509805741745",
   "updated_at": "2026-04-30T08:51:41+08:00",
   "summary": "用户31岁，杭州产品经理，具备7年Go/云原生/K8s工程背景。近期耳鸣痊愈，精力充沛。思维呈现'工程理性+抽象建模+哲学追问'三层结构，试图统一确定性系统与存在主义焦虑。已决定从宏大Agent架构收缩至'结构化故事引擎'MVP，结合心学、尼采与魔幻现实主义进行垂直场景落地。",
   "identity": {
@@ -21,9 +21,6 @@
       "technologies": 0
     },
     "active_time_range": [
-      "11:00-14:00",
-      "06:00-09:00",
-      "07:00-10:00",
       "00:00-03:00"
     ]
   },
@@ -82,7 +79,7 @@
         "updated_at": "2026-04-25"
       },
       "need_for_structure": {
-        "score": 0.9075,
+        "score": 0.95,
         "confidence": 1,
         "evidence": [
           "经常要求结构化、系统化表达",
@@ -113,7 +110,7 @@
         "updated_at": "2026-04-25"
       },
       "openness": {
-        "score": 0.880625,
+        "score": 0.89,
         "confidence": 1,
         "evidence": [
           "持续讨论抽象主题和统一模型",
@@ -159,13 +156,13 @@
         "updated_at": "2026-04-27"
       },
       "stress_level": {
-        "score": 0.35570175438596496,
+        "score": 0.3,
         "confidence": 1,
         "evidence": [
-          "今天有点烦",
-          "有点耳鸣",
           "我耳鸣好了",
-          "我现在精力充沛"
+          "我现在精力充沛",
+          "最近很开心",
+          "独处时更放松"
         ],
         "updated_at": "2026-04-30"
       }
@@ -189,13 +186,13 @@
         "updated_at": "2026-04-25"
       },
       "meaning_seeking": {
-        "score": 0.8925000000000001,
+        "score": 0.9,
         "confidence": 1,
         "evidence": [
           "频繁讨论意义、本质、存在和系统",
           "阅读《有无之境》探讨存在与境界",
-          "频繁讨论意义、本质",
-          "要求小说结合王阳明心学与尼采权力意志"
+          "要求小说结合王阳明心学与尼采权力意志",
+          "通过构建有掌控感的东西来对抗存在主义不确定性"
         ],
         "updated_at": "2026-04-30"
       },
@@ -210,7 +207,7 @@
     },
     "behavior_style": {
       "analysis_before_action": {
-        "score": 0.8687499999999999,
+        "score": 0.88,
         "confidence": 1,
         "evidence": [
           "通常先拆框架再行动",
@@ -269,9 +266,7 @@
       "emotional_triggers": [
         "生理不适（耳鸣）",
         "生理不适（已缓解）",
-        "生理不适（耳鸣已缓解）",
         "信息过载（曾反馈'太吵了'）",
-        "信息过载",
         "被深刻洞察时的寒意与被理解感",
         "对未来方向的不确定感",
         "职业/表达的偶尔焦虑"
@@ -381,31 +376,18 @@
   ],
   "predictions": {
     "likely_next_topics": [
-      "耳鸣缓解建议",
-      "压力管理",
-      "睡眠或休息状况",
-      "产品方法论探讨",
-      "旅行经验分享",
-      "《有无之境》读书感悟",
-      "王阳明心学与个人实践",
-      "产品方法论中的哲学思考",
-      "旅行经历分享",
-      "精力充沛时的新计划",
-      "小说后续章节生成",
-      "心学与产品管理的结合探讨",
-      "墨尔本旅行细节确认",
-      "哲学概念的进一步拆解",
       "结构化故事引擎的具体Schema设计",
-      "心学与尼采在故事生成中的具体映射机制",
       "MVP版本的迭代计划与技术选型",
-      "Agent系统在创意写作中的边界探讨",
+      "心学与尼采在故事生成中的具体映射机制",
       "如何平衡工程确定性与艺术创造性",
-      "Go CLI vs HTML/JS 前端实现选择"
+      "Go CLI vs HTML/JS 前端实现选择",
+      "《有无之境》读书感悟",
+      "王阳明心学与个人实践"
     ],
     "likely_next_action": "协助用户设计'结构化故事引擎'的核心数据Schema或生成首个MVP原型代码片段",
     "signals": {
       "churn_risk": {
-        "score": 0.11625808538163002,
+        "score": 0.1,
         "confidence": 1,
         "evidence": [
           "目前仍有较强探索与追问倾向",
@@ -426,24 +408,14 @@
     }
   },
   "source_meta": {
-    "user_message_count_analyzed": 22,
-    "assistant_message_count": 75,
+    "user_message_count_analyzed": 3,
+    "assistant_message_count": 3,
     "last_message_at": "2026-04-30T00:50:49Z",
     "generated_from": "conversation_history + llm_inference + rules",
     "evidence_window": [
-      "session_frequency=sporadic",
-      "avg_message_length=4",
-      "avg_depth=1.5",
-      "avg_message_length=16",
-      "avg_depth=2.0",
-      "avg_message_length=38",
       "session_frequency=weekly",
-      "avg_message_length=37",
-      "session_frequency=frequent",
-      "avg_message_length=12",
-      "avg_depth=7.4",
-      "avg_message_length=2061",
-      "avg_message_length=981"
+      "avg_message_length=981",
+      "avg_depth=2.0"
     ]
   }
 }

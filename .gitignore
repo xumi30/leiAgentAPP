@@ -27,6 +27,7 @@ data/*.db-shm
 data/*.db-wal
 data/doc_library.json
 data/memo.md
+data/mcp_servers
 
 # macOS
 .DS_Store

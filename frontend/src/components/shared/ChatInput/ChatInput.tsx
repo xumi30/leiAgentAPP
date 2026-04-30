@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import assistantAvatar from '../../../assets/images/aitx.png';
 
 export interface MentionOption {
@@ -75,6 +75,15 @@ export default function ChatInput(props: ChatInputProps) {
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const mentionAtRef = useRef<{ start: number; end: number }>({ start: -1, end: -1 });
   const [mentionAnchor, setMentionAnchor] = useState({ left: 10, top: 0 });
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || String(value ?? '') !== '') return;
+    el.style.height = '';
+    el.scrollTop = 0;
+    const overlay = shellRef.current?.querySelector?.('.dialog__textarea-overlay') as HTMLDivElement | null;
+    if (overlay) overlay.scrollTop = 0;
+  }, [value]);
 
   const mentionCandidates = useMemo(() => {
     if (!mentionOpen) return [];
@@ -340,4 +349,3 @@ export default function ChatInput(props: ChatInputProps) {
     </div>
   );
 }
-

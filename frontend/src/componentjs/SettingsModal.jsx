@@ -8,6 +8,7 @@ import {
   GetOpenClawSkillState,
   InstallOpenClawSkill,
   InstallOpenClawSkillDeps,
+  PrepareMCPHubDeployment,
   RegisterMCPHub,
   SaveLLMConfigForm,
   SaveMCPConfigForm,
@@ -739,17 +740,23 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     `${String(detailIdentifier || 'unknown')}::${String(option?.installationMethod || 'manual')}::${String(option?.connection?.type || 'unknown')}::${index}`;
 
   const installHubOption = async (option, installKey) => {
-    const nextRow = rowFromHubDeployment(hubSelectedDetail, option, mcpServers);
-    const nextIndex = mcpServers.length;
-    const nextRows = [...mcpServers, nextRow];
     setHubInstallStates((prev) => ({
       ...prev,
-      [installKey]: { state: 'installing', message: '安装中…' },
+      [installKey]: { state: 'installing', message: '下载/准备中…' },
     }));
-    setMcpServers(nextRows);
-    setMcpStatuses((prev) => [...prev, emptyMcpStatus()]);
-    lastValidatedRef.current = [...lastValidatedRef.current, ''];
     try {
+      const prepared = await PrepareMCPHubDeployment(hubSelectedDetail, option, mcpServers);
+      const nextRow = prepared?.row;
+      if (!nextRow) throw new Error('未生成 MCP 配置行');
+      const nextIndex = mcpServers.length;
+      const nextRows = [...mcpServers, nextRow];
+      setMcpServers(nextRows);
+      setMcpStatuses((prev) => [...prev, emptyMcpStatus()]);
+      lastValidatedRef.current = [...lastValidatedRef.current, ''];
+      setHubInstallStates((prev) => ({
+        ...prev,
+        [installKey]: { state: 'installing', message: prepared?.message || '校验中…' },
+      }));
       const result = await validateMcpRow(nextIndex, nextRow);
       if (result?.ok) {
         const persistedRows = [...nextRows];
@@ -775,9 +782,6 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         [installKey]: { state: 'failed', message: `失败：${String(result?.message || '重试？')}` },
       }));
     } catch (e) {
-      setMcpServers((prev) => prev.filter((_, index) => index !== nextIndex));
-      setMcpStatuses((prev) => prev.filter((_, index) => index !== nextIndex));
-      lastValidatedRef.current = lastValidatedRef.current.filter((_, index) => index !== nextIndex);
       setHubInstallStates((prev) => ({
         ...prev,
         [installKey]: { state: 'failed', message: `失败：${String(e?.message || e || '重试？')}` },
