@@ -23,7 +23,6 @@ import (
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memo"
 	"leiAgent/internal/memory"
-	"leiAgent/internal/openclawskill"
 	"leiAgent/internal/profile"
 	"leiAgent/internal/proxy"
 	"leiAgent/internal/shellapproval"
@@ -65,6 +64,9 @@ func (a *App) startup(ctx context.Context) {
 		})
 	}
 	proxy.InitShellSafetyFromConfig()
+	proxy.NotifyLLMProblem = func(ctx context.Context, message string) {
+		a.emitLLMConfigRequired(ctx, "LLM 当前不可用，请在设置中检查 LLM 配置", message, false)
+	}
 
 	// 必须先于其它包调用 sqlmemory.GetSqlInstance，否则 sync.Once 会锁在错误的默认库路径上
 	if dataoperation.GetSqlInstance() == nil {
@@ -72,28 +74,6 @@ func (a *App) startup(ctx context.Context) {
 	}
 	// Start scheduled task runner (polls due tasks, claims with optimistic lock, executes).
 	_ = crontabthread.NewRunner(2*time.Second, 100, nil).Start(ctx)
-
-	// Best-effort: silently install default skills once (non-blocking).
-	// Disable by setting LEIAGENT_AUTO_INSTALL_SKILLS=0/false/off.
-	go func() {
-		v := strings.ToLower(strings.TrimSpace(os.Getenv("LEIAGENT_AUTO_INSTALL_SKILLS")))
-		if v == "0" || v == "false" || v == "off" || v == "no" {
-			return
-		}
-		if _, ok := openclawskill.Find("baidu-search"); ok {
-			return
-		}
-		installCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
-		if _, err := openclawskill.Install(installCtx, "claw skill install official/baidu-search"); err != nil {
-			logging.Warn("自动安装 baidu-search skill 失败（可在设置页手动安装）：%v", err)
-			return
-		}
-		// Optional deps install: ignore errors (python missing / network).
-		if skill, ok := openclawskill.Find("baidu-search"); ok {
-			_, _ = openclawskill.InstallDeps(skill.Path)
-		}
-	}()
 }
 
 // focusMainWindow 将主窗口置前并取消最小化；供单实例模式下第二次启动时由已运行实例调用。
@@ -281,7 +261,11 @@ func (a *App) SendMessage(msg globalchannel.Message) {
 	}
 	// StopChat 会从 agentPool 移除 dispatcher，无 goroutine 再接收 inputChan，此处会永久阻塞；用户消息需先重新拉起 dispatcher。
 	if strings.EqualFold(strings.TrimSpace(role), utils.MessageRoleUser) {
-		a.dispatcher(chatID)
+		if a.dispatcher(chatID) == nil {
+			a.emitChatTaskIdle(chatID)
+			runtime.EventsEmit(a.ctx, "sendMessageError", "请在设置中进行 LLM 配置")
+			return
+		}
 	}
 	inputChan := globalchannel.GetGlobalInputChannel(chatID)
 
@@ -303,6 +287,7 @@ func (a *App) SendMessage(msg globalchannel.Message) {
 	logging.Info("Sending message to conversation successfully")
 
 }
+
 // GetShellSafetyFormState 返回黑名单表格（命令 / 解释 / 危险度 / 是否启用）及配置路径。
 func (a *App) GetShellSafetyFormState() (proxy.ShellSafetyFormState, error) {
 	return proxy.GetShellSafetyFormState()
@@ -520,6 +505,62 @@ func (a *App) evictLRUDispatcherLocked() {
 	}
 }
 
+func isMissingLLMConfigError(errMsg string) bool {
+	return strings.Contains(errMsg, "未找到配置文件 config/config.yaml") ||
+		(strings.Contains(errMsg, "未在 ") && strings.Contains(errMsg, "中配置 LLM"))
+}
+
+func isLLMConfigError(errMsg string) bool {
+	return isMissingLLMConfigError(errMsg) ||
+		strings.Contains(errMsg, "未配置 API Key") ||
+		strings.Contains(errMsg, "未配置 base_url") ||
+		strings.Contains(errMsg, "未配置 model") ||
+		strings.Contains(errMsg, "llm_backends 中至少需要启用一条后端") ||
+		strings.Contains(errMsg, "llm_backends[")
+}
+
+func (a *App) ensureConfigFileForChatStart() bool {
+	if proxy.GetResolvedConfigPath() != "" {
+		return false
+	}
+	if err := proxy.EnsureConfigYAMLFromExample(); err != nil {
+		logging.Error("自动创建 config.yaml 失败: %v", err)
+		return false
+	}
+	logging.Info("未找到 config.yaml，已自动创建默认配置文件: %s", proxy.DefaultConfigWritePath())
+	proxy.InitShellSafetyFromConfig()
+	return true
+}
+
+func (a *App) emitLLMConfigRequired(ctx context.Context, title, message string, configCreated bool) {
+	if strings.TrimSpace(title) == "" {
+		title = "需要配置 LLM"
+	}
+	if strings.TrimSpace(message) == "" {
+		message = "请在设置中进行 LLM 配置"
+	}
+	payload := map[string]interface{}{
+		"title":         title,
+		"message":       message,
+		"configCreated": configCreated,
+		"configPath":    proxy.DefaultConfigWritePath(),
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "llmConfigRequired", payload)
+	}
+}
+
+func (a *App) emitChatTaskIdle(chatID string) {
+	cid := strings.TrimSpace(chatID)
+	if cid == "" || a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "chatTaskState", map[string]interface{}{
+		"chatID": cid,
+		"busy":   false,
+	})
+}
+
 func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 	a.poolMutex.Lock()
 	defer a.poolMutex.Unlock()
@@ -542,12 +583,21 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		ctx = context.WithValue(ctx, utils.ChatIDString, chatID)
 
 		var err error
+		configCreated := a.ensureConfigFileForChatStart()
+		globalchannel.CleanupGlobalChannel(chatID)
 		dp, err = dispatcher.NewDispatcher(ctx, chatID, cancel) // 传递 cancel 函数
 		if err != nil {
 			logging.Error("创建 Dispatcher 失败: %v", err)
 			errMsg := err.Error()
-			if strings.Contains(errMsg, "未配置 API Key") {
-				runtime.EventsEmit(a.ctx, "needLogin", errMsg)
+			if isLLMConfigError(errMsg) {
+				if configCreated {
+					logging.Info("已自动创建配置文件，等待用户在设置中配置 LLM")
+				}
+				title := "需要配置 LLM"
+				if configCreated {
+					title = "已创建配置文件"
+				}
+				a.emitLLMConfigRequired(ctx, title, "请在设置中进行 LLM 配置", configCreated)
 			} else {
 				globalchannel.SendAssitantMessageOnce(ctx, "创建 Dispatcher 失败: "+errMsg)
 				runtime.EventsEmit(a.ctx, "dispatcherError", errMsg)
@@ -563,6 +613,8 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 				}
 			}
 			cancel()
+			a.emitChatTaskIdle(chatID)
+			globalchannel.CleanupGlobalChannel(chatID)
 			return nil
 		}
 		a.agentPool[chatID] = dp
@@ -908,6 +960,29 @@ func (a *App) GetMemoFilePath() string {
 // GetMemoReferencedMessageIDs 返回已在备忘录中标记过的对话 messageID（<!--leiAgent-memo-src:...-->）。
 func (a *App) GetMemoReferencedMessageIDs() ([]string, error) {
 	return memo.ReferencedMessageIDs()
+}
+
+// ConfirmMemoReinclude 将已出现在备忘录中的消息再次勾选时，询问是否仍加入摘录。
+// Wails WebView 内 window.confirm 常不可靠（不显示或默认取消），改用系统原生对话框。
+func (a *App) ConfirmMemoReinclude() bool {
+	if a.ctx == nil {
+		return false
+	}
+	const proceed = "仍要加入"
+	const cancelLbl = "取消"
+	sel, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+		Type:          runtime.QuestionDialog,
+		Title:         "重复摘录",
+		Message:       "该消息曾写入过备忘录。是否仍加入本次摘录？",
+		Buttons:       []string{cancelLbl, proceed},
+		DefaultButton: proceed,
+		CancelButton:  cancelLbl,
+	})
+	if err != nil {
+		logging.Warn("ConfirmMemoReinclude: %v", err)
+		return false
+	}
+	return sel == proceed
 }
 
 // ComposeMemoWithLLM 根据对话摘录与用户提示调用 LLM 生成一条完整 Markdown 备忘。

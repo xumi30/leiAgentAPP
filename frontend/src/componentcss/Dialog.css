@@ -179,6 +179,25 @@
     color: var(--apple-secondary);
 }
 
+.dialog__tab-token-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    max-width: 108px;
+    min-width: 0;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    color: var(--apple-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+
 /* 与侧栏会话行同色：小号 token 沿用同一文字色略透明 */
 .dialog__tab--convo-tint .dialog__tab-token-inline {
     color: inherit;
@@ -1100,6 +1119,11 @@
     flex-direction: column;
 }
 
+/* 用户侧 column 容器默认 stretch 会把气泡拉成全宽；头像行单独 justify-end，造成「像在左边」的视觉错位。*/
+.dialogmessage_user .dialogmessage__body {
+    align-items: flex-end;
+}
+
 /* 头像行与气泡之间收紧 */
 .dialogmessage .dialogmessage__body {
     row-gap: 2px;
@@ -1122,10 +1146,6 @@
 .dialogmessage_user.dialogmessage--memo-pick {
     /* 勾选框与用户头像同侧（右侧），与助手侧「头像旁」对称 */
     flex-direction: row-reverse;
-}
-
-.dialogmessage_user.dialogmessage--memo-pick .dialogmessage__body {
-    align-items: flex-end;
 }
 
 .dialogmessage_assistant.dialogmessage--memo-pick .dialogmessage__body {
@@ -1171,6 +1191,21 @@
 .message-timestamp {
     font-size: 12px;
     color: var(--apple-secondary);
+}
+
+.message-token-count {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.035);
+    border: 1px solid rgba(0, 0, 0, 0.045);
+    color: color-mix(in srgb, var(--apple-secondary) 72%, transparent);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
 }
 
 .messageauthor {
@@ -2363,6 +2398,8 @@
 .dialog__tab-inline {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .dialog__tab-main-title-inline {
@@ -2370,6 +2407,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dialog__tab-token-pill {
+  margin-left: 0;
 }
 
 /* execute_command 用户确认条 */

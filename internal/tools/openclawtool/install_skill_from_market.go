@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const defaultClawdRegistryBaseURL = "https://backend.clawd.org.cn/api"
+
 // InstallOpenClawSkillFromMarket searches the ClawHub registry and installs a skill into ./skills.
 // It wraps proxy.InstallOpenClawSkill so the model can do "install skill X" by query.
 type InstallOpenClawSkillFromMarket struct {
@@ -61,7 +63,7 @@ func (t *InstallOpenClawSkillFromMarket) Parameters() map[string]interface{} {
 			},
 			"registry_base_url": map[string]interface{}{
 				"type":        "string",
-				"description": "Optional ClawHub registry base URL override (defaults to env CLAWHUB_REGISTRY or https://clawhub.ai).",
+				"description": "Optional ClawHub registry base URL override (defaults to env CLAWHUB_REGISTRY or https://backend.clawd.org.cn/api).",
 			},
 		},
 	}
@@ -99,7 +101,7 @@ func (t *InstallOpenClawSkillFromMarket) Execute(ctx context.Context, args strin
 		registryBase = strings.TrimSpace(os.Getenv("CLAWHUB_REGISTRY"))
 	}
 	if registryBase == "" {
-		registryBase = "https://clawhub.ai"
+		registryBase = defaultClawdRegistryBaseURL
 	}
 
 	pickedReason := ""
@@ -204,6 +206,13 @@ type skillSearchResponse struct {
 	Results []skillSearchItem `json:"results"`
 }
 
+type clawdSkillSearchItem struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
 type skillSearchItem struct {
 	Score       float64 `json:"score"`
 	Slug        string  `json:"slug"`
@@ -217,6 +226,13 @@ func searchSkills(ctx context.Context, client *http.Client, registryBase, query 
 	if base == "" {
 		return nil, fmt.Errorf("registry_base_url 不能为空")
 	}
+	if isClawdAPIRegistry(base) {
+		return searchClawdSkills(ctx, client, base, query)
+	}
+	return searchClawHubSkills(ctx, client, base, query)
+}
+
+func searchClawHubSkills(ctx context.Context, client *http.Client, base, query string) ([]skillSearchItem, error) {
 	u, err := url.Parse(base + "/api/v1/search")
 	if err != nil {
 		return nil, err
@@ -243,6 +259,74 @@ func searchSkills(ctx context.Context, client *http.Client, registryBase, query 
 		return nil, fmt.Errorf("skill market search json parse failed: %w", err)
 	}
 	return parsed.Results, nil
+}
+
+func searchClawdSkills(ctx context.Context, client *http.Client, base, query string) ([]skillSearchItem, error) {
+	searchURL := strings.TrimRight(base, "/")
+	if !strings.HasSuffix(searchURL, "/api") {
+		searchURL += "/api"
+	}
+	u, err := url.Parse(searchURL + "/skills")
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("q", query)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("skill market search failed: http %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var parsed []clawdSkillSearchItem
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("skill market search json parse failed: %w", err)
+	}
+	items := make([]skillSearchItem, 0, len(parsed))
+	normalizedQuery := normalizeLoose(query)
+	for _, item := range parsed {
+		slug := strings.TrimSpace(item.ID)
+		if slug == "" {
+			continue
+		}
+		score := 1.0
+		if normalizedQuery != "" {
+			switch {
+			case normalizeLoose(slug) == normalizedQuery || normalizeLoose(item.Name) == normalizedQuery:
+				score = 100
+			case strings.Contains(normalizeLoose(slug), normalizedQuery):
+				score = 90
+			case strings.Contains(normalizeLoose(item.Name), normalizedQuery):
+				score = 80
+			case strings.Contains(normalizeLoose(item.Description), normalizedQuery):
+				score = 50
+			}
+		}
+		items = append(items, skillSearchItem{
+			Score:       score,
+			Slug:        slug,
+			DisplayName: item.Name,
+			Summary:     item.Description,
+		})
+	}
+	return items, nil
+}
+
+func isClawdAPIRegistry(base string) bool {
+	u, err := url.Parse(base)
+	if err != nil {
+		return strings.Contains(base, "backend.clawd.org.cn")
+	}
+	return strings.EqualFold(u.Host, "backend.clawd.org.cn") || strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/api")
 }
 
 func pickBestSkillSearchResult(items []skillSearchItem, query string, preferredSlugs []string) (skillSearchItem, string) {
@@ -296,6 +380,8 @@ func pickBestSkillSearchResult(items []skillSearchItem, query string, preferredS
 
 func asString(v interface{}) string {
 	switch x := v.(type) {
+	case nil:
+		return ""
 	case string:
 		return x
 	default:
@@ -441,4 +527,3 @@ func normalizeLoose(s string) string {
 	replacer := strings.NewReplacer(" ", "", "-", "", "_", "", ".", "", "/", "", ":", "")
 	return replacer.Replace(s)
 }
-

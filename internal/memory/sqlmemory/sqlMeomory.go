@@ -77,9 +77,12 @@ func createTables(db *sql.DB) error {
 	queries := []string{
 		conversationstable,
 		dialogtable,
+		dialogindexchatID,
+		dialogindexchatIDRole,
 		dialogindextimestamp,
 		subchattable,
 		chatIDindex,
+		subChatIDindex,
 		planstable,
 		planstepstable,
 		agentstable,
@@ -91,13 +94,9 @@ func createTables(db *sql.DB) error {
 		}
 	}
 
-	if _, err := db.Exec(`ALTER TABLE messages ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0`); err != nil {
-		errStr := strings.ToLower(err.Error())
-		if !strings.Contains(errStr, "duplicate column") {
-			return fmt.Errorf("migrate messages add total_tokens: %w", err)
-		}
+	if err := ensureMessagesSchema(db); err != nil {
+		return err
 	}
-
 	if err := ensureConversationSchema(db); err != nil {
 		return err
 	}
@@ -108,6 +107,24 @@ func createTables(db *sql.DB) error {
 		return err
 	}
 
+	return nil
+}
+
+func ensureMessagesSchema(db *sql.DB) error {
+	cols, err := listTableColumns(db, "messages")
+	if err != nil {
+		return fmt.Errorf("inspect messages schema: %w", err)
+	}
+	if !cols["agentid"] {
+		if _, err := db.Exec(`ALTER TABLE messages ADD COLUMN agentID TEXT`); err != nil {
+			return fmt.Errorf("migrate messages add agentID: %w", err)
+		}
+	}
+	if !cols["total_tokens"] {
+		if _, err := db.Exec(`ALTER TABLE messages ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("migrate messages add total_tokens: %w", err)
+		}
+	}
 	return nil
 }
 

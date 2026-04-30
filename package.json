@@ -6,7 +6,6 @@
   },
   "dependencies": {
     "chrome-devtools-mcp": "^0.21.0",
-    "playwright": "^1.59.1",
     "react-markdown": "^10.1.0"
   },
   "name": "leiagentapp",

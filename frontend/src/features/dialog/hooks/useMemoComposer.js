@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppendMemoMarkdown,
   ComposeMemoWithLLM,
+  ConfirmMemoReinclude,
   GetMemoReferencedMessageIDs,
 } from '../../../../wailsjs/go/main/App';
 import {
@@ -34,6 +35,9 @@ export function useMemoComposer(opts) {
   const { open, messages, onClose, onHint, onError } = opts || {};
 
   const [memoMarkedIds, setMemoMarkedIds] = useState(() => new Set());
+  const memoMarkedIdsRef = useRef(memoMarkedIds);
+  memoMarkedIdsRef.current = memoMarkedIds;
+
   const [memoRefIds, setMemoRefIds] = useState(() => new Set());
   const [memoCheckSaving, setMemoCheckSaving] = useState(false);
   const [memoComposeHint, setMemoComposeHint] = useState('');
@@ -69,18 +73,34 @@ export function useMemoComposer(opts) {
     setMemoPresetDraftText('');
   }, [open, refreshMemoRefIds]);
 
-  const tryToggleMemoMark = useCallback((messageID) => {
-    const id = String(messageID);
-    setMemoMarkedIds((prev) => {
-      const willSelect = !prev.has(id);
-      if (willSelect && memoRefIds.has(id)) {
-        if (!window.confirm('该消息曾写入过备忘录。是否仍加入本次摘录？')) {
-          return prev;
-        }
+  const tryToggleMemoMark = useCallback(async (messageID) => {
+    const id = String(messageID ?? '').trim();
+    if (!id) return;
+
+    const prev = memoMarkedIdsRef.current;
+    if (prev.has(id)) {
+      setMemoMarkedIds((p) => {
+        const next = new Set(p);
+        next.delete(id);
+        return next;
+      });
+      return;
+    }
+
+    if (memoRefIds.has(id)) {
+      let ok = false;
+      try {
+        ok = await ConfirmMemoReinclude();
+      } catch (e) {
+        console.error('ConfirmMemoReinclude:', e);
+        ok = false;
       }
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (!ok) return;
+    }
+
+    setMemoMarkedIds((p) => {
+      const next = new Set(p);
+      next.add(id);
       return next;
     });
   }, [memoRefIds]);

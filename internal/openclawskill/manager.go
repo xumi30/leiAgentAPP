@@ -151,6 +151,8 @@ var skillSlugPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/@-]*$`)
 var envKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var clawdInstallURLPattern = regexp.MustCompile(`backend\.clawd\.org\.cn/api/skills/([^"'\s|]+)/install\.sh`)
 
+const clawdAPIBaseURL = "https://backend.clawd.org.cn/api"
+
 type installRequest struct {
 	Slug  string
 	Force bool
@@ -349,13 +351,105 @@ func installFromClawd(ctx context.Context, req installRequest, start time.Time) 
 	} else {
 		logging.Warn("OpenClaw clawd package install failed, fallback to zip: slug=%s err=%v", slug, err)
 	}
+	if result, err := installFromClawdRegistry(ctx, req, start, target); err == nil {
+		return result, nil
+	} else {
+		logging.Warn("OpenClaw clawd registry install failed, fallback to zip: slug=%s err=%v", slug, err)
+	}
 	return installFromClawdZip(ctx, req, start, target)
+}
+
+func installFromClawdRegistry(ctx context.Context, req installRequest, start time.Time, target string) (InstallResult, error) {
+	slug := req.Slug
+	searchURL, err := url.Parse(clawdAPIBaseURL + "/skills")
+	if err != nil {
+		return InstallResult{}, err
+	}
+	q := searchURL.Query()
+	q.Set("q", skillNameFromSlug(slug))
+	searchURL.RawQuery = q.Encode()
+	command := []string{"GET", searchURL.String()}
+	result := InstallResult{
+		OK:            false,
+		Slug:          slug,
+		Command:       command,
+		WorkspaceRoot: WorkspaceRoot(),
+		SkillsRoot:    SkillsRoot(),
+		ExitCode:      -1,
+		Force:         req.Force,
+	}
+	logging.Info("OpenClaw clawd registry install: slug=%s target=%s url=%s", slug, target, searchURL.String())
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL.String(), nil)
+	if err != nil {
+		return result, err
+	}
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return result, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return result, fmt.Errorf("registry endpoint failed: HTTP %d %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var packages []clawdSkillPackage
+	if err := json.NewDecoder(resp.Body).Decode(&packages); err != nil {
+		return result, fmt.Errorf("解析 registry 响应失败：%w", err)
+	}
+	pkg, ok := pickClawdRegistryPackage(packages, slug)
+	if !ok {
+		return result, fmt.Errorf("registry 未找到 skill：%s", slug)
+	}
+	if strings.TrimSpace(pkg.ID) == "" {
+		pkg.ID = slug
+	}
+	if err := os.RemoveAll(target); err != nil {
+		return result, fmt.Errorf("清理旧 skill 目录失败：%w", err)
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		return result, fmt.Errorf("创建 skill 目录失败：%w", err)
+	}
+	if err := restoreClawdFiles(target, pkg.Files); err != nil {
+		return result, err
+	}
+	if err := writeClawdSkillMD(target, pkg); err != nil {
+		return result, err
+	}
+	result.OK = true
+	result.ExitCode = 0
+	result.DurationMillis = time.Since(start).Milliseconds()
+	result.Message = "安装完成"
+	result.Output = fmt.Sprintf("Installed %s -> %s", slug, target)
+	result.Skills = Scan()
+	logging.Info("OpenClaw clawd registry install finished: slug=%s target=%s durationMs=%d", slug, target, result.DurationMillis)
+	return result, nil
+}
+
+func pickClawdRegistryPackage(packages []clawdSkillPackage, slug string) (clawdSkillPackage, bool) {
+	slug = strings.TrimSpace(slug)
+	name := skillNameFromSlug(slug)
+	for _, pkg := range packages {
+		if strings.EqualFold(strings.TrimSpace(pkg.ID), slug) {
+			return pkg, true
+		}
+	}
+	for _, pkg := range packages {
+		if strings.EqualFold(strings.TrimSpace(pkg.Name), name) {
+			return pkg, true
+		}
+	}
+	for _, pkg := range packages {
+		if strings.EqualFold(skillNameFromSlug(pkg.ID), name) {
+			return pkg, true
+		}
+	}
+	return clawdSkillPackage{}, false
 }
 
 func installFromClawdPackage(ctx context.Context, req installRequest, start time.Time, target string) (InstallResult, error) {
 	slug := req.Slug
 	encoded := url.PathEscape(slug)
-	packageURL := fmt.Sprintf("https://backend.clawd.org.cn/api/skills/%s/package", encoded)
+	packageURL := fmt.Sprintf("%s/skills/%s/package", clawdAPIBaseURL, encoded)
 	command := []string{"GET", packageURL}
 	result := InstallResult{
 		OK:            false,
@@ -412,7 +506,7 @@ func installFromClawdPackage(ctx context.Context, req installRequest, start time
 func installFromClawdZip(ctx context.Context, req installRequest, start time.Time, target string) (InstallResult, error) {
 	slug := req.Slug
 	encoded := url.PathEscape(slug)
-	downloadURL := fmt.Sprintf("https://backend.clawd.org.cn/api/skills/%s/download", encoded)
+	downloadURL := fmt.Sprintf("%s/skills/%s/download", clawdAPIBaseURL, encoded)
 	command := []string{"GET", downloadURL}
 	result := InstallResult{
 		OK:            false,
@@ -944,12 +1038,7 @@ func parseFrontmatter(data []byte) frontmatter {
 }
 
 func isSupported(name string) bool {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "baidu-search":
-		return true
-	default:
-		return false
-	}
+	return strings.TrimSpace(name) != ""
 }
 
 func inferPythonDeps(name, dir string) []string {

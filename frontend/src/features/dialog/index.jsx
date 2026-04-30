@@ -143,6 +143,13 @@ export default function Dialog() {
     });
   }, [visibleMessages, streamPulse, chatId]);
 
+  const stopButtonEngaged =
+    stopVisible
+    || (
+      Boolean(streamPulse)
+      && String(streamPulse?.chatID ?? '') === String(chatId ?? '')
+    );
+
   const showTransientHint = useCallback((text, ms = TRANSIENT_HINT_MS) => {
     setClassifyHint(text);
     if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current);
@@ -358,10 +365,10 @@ export default function Dialog() {
             type="button"
             className="dialog__btn-stop dialog__btn-stop--visible"
             onClick={stopDialog}
-            disabled={!stopVisible}
+            disabled={!stopButtonEngaged}
           >
             <span className="dialog__btn-stop-icon" aria-hidden>⏹</span>
-            <span className="dialog__btn-stop-text">{stopVisible ? '跑马中' : '摸鱼中'}</span>
+            <span className="dialog__btn-stop-text">{stopButtonEngaged ? '跑马中' : '摸鱼中'}</span>
           </button>
 
           <ChatInput

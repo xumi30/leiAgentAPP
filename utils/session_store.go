@@ -2,7 +2,7 @@ package utils
 
 import "sync"
 
-// chatID -> sessionID (e.g. Playwright session)
+// chatID -> tool sessionID
 var chatSessionStore sync.Map
 
 func GetSessionID(chatID string) (string, bool) {
@@ -33,4 +33,3 @@ func DeleteSessionID(chatID string) {
 	}
 	chatSessionStore.Delete(chatID)
 }
-

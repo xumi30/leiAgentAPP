@@ -7,6 +7,7 @@ import (
 	"leiAgent/dataoperation"
 	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/agent"
+	"leiAgent/internal/capabilities"
 	"leiAgent/internal/globalchannel"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/memory/compressor"
@@ -64,8 +65,10 @@ func init() {
 	registerMCPFromHub := mcptool.NewRegisterMCPFromHub()
 	openClawBaiduSearch := openclawtool.NewBaiduSearchTool()
 	installOpenClawSkillFromMarket := openclawtool.NewInstallOpenClawSkillFromMarket(nil)
+	readOpenClawSkill := capabilities.NewReadSkillTool()
 
 	toolRegistry.Register(bashfunction)
+	toolRegistry.Register(readOpenClawSkill)
 	toolRegistry.Register(listMCPTools)
 	toolRegistry.Register(callMCPTool)
 	toolRegistry.Register(registerMCPFromHub)
@@ -173,7 +176,10 @@ func (d *Dispatcher) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case msg := <-globalchannel.GetGlobalInputChannel(d.ChatID):
+		case msg, ok := <-globalchannel.GetGlobalInputChannel(d.ChatID):
+			if !ok {
+				return
+			}
 			if msg == nil || msg.Content == "" {
 				continue
 			}
@@ -364,7 +370,7 @@ func shouldUseActionGate(message string) bool {
 		"搜索", "查一下", "查询", "搜一下", "百度", "google", "最新", "新闻",
 		"打开网页", "浏览器", "点击", "下载", "写入文件", "保存到", "执行命令", "运行命令", "bash",
 		"提醒", "定时", "闹钟", "计划", "规划", "分步", "多步", "帮我实现", "开发一个", "搭建",
-		"续写", "写小说", "小说", "章节", "章书", "大纲", "长文", "长篇", "创作", "故事","安装",
+		"续写", "写小说", "小说", "章节", "章书", "大纲", "长文", "长篇", "创作", "故事", "安装",
 		"continue the story", "write a novel", "chapter", "chapters", "outline", "long-form", "story",
 	}
 	for _, hint := range actionHints {
@@ -470,7 +476,7 @@ func (d *Dispatcher) handleTool(ctx context.Context, intent *Intention) {
 	message := intent.Goal
 	ctx = context.WithValue(ctx, utils.UserGoalString, message)
 	chatId := ctx.Value(utils.ChatIDString).(string)
-	memory.SetSystemPrompt(chatId, utils.SingleToolPromptTemplate)
+	memory.SetSystemPrompt(chatId, utils.SingleToolSystemPrompt())
 	logging.Info("tool对话系统提示词已加载...")
 	d.agent.BeginTask(ctx, message)
 }

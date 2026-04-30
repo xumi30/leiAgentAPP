@@ -66,7 +66,12 @@ dragon_animation.html
 manga_html.html
 
 # 本地记忆
-localmemory/    
+localmemory/
+
+# 本地配置（真实密钥只放本机，不进入 Git）
+config/config.yaml
+/config/config.yaml
+!config/config.example.yaml
 
 # 环境变量（若以后使用）
 .env
@@ -79,4 +84,3 @@ frontend/.vite/
 
 # Skills（技能目录，完全忽略）
 skills/
-

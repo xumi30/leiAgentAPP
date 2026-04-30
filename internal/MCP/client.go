@@ -246,7 +246,7 @@ func applyHeaders(req *http.Request, headers map[string]string) {
 
 func toolAllowed(allowed []string, name string) bool {
 	if len(allowed) == 0 {
-		return true
+		return false
 	}
 	for _, item := range allowed {
 		if strings.TrimSpace(item) == strings.TrimSpace(name) {

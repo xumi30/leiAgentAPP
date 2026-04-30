@@ -35,10 +35,6 @@ jobs:
       - name: Run Go tests
         run: go test ./...
 
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
       # 与 Release 的 Linux 矩阵对齐：尽早发现 WebKit2GTK / 前端 / CGO 问题（仅 Linux 原生链接）
       - name: Install Linux Wails build dependencies
         run: |
@@ -51,5 +47,5 @@ jobs:
       - name: Add Go bin to PATH
         run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Wails build (Linux smoke test)
+      - name: Wails build (generates bindings + frontend smoke test)
         run: wails build -clean -tags webkit2_41

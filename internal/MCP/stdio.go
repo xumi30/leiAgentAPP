@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"leiAgent/logging"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -30,13 +29,7 @@ func newStdioSession(ctx context.Context, cfg ServerConfig) (*stdioSession, erro
 	logging.Info("MCP stdio starting: label=%s command=%s args=%v", cfg.Label, cfg.Command, cfg.Args)
 
 	cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
-	cmd.Env = os.Environ()
-	for k, v := range cfg.Env {
-		if strings.TrimSpace(k) == "" {
-			continue
-		}
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
-	}
+	cmd.Env = envForServerConfig(cfg)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

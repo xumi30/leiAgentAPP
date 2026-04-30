@@ -4,6 +4,12 @@ import userAvatar from '../../../assets/images/ren.png';
 import assistantAvatar from '../../../assets/images/aitx.png';
 import { isAssistantToolRoutineMessage } from '../../../utils/messageClassify';
 
+function messageTokenCount(message) {
+  const raw = message?.total_tokens ?? message?.totalTokens;
+  const value = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 /**
  * MessageItem
  * - 单条消息展示（UI only）
@@ -41,6 +47,7 @@ export default function MessageItem({
 }) {
   const isUser = msg?.role === 'user';
   const mid = String(msg?.messageID ?? msg?.messageId ?? msg?.id ?? '');
+  const tokenCount = messageTokenCount(msg);
 
   const toolRoutineCompact = useMemo(() => {
     if (isUser) return false;
@@ -105,6 +112,11 @@ export default function MessageItem({
               </>
             )}
             <span className="message-timestamp">{msg?.timestamp}</span>
+            {tokenCount > 0 ? (
+              <span className="message-token-count" aria-label="此条消息 token 数">
+                {tokenCount.toLocaleString()} tokens
+              </span>
+            ) : null}
           </div>
         ) : null}
 
@@ -151,4 +163,3 @@ export default function MessageItem({
     </div>
   );
 }
-

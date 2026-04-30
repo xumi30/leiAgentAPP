@@ -1,7 +1,6 @@
 package mcpbridge
 
 import (
-	"os"
 	"sort"
 	"strings"
 )
@@ -68,10 +67,7 @@ func MissingRequiredEnvKeys(cfg ServerConfig) []string {
 
 	missing := make([]string, 0, len(required))
 	for _, key := range required {
-		if value, ok := cfg.Env[key]; ok && strings.TrimSpace(value) != "" {
-			continue
-		}
-		if value, ok := os.LookupEnv(key); ok && strings.TrimSpace(value) != "" {
+		if value, _ := resolveEnvValue(cfg, key); strings.TrimSpace(value) != "" {
 			continue
 		}
 		missing = append(missing, key)

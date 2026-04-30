@@ -255,8 +255,15 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		logging.Info("流式响应结束 finish_reason=%q（无 usage 块）正文长度=%d 字符 chatID=%s", lastFinishReason, len(result), memChatID)
 	}
 	if !scanner.Completed() && strings.TrimSpace(lastFinishReason) == "" {
-		logging.Warn("流式响应未收到 [DONE]，且未提供 finish_reason；本次输出可能为半截内容，视为异常结束并交由上层重试/兜底")
-		return nil, fmt.Errorf("流式响应异常结束：未收到 [DONE] 或 finish_reason")
+		if !hasUsableStreamPayload(result, reasoningResult, tls) {
+			logging.Warn("流式响应未收到 [DONE]，且未提供 finish_reason；本次输出没有有效正文/推理/工具调用，视为异常结束并交由上层重试/兜底")
+			return nil, fmt.Errorf("流式响应异常结束：未收到 [DONE] 或 finish_reason")
+		}
+		if !streamPayloadLooksComplete(result, reasoningResult, tls) {
+			logging.Warn("流式响应未收到 [DONE]，且未提供 finish_reason；正文/工具调用未完整收尾，疑似中途断流，交由上层重试/兜底")
+			return nil, fmt.Errorf("流式响应疑似中途截断：未收到 [DONE] 或 finish_reason，且内容未完整收尾")
+		}
+		logging.Warn("流式响应未收到 [DONE]，且未提供 finish_reason；内容看起来已完整收尾，按兼容模式视为正常 EOF，避免重复重试")
 	}
 	if lastFinishReason == "length" {
 		logging.Warn("模型因 max_tokens 上限结束（finish_reason=length），输出可能被截断；可在 config 增加 max_output_tokens 或设置环境变量 LEIAGENT_LLM_MAX_OUTPUT_TOKENS")
@@ -268,6 +275,57 @@ func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (
 		ReasoningContent: reasoningResult,
 		NeedAction:       needAction,
 	}, nil
+}
+
+func hasUsableStreamPayload(content string, reasoningContent string, tools []openaistyle.ChatCompletionToolCall) bool {
+	return strings.TrimSpace(content) != "" || strings.TrimSpace(reasoningContent) != "" || len(tools) > 0
+}
+
+func streamPayloadLooksComplete(content string, reasoningContent string, tools []openaistyle.ChatCompletionToolCall) bool {
+	if len(tools) > 0 {
+		return toolCallsLookComplete(tools)
+	}
+	text := strings.TrimSpace(content)
+	if text == "" {
+		text = strings.TrimSpace(reasoningContent)
+	}
+	if text == "" {
+		return false
+	}
+	if strings.Count(text, "```")%2 != 0 {
+		return false
+	}
+	if (strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[")) && json.Valid([]byte(text)) {
+		return true
+	}
+
+	text = strings.TrimRight(text, "\"'”’)]}）】」》")
+	if text == "" {
+		return false
+	}
+	runes := []rune(text)
+	switch runes[len(runes)-1] {
+	case '.', '!', '?', '。', '！', '？', '…':
+		return true
+	default:
+		return false
+	}
+}
+
+func toolCallsLookComplete(tools []openaistyle.ChatCompletionToolCall) bool {
+	for _, tool := range tools {
+		if tool.Function == nil {
+			return false
+		}
+		if strings.TrimSpace(tool.Function.Name) == "" {
+			return false
+		}
+		args := strings.TrimSpace(tool.Function.Arguments)
+		if args == "" || !json.Valid([]byte(args)) {
+			return false
+		}
+	}
+	return true
 }
 
 func consumeNeedActionHeader(buffer string) (parsed bool, needAction bool, rest string, flushRaw bool) {

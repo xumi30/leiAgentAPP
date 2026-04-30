@@ -140,7 +140,7 @@ export default function ProxyLbAuthModal({
         <div className="auth-modal__head">
           <div>
             <p id="proxy-lb-auth-title" className="auth-modal__title">Proxy-LB</p>
-            <p className="auth-modal__desc">雷哥搜集的免费token,很不稳定.</p><p> 很多不支持工具执行!!慎用。</p>
+            <p className="auth-modal__desc">雷哥搜集的免费token进行了负载均衡,很不稳定.</p><p className="auth-modal__desc"> 很多不支持工具执行!!慎用。最好自己配置上面的LLM</p>
           </div>
           <button type="button" className="auth-modal__secondary-btn auth-modal__close" onClick={onClose} aria-label="关闭">×</button>
         </div>

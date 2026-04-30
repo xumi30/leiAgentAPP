@@ -8,7 +8,6 @@ import (
 	"leiAgent/internal/tools"
 	"leiAgent/utils"
 	"net/http"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,10 +25,10 @@ func (t *BaiduSearchTool) Name() string {
 }
 
 func (t *BaiduSearchTool) Description() string {
-	return `Search the Chinese web through the installed OpenClaw/ClawHub baidu-search skill.
+	return `Search the Chinese web through Baidu AI Search.
 
 Use this for current Chinese-language information, documentation, news, company/product research, and topics where Baidu coverage is more relevant.
-Requires the baidu-search skill installed under ./skills and BAIDU_API_KEY configured in the app environment.`
+Requires BAIDU_API_KEY configured in the app environment.`
 }
 
 func (t *BaiduSearchTool) Parameters() map[string]interface{} {
@@ -73,52 +72,7 @@ func (t *BaiduSearchTool) Execute(ctx context.Context, args string) (string, err
 		params.Count = 50
 	}
 
-	skill, ok := openclawskill.Find("baidu-search")
-	if !ok {
-		return "", fmt.Errorf("未安装 baidu-search skill：请在设置页粘贴 `claw skill install official/baidu-search` 安装")
-	}
-	skill = openclawskill.CheckRequirements(skill)
-	if !skill.Ready {
-		return "", fmt.Errorf("baidu-search skill 尚不可用：%s", skill.StatusDetail)
-	}
-
-	// Prefer the legacy script-based skill. If the installed skill does not ship scripts/search.py
-	// (e.g. official/baidu-search), fall back to calling the Baidu API directly from Go.
-	script, err := openclawskill.BaiduSearchScriptPath()
-	if err != nil {
-		return baiduSearchDirect(params.Query, params.Count, params.Freshness)
-	}
-	python := "python3"
-	if skill.PythonDeps != nil {
-		if candidate := openclawskill.SkillPythonPath(skill.Path); candidate != "" {
-			python = candidate
-		}
-	}
-
-	payload := map[string]interface{}{
-		"query": params.Query,
-		"count": params.Count,
-	}
-	if strings.TrimSpace(params.Freshness) != "" {
-		payload["freshness"] = strings.TrimSpace(params.Freshness)
-	}
-	jsonArg, err := openclawskill.MarshalForCommand(payload)
-	if err != nil {
-		return "", err
-	}
-
-	cmd := exec.CommandContext(ctx, python, script, jsonArg)
-	cmd.Dir = skill.Path
-	cmd.Env = openclawskill.EnvForSkill(skill)
-	output, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(output))
-	if err != nil {
-		if text == "" {
-			text = err.Error()
-		}
-		return "", fmt.Errorf("baidu-search 执行失败：%s", text)
-	}
-	return normalizeOutput(text, params.Count), nil
+	return baiduSearchDirect(params.Query, params.Count, params.Freshness)
 }
 
 func baiduSearchDirect(query string, count int, freshness string) (string, error) {
@@ -216,12 +170,12 @@ func baiduSearchDirect(query string, count int, freshness string) (string, error
 func (t *BaiduSearchTool) Results() map[string]interface{} {
 	return map[string]interface{}{
 		"type":        "object",
-		"description": "Baidu AI Search result returned by the OpenClaw baidu-search skill.",
+		"description": "Baidu AI Search result.",
 	}
 }
 
 func (t *BaiduSearchTool) SimpleInfo() map[string]string {
-	return utils.SimpleInfoMap(utils.ToolTopicSearch, "通过 OpenClaw baidu-search skill 调用百度 AI 搜索。")
+	return utils.SimpleInfoMap(utils.ToolTopicSearch, "通过百度 AI 搜索 API 获取中文互联网搜索结果。")
 }
 
 func normalizeOutput(text string, count int) string {

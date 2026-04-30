@@ -292,7 +292,7 @@ function hubRatingText(item) {
 }
 
 export default function SettingsModal({ open, onClose, onSaved }) {
-  const [activeTab, setActiveTab] = useState('mcp');
+  const [activeTab, setActiveTab] = useState('llm');
   const [backends, setBackends] = useState(() => []);
   const [mcpServers, setMcpServers] = useState(() => []);
   const [mcpStatuses, setMcpStatuses] = useState(() => []);
@@ -436,6 +436,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
 
   useEffect(() => {
     if (open) {
+      setActiveTab('llm');
       void (async () => {
         await loadLLMOnly();
         // Load other panels in background so LLM renders first.

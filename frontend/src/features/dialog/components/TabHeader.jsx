@@ -52,8 +52,7 @@ export default function TabHeader({
                 <span className="dialog__tab-main-title-inline">
                   {(conversationTitle || s.title || '主对话').trim() || '主对话'}
                 </span>
-                <span className="dialog__tab-token-inline">
-                  {' / '}
+                <span className="dialog__tab-token-pill" aria-label="当前对话 token 数">
                   {Number(conversationTokenTotal || 0).toLocaleString()} tokens
                 </span>
               </span>
@@ -74,4 +73,3 @@ export default function TabHeader({
     </div>
   );
 }
-

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"leiAgent/internal/capabilities"
 	"leiAgent/internal/memory"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/proxy"
@@ -108,8 +109,11 @@ If intent = TOOL:
 - tooltopic MUST be one of [%s]
 - tool_source MUST be one of: local, mcp, mixed
 - If no topic matches cleanly, choose the closest topic instead of inventing a new one
-- Prefer mcp when MCP_LIST shows relevant capability that overlaps with local tools
-- Use local only when local tools are clearly more appropriate or no suitable MCP capability exists
+- Use greedy capability choice: explicit user mention first, otherwise local tools, then MCP, then skills
+- Choose mixed when local tools may need MCP or skill support; this is the normal default for non-trivial tool work
+- Choose local only when local tools alone are clearly enough
+- Choose mcp only when the user explicitly asks for MCP or MCP_LIST is the only relevant capability
+- SKILL_LIST means installed instruction bundles; they are used by reading SKILL.md on demand, not by installing anything at startup
 
 ---
 
@@ -196,6 +200,7 @@ type IntentInput struct {
 	CurrentState   IntentCurrentState     `json:"current_state,omitempty"`
 	Tools          interface{}            `json:"TOOL_LIST"`
 	MCPs           interface{}            `json:"MCP_LIST"`
+	Skills         interface{}            `json:"SKILL_LIST"`
 }
 
 func ConfirmIntention(ctx context.Context, message string, currentState *Intention) (*Intention, error) {
@@ -206,6 +211,7 @@ func ConfirmIntention(ctx context.Context, message string, currentState *Intenti
 		RecentContext:  buildIntentRecentContext(ctx, message),
 		Tools:          json.RawMessage(js),
 		MCPs:           json.RawMessage(getMCPSimpleInfo()),
+		Skills:         capabilities.SkillSimpleInfos(),
 	}
 	if currentState != nil {
 		intentInput.CurrentState = IntentCurrentState{
@@ -219,7 +225,7 @@ func ConfirmIntention(ctx context.Context, message string, currentState *Intenti
 		logging.Error("序列化规划输入失败: %v", err)
 	}
 
-	message = `这是意图识别输入。current_message 是当前用户输入，recent_context 是最近几条真实对话上下文，current_state 是当前会话已知状态，TOOL_LIST 是本地工具概览，MCP_LIST 是已连接 MCP 能力概览。请基于这些信息判断用户请求意图:` + string(intentJSON)
+	message = `这是意图识别输入。current_message 是当前用户输入，recent_context 是最近几条真实对话上下文，current_state 是当前会话已知状态，TOOL_LIST 是本地工具概览，MCP_LIST 是已连接 MCP 能力概览，SKILL_LIST 是已安装 skill 概览。请基于这些信息判断用户请求意图:` + string(intentJSON)
 
 	chatIDVal := ctx.Value(utils.ChatIDString)
 	chatIDStr, ok := chatIDVal.(string)
@@ -460,6 +466,6 @@ func normalizeToolSource(s string) string {
 	case utils.ToolSourceMixed:
 		return utils.ToolSourceMixed
 	default:
-		return utils.ToolSourceLocal
+		return utils.ToolSourceMixed
 	}
 }

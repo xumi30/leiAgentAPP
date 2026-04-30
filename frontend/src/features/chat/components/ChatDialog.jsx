@@ -6,7 +6,7 @@ import { ChatService } from '../../../services/chatService';
 import { AddAgentToConversation, AddConversation, GetConversationAgents, GetMessages, ListAgents, SwitchChat } from '../../../services/api';
 import { classifyUserMessage } from '../../../utils/messageClassify';
 import { GetMCPConfigFormState, GetOpenClawSkillState, RespondShellApproval } from '../../../../wailsjs/go/main/App';
-import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime';
+import { EventsOn } from '../../../../wailsjs/runtime/runtime';
 import assistantAvatar from '../../../assets/images/aitx.png';
 import Tooltip from './tooltip/Tooltip';
 import MemoStrip from '../../dialog/components/MemoStrip';
@@ -49,6 +49,12 @@ const normalizeMessage = (raw) => {
 
 // 提取 Agent ID 的辅助函数
 const getAgentID = (agent) => String(agent?.agentID ?? agent?.agent_id ?? '').trim();
+
+const messageTokenCount = (message) => {
+  const raw = message?.total_tokens ?? message?.totalTokens;
+  const value = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
 
 const ChatDialog = () => {
   // 状态管理
@@ -326,15 +332,21 @@ const ChatDialog = () => {
       });
     };
 
-    EventsOn('dialogAppend', onAppend);
-    EventsOn('dialogStreamEnd', onStreamEnd);
-    EventsOn('chatTaskState', onTaskState);
-    EventsOn('GetMessagesByMessageID', onGetMessagesByMessageID);
+    const offAppend = EventsOn('dialogAppend', onAppend);
+    const offStreamEnd = EventsOn('dialogStreamEnd', onStreamEnd);
+    const offTaskState = EventsOn('chatTaskState', onTaskState);
+    const offGetMessagesByMessageID = EventsOn('GetMessagesByMessageID', onGetMessagesByMessageID);
+    const offSendMessageError = EventsOn('sendMessageError', stopStreaming);
+    const offDispatcherError = EventsOn('dispatcherError', stopStreaming);
+    const offLLMConfigRequired = EventsOn('llmConfigRequired', stopStreaming);
     return () => {
-      EventsOff('dialogAppend');
-      EventsOff('dialogStreamEnd');
-      EventsOff('chatTaskState');
-      EventsOff('GetMessagesByMessageID');
+      offAppend();
+      offStreamEnd();
+      offTaskState();
+      offGetMessagesByMessageID();
+      offSendMessageError();
+      offDispatcherError();
+      offLLMConfigRequired();
     };
   }, [chatId, setMessages, startStreaming, stopStreaming]);
 
@@ -346,9 +358,9 @@ const ChatDialog = () => {
       if (!cid || !reqId) return;
       setShellApproval({ chatID: cid, requestId: reqId, command: cmd });
     };
-    EventsOn('shellApprovalRequest', onShellApprovalRequest);
+    const offShellApprovalRequest = EventsOn('shellApprovalRequest', onShellApprovalRequest);
     return () => {
-      EventsOff('shellApprovalRequest');
+      offShellApprovalRequest();
     };
   }, []);
 
@@ -356,6 +368,15 @@ const ChatDialog = () => {
     shellApproval &&
     String(shellApproval.chatID ?? '').trim() !== '' &&
     String(shellApproval.chatID ?? '').trim() === String(chatId ?? '').trim();
+
+  /** 与 MessageBubble 的 isStreaming 一致：有 append 数据流时也应显示「跑马中」并可停止 */
+  const streamFlowingThisChat = useMemo(
+    () =>
+      Boolean(streamPulse)
+      && String(streamPulse?.chatID ?? '') === String(chatId ?? ''),
+    [streamPulse, chatId],
+  );
+  const stopButtonEngaged = stopVisible || streamFlowingThisChat;
 
   const resolveShellApproval = useCallback(async (approve) => {
     if (!shellApproval?.requestId) return;
@@ -381,6 +402,13 @@ const ChatDialog = () => {
       return hasText || streamingHere;
     });
   }, [currentMessages, streamPulse, chatId]);
+
+  const conversationTokenTotal = useMemo(() => {
+    return (Array.isArray(currentMessages) ? currentMessages : []).reduce(
+      (sum, message) => sum + messageTokenCount(message),
+      0,
+    );
+  }, [currentMessages]);
 
   const memoComposer = useMemoComposer({
     open: memoStripOpen,
@@ -573,6 +601,7 @@ const ChatDialog = () => {
     } catch (e) {
       console.error('停止聊天失败:', e);
     }
+    setStreamPulse(null);
     stopStreaming();
   };
 
@@ -590,6 +619,9 @@ const ChatDialog = () => {
             <span className="dialog__tab-inline" dir="auto">
               <span className="dialog__tab-main-title-inline">
                 {(conversationTitle || '主对话').trim() || '主对话'}
+              </span>
+              <span className="dialog__tab-token-pill" aria-label="当前对话 token 数">
+                {conversationTokenTotal.toLocaleString()} tokens
               </span>
             </span>
           </button>
@@ -682,10 +714,13 @@ const ChatDialog = () => {
               isStreaming={
                 Boolean(streamPulse)
                 && String(streamPulse?.chatID ?? '') === String(chatId ?? '')
-                && String(streamPulse?.messageID ?? '') === String(message?.messageID ?? '')
+                && String(streamPulse?.messageID ?? '')
+                  === String(message?.messageID ?? message?.messageId ?? message?.id ?? '')
               }
               memoStripOpen={memoStripOpen}
-              memoChecked={memoComposer.memoMarkedIds?.has?.(String(message?.messageID ?? ''))}
+              memoChecked={memoComposer.memoMarkedIds?.has?.(
+                String(message?.messageID ?? message?.messageId ?? message?.id ?? '').trim(),
+              )}
               onToggleMemo={memoComposer.tryToggleMemoMark}
             />
           ))}
@@ -700,10 +735,10 @@ const ChatDialog = () => {
             type="button"
             className="dialog__btn-stop dialog__btn-stop--visible"
             onClick={handleStopGenerating}
-            disabled={!stopVisible}
+            disabled={!stopButtonEngaged}
           >
             <span className="dialog__btn-stop-icon" aria-hidden>⏹</span>
-            <span className="dialog__btn-stop-text">{stopVisible ? '跑马中' : '摸鱼中'}</span>
+            <span className="dialog__btn-stop-text">{stopButtonEngaged ? '跑马中' : '摸鱼中'}</span>
           </button>
 
           <ChatInput

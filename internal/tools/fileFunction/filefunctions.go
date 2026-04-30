@@ -69,9 +69,12 @@ func (t *FileWriteTool) Description() string {
 	
 	Args:
 	{
-	  "path": "file path",
+	"path": "file path",
 	  "content": "structured markdown content"
 	}
+
+	Security boundary:
+	- The target path must stay inside the app workspace directory.
 	`
 }
 
@@ -82,7 +85,7 @@ func (t *FileWriteTool) Parameters() map[string]interface{} {
 		"properties": map[string]interface{}{
 			"path": map[string]interface{}{
 				"type":        "string",
-				"description": "The path to the file. Can be an absolute path (e.g., 'C:\\temp\\file.txt' on Windows or '/tmp/file.txt' on Unix) or a relative path (e.g., './data/file.txt'). Relative paths are resolved from the current working directory.",
+				"description": "The target file path inside the workspace. Relative paths are resolved under workspace/. Absolute paths must also point inside workspace/.",
 			},
 			"content": map[string]interface{}{
 				"type":        "string",
@@ -159,14 +162,13 @@ func (t *FileWriteTool) Execute(ctx context.Context, args string) (string, error
 		path = strings.ReplaceAll(path, "\\", "/")
 	}
 
-	// Check if the path is absolute or relative
-	if !filepath.IsAbs(path) {
-		// If it's a relative path, resolve it against the current working directory
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return "failed to resolve absolute path", fmt.Errorf("failed to resolve absolute path: %v", err)
-		}
-		path = absPath
+	root, err := doclib.LibraryRootAbs()
+	if err != nil {
+		return "failed to resolve workspace root", fmt.Errorf("failed to resolve workspace root: %v", err)
+	}
+	path, err = resolveFileWriteWorkspacePath(root, path)
+	if err != nil {
+		return "path must stay inside workspace", err
 	}
 
 	// Ensure the directory exists
@@ -192,6 +194,21 @@ func (t *FileWriteTool) Execute(ctx context.Context, args string) (string, error
 		"path":    path,
 	}, "", "  ")
 	return string(out), nil
+}
+
+func resolveFileWriteWorkspacePath(root, raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("path parameter is required")
+	}
+	if filepath.IsAbs(raw) {
+		abs := filepath.Clean(raw)
+		if !doclib.IsPathUnderLibrary(abs) {
+			return "", fmt.Errorf("path must stay inside workspace: %s", raw)
+		}
+		return abs, nil
+	}
+	return doclib.SafeLibraryAbs(root, raw)
 }
 
 func (t *FileWriteTool) Results() map[string]interface{} {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	mcpbridge "leiAgent/internal/MCP"
+	"leiAgent/internal/capabilities"
 	"leiAgent/internal/memory"
 	gemini "leiAgent/internal/provider/Gemin"
 	"leiAgent/internal/provider/openaistyle"
@@ -41,6 +42,7 @@ type Proxy struct {
 var (
 	defaultHTTPClient     *http.Client
 	defaultHTTPClientOnce sync.Once
+	NotifyLLMProblem      func(ctx context.Context, message string)
 )
 
 func sharedHTTPClient() *http.Client {
@@ -153,9 +155,17 @@ func (p *Proxy) communicateWithChatMessages(ctx context.Context, chatMessages []
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("全部 LLM 后端均失败（共 %d 条）: %w", len(p.backends), lastErr)
+		err := fmt.Errorf("全部 LLM 后端均失败（共 %d 条）: %w", len(p.backends), lastErr)
+		if NotifyLLMProblem != nil {
+			NotifyLLMProblem(ctx, err.Error())
+		}
+		return nil, err
 	}
-	return nil, fmt.Errorf("全部 LLM 后端均失败（共 %d 条）", len(p.backends))
+	err := fmt.Errorf("全部 LLM 后端均失败（共 %d 条）", len(p.backends))
+	if NotifyLLMProblem != nil {
+		NotifyLLMProblem(ctx, err.Error())
+	}
+	return nil, err
 }
 
 func (p *Proxy) doRequest(requestinfo *http.Request, info *ModelAPIInfo) (*http.Response, error) {
@@ -254,6 +264,13 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		toolChoice = &openaistyle.ToolChoice{Type: openaistyle.ToolChoiceAuto}
 		topic, ok := ctx.Value(utils.ToolTopicToLoad).(string)
 		source, _ := ctx.Value(utils.ToolSourceToLoad).(string)
+		source = capabilities.DefaultToolSource(source)
+		if prompt := capabilities.BuildSystemPrompt(topic, source); strings.TrimSpace(prompt) != "" {
+			chatMessages = append([]openaistyle.ChatMessage{{
+				Role:    openaistyle.RoleSystem,
+				Content: prompt,
+			}}, chatMessages...)
+		}
 		if ok && topic != "" {
 			logging.Info("正在加载工具话题 %v, source=%s", topic, source)
 		}
@@ -261,11 +278,11 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		switch strings.TrimSpace(source) {
 		case utils.ToolSourceMCP:
 			logging.Info("正在加载 MCP 工具")
-			tls = mcpbridge.BuildDynamicToolsByTopic(topic)
+			tls = capabilities.BuildMCPToolsByTopic(topic)
 		case utils.ToolSourceMixed:
 			logging.Info("正在加载混合工具")
 			tls = append(tls, toolRegister.ConvertToolsByTopic(topic)...)
-			tls = append(tls, mcpbridge.BuildDynamicToolsByTopic(topic)...)
+			tls = append(tls, capabilities.BuildMCPToolsByTopic(topic)...)
 		case utils.ToolSourceLocal:
 			logging.Info("正在加载本地工具")
 			if ok {
@@ -285,6 +302,7 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		if !ok {
 			tls = toolRegister.ConvertTools()
 		}
+		tls = capabilities.AppendUnique(tls, capabilities.SupportTools()...)
 		for _, t := range tls {
 			logging.Info("加载完成的工具 %v", t.Function.Name)
 		}

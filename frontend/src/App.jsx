@@ -17,7 +17,7 @@ import {
   GetLLMConnectionStatus,
   SetLLMThinkingDisabled,
 } from '../wailsjs/go/main/App';
-import { EventsOff, EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn } from '../wailsjs/runtime/runtime';
 
 const THINKING_LS_KEY = 'leiAgent.llmThinkingDisabled';
 
@@ -40,7 +40,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [localMemoryOpen, setLocalMemoryOpen] = useState(false);
   const [userProfileOpen, setUserProfileOpen] = useState(false);
-  const [needLoginOpen, setNeedLoginOpen] = useState(false);
+  const [llmConfigPrompt, setLlmConfigPrompt] = useState(null);
   const [activeChatId, setActiveChatId] = useState('');
   const [activeChatTitle, setActiveChatTitle] = useState('');
   /** 助手流式输出进行中（按 chatID），用于侧栏列表显示加载态 */
@@ -147,11 +147,11 @@ function App() {
         return next;
       });
     };
-    EventsOn('dialogAppend', onAppend);
-    EventsOn('dialogStreamEnd', onStreamEnd);
+    const offAppend = EventsOn('dialogAppend', onAppend);
+    const offStreamEnd = EventsOn('dialogStreamEnd', onStreamEnd);
     return () => {
-      EventsOff('dialogAppend');
-      EventsOff('dialogStreamEnd');
+      offAppend();
+      offStreamEnd();
     };
   }, []);
 
@@ -165,9 +165,24 @@ function App() {
   }, [refreshMemoDates]);
 
   useEffect(() => {
-    const onNeedLogin = () => { setNeedLoginOpen(true); };
-    EventsOn('needLogin', onNeedLogin);
-    return () => { EventsOff('needLogin'); };
+    const openPrompt = (payload) => {
+      const detail = payload && typeof payload === 'object' ? payload : {};
+      const fallback = typeof payload === 'string' ? payload : '';
+      setLlmConfigPrompt({
+        title: String(detail.title ?? '需要可用的 LLM'),
+        message: String(detail.message ?? fallback ?? '请在设置中进行 LLM 配置'),
+        configCreated: Boolean(detail.configCreated),
+        configPath: String(detail.configPath ?? ''),
+      });
+    };
+    const onNeedLogin = (payload) => openPrompt(payload);
+    const onLLMConfigRequired = (payload) => openPrompt(payload);
+    const offNeedLogin = EventsOn('needLogin', onNeedLogin);
+    const offLLMConfigRequired = EventsOn('llmConfigRequired', onLLMConfigRequired);
+    return () => {
+      offNeedLogin();
+      offLLMConfigRequired();
+    };
   }, []);
 
   useEffect(() => {
@@ -263,26 +278,32 @@ function App() {
       />
       <LocalMemoryModal open={localMemoryOpen} chatId={activeChatId} onClose={() => setLocalMemoryOpen(false)} />
       <UserProfileModal open={userProfileOpen} chatId={activeChatId} onClose={() => setUserProfileOpen(false)} />
-      {needLoginOpen ? (
+      {llmConfigPrompt ? (
         <div
           className="auth-modal-overlay"
           role="presentation"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setNeedLoginOpen(false); }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setLlmConfigPrompt(null); }}
         >
           <div className="auth-modal" role="dialog" aria-modal="true">
             <div className="auth-modal__head">
               <div>
-                <p className="auth-modal__title">需要可用的 LLM</p>
-                <p className="auth-modal__desc">请在设置 → LLM 中填写 API 或使用 PROXYLB 登录；顶栏指示灯仅用于可选的连通性检测。</p>
+                <p className="auth-modal__title">{llmConfigPrompt.title}</p>
+                <p className="auth-modal__desc">
+                  {llmConfigPrompt.configCreated ? '已自动创建配置文件。' : ''}
+                  {llmConfigPrompt.message || '请在设置中进行 LLM 配置'}
+                </p>
+                {llmConfigPrompt.configPath ? (
+                  <p className="auth-modal__desc auth-modal__desc--path">{llmConfigPrompt.configPath}</p>
+                ) : null}
               </div>
             </div>
             <div className="auth-modal__actions">
-              <button type="button" className="auth-modal__secondary-btn" onClick={() => setNeedLoginOpen(false)}>取消</button>
+              <button type="button" className="auth-modal__secondary-btn" onClick={() => setLlmConfigPrompt(null)}>取消</button>
               <button
                 type="button"
                 className="auth-modal__primary-btn"
                 onClick={() => {
-                  setNeedLoginOpen(false);
+                  setLlmConfigPrompt(null);
                   setSettingsOpen(true);
                 }}
               >

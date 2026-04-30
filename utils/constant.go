@@ -1,6 +1,9 @@
 package utils
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 const (
 	VersionString = "0.0.1"
@@ -116,7 +119,7 @@ After this single header line:
 Never mention, explain, discuss or reference this header rule and decision logic in your reply.
 Never add any words before the header line.`
 
-	SingleToolPromptTemplate = `
+	SingleToolPrompt = `
 You are a tool-calling AI agent.
 
 When a tool is needed, you MUST use the OpenAI compatible Function Calling interface.
@@ -139,6 +142,18 @@ MUST not describe a tool call in plain text, JSON, or markdown.
 - Do NOT call list_links, list_inputs, or observe after the results page is already open unless the user explicitly asks you to inspect or analyze the page.
 `
 )
+
+// SingleToolSystemPrompt builds the tool-mode system prompt with a fresh server clock.
+// Do not cache this at package init: wrong date math breaks create_scheduled_task (run_at must be strictly after "now").
+// Note: Go time layouts use the reference date 2006-01-02; "2006-01-01" formats incorrectly (duplicate month tokens).
+func SingleToolSystemPrompt() string {
+	return fmt.Sprintf(`%s
+
+# Server time (authoritative for scheduling)
+Current time (RFC3339): %s
+For create_scheduled_task with schedule_type once: run_at must be RFC3339 and strictly AFTER this timestamp. Prefer a safety margin (e.g. ≥1 minute ahead) unless the user gave an unambiguous future wall-clock time.
+`, SingleToolPrompt, time.Now().Format(time.RFC3339))
+}
 
 var (
 	ToolTopicTime    = ToolTopics[0]

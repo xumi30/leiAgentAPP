@@ -491,7 +491,14 @@ function MarkdownAnchor({ href, children, node: _n, inline: _i, ...rest }) {
 /** @param {keyof JSX.IntrinsicElements} tag */
 function mdBlock(tag) {
   const Tag = tag;
-  return function MdBlock({ node: _node, inline: _inline, children, ...rest }) {
+  return function MdBlock({
+    node: _node,
+    inline: _inline,
+    ordered: _ordered,
+    checked: _checked,
+    children,
+    ...rest
+  }) {
     return <Tag {...rest}>{highlightKeywordChildren(children)}</Tag>;
   };
 }

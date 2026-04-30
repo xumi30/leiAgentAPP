@@ -5,8 +5,8 @@ This checklist tracks the work needed before shipping leiAgent outside a trusted
 ## Current status
 
 - Go packages compile and `go test ./...` runs.
-- The React frontend builds with `npm run build` from `frontend/`.
-- Wails can build a macOS app locally with `wails build`.
+- Wails generates `frontend/wailsjs` bindings before building the React frontend.
+- CI uses `wails build -clean -tags webkit2_41` as the Linux smoke build.
 - Release hardening is still in progress.
 
 ## Before every release
@@ -15,14 +15,14 @@ Run:
 
 ```bash
 ./scripts/release-check.sh
-wails build
 ```
 
-The release check scans for committed-looking API keys, verifies Go formatting, runs Go tests, and builds the frontend.
+The release check scans for committed-looking API keys, verifies Go formatting, runs Go tests, and builds the app through Wails so generated frontend bindings exist before Vite runs.
 
 ## Required before public distribution
 
 - Replace all real credentials with placeholders or environment variables.
+- Rotate any credentials that have ever been committed, then rewrite Git history before publishing.
 - Keep user data out of the repository and out of the app bundle. Runtime folders such as `workspace/`, `localmemory/`, `profiles/`, `logs/`, and local databases should remain user data.
 - Add smoke tests for the main app workflows: model configuration, chat send/stream, local memory, memo storage, scheduled tasks, MCP setup, and workspace file operations.
 - Define a tool permission policy for file, shell, browser, download, and MCP tools.

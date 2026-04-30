@@ -8,7 +8,7 @@ export GOCACHE="${GOCACHE:-$ROOT/.cache/go-build}"
 mkdir -p "$GOCACHE"
 
 echo "==> Checking for committed-looking secrets"
-if git grep -nE '(sk-[A-Za-z0-9]{20,}|api_key:[[:space:]]*\"sk-[A-Za-z0-9]|apiKey:[[:space:]]*\"sk-[A-Za-z0-9])' -- \
+if git grep -nE '(sk-[A-Za-z0-9]{20,}|lb_[A-Za-z0-9_-]{20,}|api_key:[[:space:]]*\"?(sk-|lb_)[A-Za-z0-9_-]{20,}|apiKey:[[:space:]]*\"?(sk-|lb_)[A-Za-z0-9_-]{20,}|Authorization:[[:space:]]*\"?Bearer[[:space:]]+[A-Za-z0-9._-]{20,})' -- \
   ':!package-lock.json' \
   ':!frontend/package-lock.json'; then
   echo "Potential secret found. Replace it with a placeholder before release." >&2
@@ -26,7 +26,15 @@ fi
 echo "==> Running Go tests"
 go test ./...
 
-echo "==> Building frontend"
-(cd frontend && npm run build)
+echo "==> Building Wails app (generates bindings before frontend build)"
+if ! command -v wails >/dev/null 2>&1; then
+  echo "wails CLI is required for release checks. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0" >&2
+  exit 1
+fi
+if [[ -n "${WAILS_BUILD_TAGS:-}" ]]; then
+  wails build -clean -tags "$WAILS_BUILD_TAGS"
+else
+  wails build -clean
+fi
 
 echo "Release checks passed."

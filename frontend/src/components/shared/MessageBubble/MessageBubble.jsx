@@ -6,6 +6,13 @@ import assistantAvatar from '../../../assets/images/aitx.png';
 import MessageContent from '../../../componentjs/MessageContent.jsx';
 
 const DEFAULT_ASSISTANT_AGENT_ID = 'agentid_0';
+
+const formatTokenCount = (message) => {
+  const raw = message?.total_tokens ?? message?.totalTokens;
+  const value = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
 const formatBeijingTime = (timestamp) => {
   if (!timestamp) return '';
   const date = new Date(timestamp);
@@ -39,6 +46,7 @@ const MessageBubble = ({
   const mid = String(message?.messageID ?? message?.messageId ?? message?.id ?? '');
   const agentIDRaw = String(message?.agentID ?? '').trim();
   const timestampText1 = message.timestamp ? formatBeijingTime(message.timestamp) : '';
+  const tokenCount = formatTokenCount(message);
   const agentID = !isUser ? (agentIDRaw || DEFAULT_ASSISTANT_AGENT_ID) : '';
 
   const agent = agentID && storeAgentsById instanceof Map ? storeAgentsById.get(agentID) : null;
@@ -85,6 +93,11 @@ const MessageBubble = ({
               <span className="message-avatar__name">{assistantLabel}</span>
             ) : null}
             {timestampText1 ? <span className="message-timestamp">{timestampText1}</span> : null}
+            {tokenCount > 0 ? (
+              <span className="message-token-count" aria-label="此条消息 token 数">
+                {tokenCount.toLocaleString()} tokens
+              </span>
+            ) : null}
           </div>
         ) : null}
 
