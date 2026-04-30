@@ -60,16 +60,37 @@ export default function Dialog() {
   const expandAllMessageBodies = useCallback(() => setAllMessageBodiesExpanded(true), []);
   const collapseAllMessageBodies = useCallback(() => setAllMessageBodiesExpanded(false), []);
 
+  const currentChatAgentsForUI = useMemo(() => {
+    const list = Array.isArray(currentChatAgents) ? [...currentChatAgents] : [];
+    const hasDefault = list.some(
+      (a) => String(a?.agentID ?? a?.agent_id ?? '').trim() === DEFAULT_ASSISTANT_AGENT_ID,
+    );
+    if (hasDefault) return list;
+
+    const fromAll = (Array.isArray(allAgents) ? allAgents : []).find(
+      (a) => String(a?.agent_id ?? a?.agentID ?? '').trim() === DEFAULT_ASSISTANT_AGENT_ID,
+    );
+    if (fromAll) return [fromAll, ...list];
+    return [
+      {
+        agentID: DEFAULT_ASSISTANT_AGENT_ID,
+        agent_id: DEFAULT_ASSISTANT_AGENT_ID,
+        agent_name: '工具人',
+        avatar_image: '',
+      },
+      ...list,
+    ];
+  }, [currentChatAgents, allAgents]);
+
   const conversationAgentOptions = useMemo(() => {
-    const list = Array.isArray(currentChatAgents) ? currentChatAgents : [];
-    return list
+    return currentChatAgentsForUI
       .map((a) => ({
         agent_id: String(a?.agentID ?? a?.agent_id ?? '').trim(),
         agent_name: String(a?.agent_name ?? '').trim(),
         avatar_image: String(a?.avatar_image ?? '').trim(),
       }))
       .filter((a) => a.agent_id && a.agent_name);
-  }, [currentChatAgents]);
+  }, [currentChatAgentsForUI]);
 
   const agentsById = useMemo(() => {
     const m = new Map();
@@ -86,7 +107,7 @@ export default function Dialog() {
     if (!m.has(DEFAULT_ASSISTANT_AGENT_ID)) {
       m.set(DEFAULT_ASSISTANT_AGENT_ID, {
         agentID: DEFAULT_ASSISTANT_AGENT_ID,
-        agent_name: '助手',
+        agent_name: '工具人',
         avatar_image: '',
       });
     }
@@ -255,7 +276,7 @@ export default function Dialog() {
         conversationTitle={conversationTitle}
         conversationTokenTotal={conversationTokenTotal}
         listMacaron={listMacaron}
-        currentChatAgents={currentChatAgents}
+        currentChatAgents={currentChatAgentsForUI}
       />
 
       {classifyHint ? (

@@ -651,6 +651,10 @@ func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID str
 					a.GetMessagesByMessageID(mid)
 				}
 			}
+			// 添加：主动触发消息更新，确保Markdown正确渲染
+			if role == utils.MessageRoleAssistant || role == utils.MessageRoleReasoning {
+				a.GetMessagesByMessageID(mid)
+			}
 			emitDialogStreamEnd(mid)
 			delete(streams, mid)
 

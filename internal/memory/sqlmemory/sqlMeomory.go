@@ -104,6 +104,9 @@ func createTables(db *sql.DB) error {
 	if err := ensureAgentsSchema(db); err != nil {
 		return err
 	}
+	if err := ensurePresetAgents(db); err != nil {
+		return err
+	}
 
 	return nil
 }

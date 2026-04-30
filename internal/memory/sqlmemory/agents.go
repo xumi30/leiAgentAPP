@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"leiAgent/internal/appruntime"
+	"leiAgent/logging"
 )
 
 const agentstable = `CREATE TABLE IF NOT EXISTS agents (
@@ -97,6 +98,39 @@ func fileToDataURI(relPath string) (string, error) {
 
 	mime := http.DetectContentType(data)
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
+const minimalPNGDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+// ensurePresetAgents inserts/updates bundled presets into agents (presetAgentSeeds was never invoked before).
+func ensurePresetAgents(db *sql.DB) error {
+	fallbackURI, errFallback := fileToDataURI("frontend/src/assets/images/aitx.png")
+	if errFallback != nil {
+		logging.Warn("preset agents: default avatar %v, using placeholder", errFallback)
+		fallbackURI = minimalPNGDataURI
+	}
+
+	const q = `
+		INSERT INTO agents (agent_id, agent_name, avatar_image, description, updated_at)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(agent_id) DO UPDATE SET
+			agent_name = excluded.agent_name,
+			avatar_image = excluded.avatar_image,
+			description = excluded.description,
+			updated_at = CURRENT_TIMESTAMP
+	`
+
+	for _, seed := range presetAgentSeeds {
+		avatarURI, err := fileToDataURI(seed.ImagePath)
+		if err != nil {
+			logging.Warn("preset agent %s avatar %q: %v", seed.AgentID, seed.ImagePath, err)
+			avatarURI = fallbackURI
+		}
+		if _, err := db.Exec(q, seed.AgentID, seed.AgentName, avatarURI, seed.Description); err != nil {
+			return fmt.Errorf("seed preset agent %s: %w", seed.AgentID, err)
+		}
+	}
+	return nil
 }
 
 func ensureAgentsSchema(db *sql.DB) error {

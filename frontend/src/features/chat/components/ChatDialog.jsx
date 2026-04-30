@@ -107,16 +107,39 @@ const ChatDialog = () => {
     }
   }, [isAutoToTalk]);
 
+  // conversations.agents 常为空；助手消息仍属 agentid_0，这里用于顶栏与 @ 提及
+  const conversationAgentsForUI = useMemo(() => {
+    const list = Array.isArray(conversationAgents) ? [...conversationAgents] : [];
+    const hasDefault = list.some((a) => getAgentID(a) === DEFAULT_ASSISTANT_AGENT_ID);
+    if (hasDefault) return list;
+
+    const fromAll = (Array.isArray(allAgents) ? allAgents : []).find(
+      (a) => String(a?.agent_id ?? a?.agentID ?? '').trim() === DEFAULT_ASSISTANT_AGENT_ID,
+    );
+    if (fromAll) {
+      return [fromAll, ...list];
+    }
+    return [
+      {
+        agentID: DEFAULT_ASSISTANT_AGENT_ID,
+        agent_id: DEFAULT_ASSISTANT_AGENT_ID,
+        agent_name: '工具人',
+        avatar_image: '',
+        description: '',
+      },
+      ...list,
+    ];
+  }, [conversationAgents, allAgents]);
+
   const mentionOptions = useMemo(() => {
-    const list = Array.isArray(conversationAgents) ? conversationAgents : [];
-    return list
+    return conversationAgentsForUI
       .map((a) => ({
         agent_id: getAgentID(a),
         agent_name: String(a?.agent_name ?? '').trim(),
         avatar_image: String(a?.avatar_image ?? '').trim(),
       }))
       .filter((a) => a.agent_id && a.agent_name);
-  }, [conversationAgents]);
+  }, [conversationAgentsForUI]);
 
   const loadCommandOptions = useCallback(async () => {
     try {
@@ -559,9 +582,9 @@ const ChatDialog = () => {
 
         </div>
 
-        {Array.isArray(conversationAgents) && conversationAgents.length > 0 ? (
+        {Array.isArray(conversationAgentsForUI) && conversationAgentsForUI.length > 0 ? (
           <div className="dialog__agents" aria-label="当前聊天已加入的 agents">
-            {conversationAgents.map((agent) => (
+            {conversationAgentsForUI.map((agent) => (
               <div
                 key={getAgentID(agent)}
                 className="dialog__agent-chip"
