@@ -12,7 +12,6 @@
   "name": "leiagentapp",
   "version": "1.0.0",
   "description": "基于 **Wails v2** 的本地桌面 Agent 应用（Go 后端 + React 前端）：多会话对话、意图路由（对话 / 规划 / 工具）、LLM 与 YAML 配置、文库与备忘录等。",
-  "main": "postcss.config.js",
   "directories": {
     "doc": "docs"
   },

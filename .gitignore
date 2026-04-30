@@ -1,6 +1,12 @@
-# Build outputs
-build/
-frontend/dist
+# Build outputs（保留仓库内随版本管理的资源，避免 CI / 离线克隆缺文件）
+build/*
+!build/appicon.png
+!build/windows/
+build/windows/*
+!build/windows/icon.ico
+
+frontend/dist/*
+!frontend/dist/index.html
 frontend/wailsjs/
 *.exe
 *.app
@@ -15,7 +21,6 @@ node_modules
 
 # Local secrets（可复制 config/config.example.yaml）
 config/config.yaml
-config/defaultBackend.yaml
 
 # Logs
 logs/
@@ -28,6 +33,21 @@ data/*.db-wal
 data/doc_library.json
 data/memo.md
 data/mcp_servers
+data/mcp_cache/
+
+# 用户画像与对话快照（运行时生成）
+profiles/
+
+# 前端工具生成的 package 指纹
+frontend/package.json.md5
+
+# 根目录本地构建/试跑产物（勿提交）
+/basic
+/leiAgent
+
+# 仓库根目录旅行计划草稿（个人输出）
+melbourne_trip_plan.md
+travel_plan_beijing.md
 
 # macOS
 .DS_Store

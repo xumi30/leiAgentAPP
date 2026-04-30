@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
 :root {
     --apple-bg: #f5f5f7;
     --apple-surface: rgba(255, 255, 255, 0.78);

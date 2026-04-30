@@ -689,12 +689,12 @@ func (d *Dispatcher) processMessageWithIntent(ctx context.Context, message strin
 	intent, err := ConfirmIntention(ctx, message, d.Intention)
 	if err != nil {
 		logging.Error("确认意图失败: %v", err)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "确认意图失败..."))
+		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("确认意图失败：%v", err))
 		return
 	}
 	if intent == nil {
 		logging.Error("确认意图失败: 返回了空意图且没有错误")
-		globalchannel.SendAssitantMessageOnce(ctx, "确认意图失败...")
+		globalchannel.SendAssitantMessageOnce(ctx, "确认意图失败：模型未返回有效意图，请重试或检查模型与网络配置。")
 		return
 	}
 	logging.Info("确认意图: %s", intent.Intent)

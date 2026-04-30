@@ -1,46 +1,60 @@
 # LeiAgent 功能说明（项目总览）
 
 > 本文档汇总桌面端 **LeiAgent** 当前主要能力，含界面、Agent、LLM、文库、工具、**本地记忆 / 用户画像** 与**备忘录**专章，便于产品/开发对照与维护。  
-> **最后更新**：2026-04-20
+> **最后更新**：2026-05-13
 
 ---
 
 ## 1. 项目概览
 
 - **形态**：基于 **Wails v2** 的桌面应用（Go 后端 + Web 前端），本地运行。
-- **布局**：顶栏全局操作；左侧**会话列表 + 日历**；中间**对话**；右侧可选**推理/思考**面板（可关闭）；多个模态层（设置、备忘录、文库等）。
-- **分栏**：左/右栏宽度可拖拽调整；关闭「思考」时右侧推理槽隐藏。
+- **布局**：顶栏全局操作；左侧为**人物头像面板**（`ConversationCalendar.jsx`，实为 Agent 头像墙）+ **会话列表**；中间为**对话**。**当前主线** `App.jsx` 中 `showReasoningChrome = false`，主界面**不挂载**右侧推理槽，仅左侧宽度可拖拽；`Reasoning` 组件仍在仓库中供后续打开。
+- **分栏**：左栏宽度可拖拽；推理栏是否显示由 `showReasoningChrome` 与顶栏「关闭思考」历史逻辑共同决定（现默认关闭整条右栏）。
 
 ---
 
 ## 2. 顶栏（Header）
 
-- **设置**：打开 **LLM 配置（YAML）** 编辑器模态框。
+- **设置**：打开 **LLM 配置（YAML）** 编辑器模态框（`SettingsModal`）。
 - **文库**：打开文档库模态框（见 §7）。
 - **本地记忆**：打开当前会话的 `localMemory` 调试视图。
 - **画像**：打开当前会话的结构化用户画像面板，可手动刷新生成。
 - **备忘录**：打开备忘录窗口（见 §10、§11）。
-- **连接状态**：展示 `GetLLMConnectionStatus` 探测结果（如已连接 / 未配置 / 不可用）；支持手动刷新；启动后定时轮询。
+- **定时任务**：打开 `ScheduledTasksModal`（定时任务列表）。
+- **连接状态**：展示 `GetLLMConnectionStatus` 探测结果；可点击刷新。刷新时若配置缺失或不可用，可能弹出 **Proxy-LB** 注册 / 登录模态（`ProxyAuthRequest` 写回配置）。启动后定时轮询连接状态。
 
 ---
 
-## 3. 会话列表与日历（ConversationList）
+## 3. 左侧栏：人物头像与会话列表
 
-- **列表**：拉取 `ListConversation`，切换 `SwitchChat`，重命名 `UpdateConversationTitle`，删除 `DeleteConversation`（成功后可整页刷新）。
-- **日历**：按日期筛选会话（`created_at` / `updated_at` 与选中 YYYY-MM-DD 对齐）。
-- **备忘标记**：`GetMemoCalendarDates` 提供的日期在日历上标识「当日备忘中有日期串」类提示（与备忘录正文中的日期解析一致）。
-- **切换会话**：派发 `conversationChanged`（含 `conversationId`、`title` 等），中间对话区与右侧推理等联动。
+### 3.1 人物头像面板（`ConversationCalendar.jsx`）
+
+- **数据来源**：`ListAgents`；新建 `CreateAgent(名称, 头像 base64, 人格描述)`；删除自定义 `DeleteCustomAgent`（`preset_agent_*` 不可删）。
+- **加入当前聊天**：悬停卡片点「+」→ 派发 `leiagent-add-agent-to-chat`（`detail.agent`）；`ChatDialog` 监听后若无 `chatId` 会先 `AddConversation` + `SwitchChat`，再 `AddAgentToConversation` / `GetConversationAgents` 更新与会话绑定的 Agent 列表。
+- **删除后**：`leiagent-agent-deleted`（`detail.agent_id`）。
+
+### 3.2 会话列表（`ConversationList.jsx`）
+
+- **列表**：`ListConversation`，`SwitchChat`，`UpdateConversationTitle`，`DeleteConversation`；删除 / 重命名等使用应用内弹层（避免 WebView 内 `window.confirm` / `prompt` 不可靠）。
+- **新建**：`AddConversation`，乐观更新列表并切换。
+- **流式指示**：`streamingChatIds` 命中时在行内展示忙状态（与 `chatTaskState` / 流式事件联动，由 `App` 传入）。
+- **切换会话**：`conversationChanged`（`conversationId`、`title`）；`ChatDialog` 拉取 `GetMessages`、`GetConversationAgents` 并重置 `sheets` 为单页 `main`。
 
 ---
 
-## 4. 对话区（Dialog）
+## 4. 对话区（`ChatDialog` + `ChatInput`）
 
-- **消息**：展示用户 / 助手 / 流式更新；监听 Wails 事件如 `dialogAppend`、`dialogStreamEnd`、`GetMessagesByMessageID` 等。
-- **发送**：`SendMessage`；空内容不发。
-- **停止**：`StopChat` 中断当前任务；后端在保留 Dispatcher 前提下重启监听（意图等内存态保留）。
-- **便签页（Sheets）**：同一会话内多「便签」分段浏览消息（主对话 + 用户新开主题）；新主题发送前可归类为 `newTopic` 等（`classifyUserMessage`）。
-- **控制类输入**：如暂停等可走 `SendUserDisplayOnly`，仅展示不入 Agent，并 `StopChat`。
-- **生成备忘**：见 §11。
+- **布局**：会话标题行、**群聊自动参与**开关（`leiAgent.chatAutoToTalk` 本地持久化，影响发送时是否附带自动对话参数及是否先发 `StopChat`）、当前会话已加入 **Agent chips**（`conversationAgentsForUI`，缺省补上助手 `agentid_0` / 「工具人」）。
+- **@ 提及**：`ChatInput` 在词界输入 `@` 打开成员列表（来自 `mentionOptions`，可键盘导航）；选中插入 `@姓名 ` 并通过 `onMentionPicked` 把 `agent_id` 加入本轮 `aiteAgentIds`，随 `ChatService.sendMessage` 传入；清空输入会清空该集合。
+- **MCP / Skill 命令面板**：
+  - **数据源**：挂载与每次 **focus** 输入框时并行调用 `GetMCPConfigFormState`、`GetOpenClawSkillState`，得到 `mcpOptions`（含 `label`、`cachedTools`、`lastCheckState` 等）与 `skillOptions`（过滤 `supported === false`）。
+  - **触发**：光标前文本中，在词界输入 `/` → MCP 模式；输入 `>` → Skill 模式；若两者均出现在光标前，取**下标较大**的触发符（`Math.max(lastIndexOf('/') , lastIndexOf('>'))`）。
+  - **交互**：继续输入筛选；下拉最多 **12** 项；`↑` `↓`、`Enter`/`Tab` 选定，`Esc` 关闭；选中后替换触发段为 **`使用 … MCP `** 或 **`使用 … skill `**（尾部保留空格）。
+- **消息**：`dialogAppend` 流式追加、`dialogStreamEnd` 结束、`chatTaskState` 忙碌态、`GetMessagesByMessageID` 补全字段等。
+- **发送**：`ChatService.sendMessage`；`Enter` 发送、`Shift+Enter` 换行（`ChatInput`）。
+- **停止**：显式按钮或控制类文案走 `StopChat`（`classifyUserMessage` 判定 `control` 时会停止流）。
+- **Sheets**：`useChatStore` 仍保留 `sheets` / `activeSheetId`；**当前** `ChatDialog` 在会话切换时重置为仅 **`main`** 一条，界面以单时间线为主（多便签若在其他入口开放以代码为准）。
+- **生成备忘**：见 §14；底部 `MemoStrip` + 消息泡勾选。
 
 ---
 
@@ -60,7 +74,8 @@
 
 ## 6. 推理侧栏（Reasoning）
 
-- 展示当前会话 `GetReasoningMessage` 返回的推理类消息；依赖顶栏「关闭思考」是否显示整块 UI。
+- 展示当前会话 `GetReasoningMessage` 返回的推理类消息。顶栏「关闭思考」开关代码仍保留但已注释。
+- **主线界面**：`App.jsx` 中 `showReasoningChrome = false` 时**不渲染**右侧槽位与 `Reasoning` 组件。
 
 ---
 
@@ -114,7 +129,7 @@
 - **主存储**：SQLite（`data/memo_notes.db`），与 `memo_write` 等工具共用。
 - **迁移**：旧版单文件 `data/memo.md` 可在首次需要时自动导入（以 `internal/memo` 为准）。
 - **结构**：一级 ATX 标题 `# 标题` 分条；正文末尾可用 `<!--leiAgent-memo-src:id1,id2-->` 记录来源对话消息 ID。
-- **Wails 能力**：读取/全量保存、路径查询、追加 Markdown、已引用 messageID 列表、LLM 整理备忘、日历日期提取等（见 `app.go` 与 `wailsjs` 绑定）。
+- **Wails 能力**：读取/全量保存、路径查询、追加 Markdown、已引用 messageID 列表、LLM 整理备忘、备忘正文日期解析等（见 `app.go` 与 `wailsjs` 绑定）。
 
 ---
 
@@ -157,6 +172,8 @@
 | `memoSaved` | 备忘追加成功；建议 `detail.focusLatest` 控制是否打开备忘录并聚焦最新条。 |
 | `conversationChanged` | 切换当前会话（`detail.conversationId`、`title` 等）。 |
 | `leiagent-open-document` | `detail.path` 打开文库并聚焦文件。 |
+| `leiagent-add-agent-to-chat` | `detail.agent`：把 Agent 绑到当前（或新建）会话。 |
+| `leiagent-agent-deleted` | `detail.agent_id`：自定义 Agent 已从库中删除。 |
 
 Wails 运行时事件（如 `dialogAppend`、`reasoningAppend`、`dialogStreamEnd` 等）由后端 `EventsEmit`，前端 `EventsOn` 订阅，细节以代码为准。
 

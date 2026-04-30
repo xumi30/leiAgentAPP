@@ -1,0 +1,128 @@
+# 推送形如 v1.2.3 的标签时：在三端执行 wails build，并将压缩包挂到对应的 GitHub Release。
+# 使用前在仓库里新建并推送该标签，例如：git tag v0.1.0 && git push origin v0.1.0
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            # Ubuntu 24.04+ 仅自带 WebKit2GTK 4.1；须加 webkit2_41（与 scripts/build-release-linux.sh --webkit2-41 一致）
+            wails_build_cmd: wails build -clean -tags webkit2_41
+          - os: windows-latest
+            platform: windows-amd64
+            wails_build_cmd: wails build -clean
+          - os: macos-latest
+            platform: darwin-arm64
+            wails_build_cmd: wails build -clean
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Wails 读取 build/windows/icon.ico；历史上曾误提交 PNG 改后缀，会导致 winres “not a valid ICO”。以 packaging 下文件为准。
+      - name: Install Windows application icon
+        run: |
+          mkdir -p build/windows
+          cp packaging/windows/icon.ico build/windows/icon.ico
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux Wails dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: Add Go bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: ${{ matrix.wails_build_cmd }}
+
+      - name: Package (Linux / macOS)
+        if: runner.os != 'Windows'
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "${{ matrix.platform }}" in
+            linux-amd64)
+              tar czf "leiAgent_${VERSION}_linux_amd64.tar.gz" -C build/bin leiAgent
+              ;;
+            darwin-arm64)
+              ditto -c -k --keepParent "build/bin/leiAgent.app" "leiAgent_${VERSION}_darwin_arm64.zip"
+              ;;
+          esac
+          ls -la leiAgent_"${VERSION}"_*
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}"
+          Compress-Archive -Path build/bin/leiAgent.exe -DestinationPath "leiAgent_${v}_windows_amd64.zip" -Force
+          Get-ChildItem "leiAgent_${v}_*"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.platform }}
+          path: leiAgent_${{ github.ref_name }}_*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all bundles
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: bundle-*
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release-assets/**/*

@@ -4,6 +4,7 @@
 
 ## 文档
 
+- **[产品介绍与使用说明（单页网页）](docs/leiagent-intro.html)** — 配置 LLM、能力与交互说明、Release 下载入口。
 - **[功能说明（项目总览，含备忘录）](docs/product-features.md)** — 维护产品/功能清单请改此文件。
 
 ## 开发与构建
