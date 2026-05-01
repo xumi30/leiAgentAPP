@@ -79,4 +79,3 @@ func LoadYAML(persistDir, chatID string, out any) (bool, string, error) {
 	}
 	return true, path, nil
 }
-

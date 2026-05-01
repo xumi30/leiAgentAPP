@@ -102,14 +102,14 @@
 | 能力方向 | 代表工具 |
 |----------|----------|
 | Shell | `bash`（bashfunction） |
-| 文件 | 分块写入、整文件写入（fileFunction） |
+| 文件 | 分块写入、整文件写入（filefunctions） |
 | 文库路径 | libraryfs |
 | 备忘录 | memo_write（memotool） |
 | 小说/长文 | noveltool |
-| 时间 | 当前时间、日期信息、时间计算（timeFunctions） |
+| 时间 | 当前时间、日期信息、时间计算（timetools） |
 | 搜索/数据 | 天气、地理编码、行情（searchFunctions） |
 
-另有 SerpAPI、百度搜索等实现于 `internal/tools/searchFuctions`，是否接入以 Agent/注册处为准。
+另有 SerpAPI、百度搜索等实现于 `internal/tools/searchfunctions`，是否接入以 Agent/注册处为准。
 
 ---
 

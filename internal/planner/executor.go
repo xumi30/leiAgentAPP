@@ -78,7 +78,7 @@ func (p *Planning) Execute(ctx context.Context) error {
 	}
 
 	logging.Info("开始执行计划，共 %d 个步骤", len(p.Steps))
-	globalchannel.SendAssitantMessageOnce(ctx, "开始执行计划，共 "+fmt.Sprint(len(p.Steps))+" 个步骤")
+	globalchannel.SendAssistantMessageOnce(ctx, "开始执行计划，共 "+fmt.Sprint(len(p.Steps))+" 个步骤")
 
 	// 初始化入度
 	p.initializeInDegrees()
@@ -108,13 +108,13 @@ func (p *Planning) Execute(ctx context.Context) error {
 		// 执行当前任务
 		if err := p.ExecuteStep(ctx, current); err != nil {
 			logging.Error("步骤 %s 执行失败: %v", p.Steps[current].Id, err)
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err))
+			globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("步骤 %s 执行失败: %v.跳过继续尝试执行剩余步骤...\n", p.Steps[current].Id, err))
 			p.Status = utils.TaskFailed
 			// return fmt.Errorf("step %s failed: %v", p.Steps[current].Id, err)
 		}
 
 		logging.Info("步骤 %s 执行完成, 结果是: %v", p.Steps[current].Id, p.Steps[current].Result)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("步骤 %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Result))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("步骤 %s 执行完成, 结果是: %v\n", p.Steps[current].Id, p.Steps[current].Result))
 
 		// 使用反向依赖图更新依赖当前任务的其他任务的入度
 		if dependentSteps, exists := reverseMap[p.Steps[current].Id]; exists {
@@ -145,7 +145,7 @@ func (p *Planning) Execute(ctx context.Context) error {
 
 	logging.Info("所有步骤尝试执行完成")
 	//logging.Info("计划执行成功,plan: %v", p)
-	globalchannel.SendAssitantMessageOnce(ctx, "执行阶段小结：所有步骤尝试执行完成\n")
+	globalchannel.SendAssistantMessageOnce(ctx, "执行阶段小结：所有步骤尝试执行完成\n")
 	return nil
 }
 

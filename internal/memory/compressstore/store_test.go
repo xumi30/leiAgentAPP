@@ -37,4 +37,3 @@ func TestPersistAndLoadYAML(t *testing.T) {
 		t.Fatalf("expected %#v got %#v", in, out)
 	}
 }
-

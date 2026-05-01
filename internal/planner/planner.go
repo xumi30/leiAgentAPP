@@ -312,7 +312,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		response, err := plannerProxy.CommunicateWithMessages(ctx, workingMessages)
 		if err != nil {
 			logging.Error("规划请求失败: %v", err)
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("规划请求失败: %v", err.Error()))
+			globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("规划请求失败: %v", err.Error()))
 			return nil, err
 		}
 
@@ -331,7 +331,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		if err := utils.UnmarshalLLMJSON(response.Content, &planner); err != nil {
 			lastParseErr = err
 			logging.Error("解析规划结果失败（plan attempt=%d）: %v", attempt, err)
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("规划结果不是合法 JSON（已自动重试 %d 次）：%v", attempt, err))
+			globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("规划结果不是合法 JSON（已自动重试 %d 次）：%v", attempt, err))
 			if attempt < maxPlanParseAttempts {
 				// 把错误原因带回给模型，让它修正 JSON 后“只输出 JSON”重试一次。
 				preview := rawJSON
@@ -348,7 +348,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		}
 
 		if len(planner.Steps) == 0 {
-			globalchannel.SendAssitantMessageOnce(ctx, "你没有生成任何执行步骤，请重新规划")
+			globalchannel.SendAssistantMessageOnce(ctx, "你没有生成任何执行步骤，请重新规划")
 			return nil, fmt.Errorf("模型未生成任何执行步骤；若你只是在讨论或补充信息，可用较短说法触发模式重判，或把任务写得更具体后再发")
 		}
 		planner.Status = utils.TaskPending

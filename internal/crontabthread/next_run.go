@@ -69,4 +69,3 @@ func computeNextRun(now time.Time, scheduleType string, runAt time.Time, cronExp
 		return time.Time{}, fmt.Errorf("unknown schedule_type %q", scheduleType)
 	}
 }
-

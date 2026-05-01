@@ -90,7 +90,6 @@ var presetAgentSeeds = []presetAgentSeed{
 	},
 }
 
-
 func bytesToImageDataURI(data []byte) string {
 	mime := http.DetectContentType(data)
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
@@ -234,7 +233,6 @@ func (m *SQLMemory) saveAgentLocked(agentID, agentName, avatarImage, description
 	}
 	return nil
 }
-
 
 func (m *SQLMemory) SaveAgent(agentID, avatarImage, description string) error {
 	return m.SaveAgentWithName(agentID, agentID, avatarImage, description)

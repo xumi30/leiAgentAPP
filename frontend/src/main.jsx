@@ -2,7 +2,7 @@ import React from 'react'
 import {createRoot} from 'react-dom/client'
 import './style.css'
 import App from './App'
-import AppErrorBoundary from './componentjs/AppErrorBoundary.jsx'
+import AppErrorBoundary from './components/AppErrorBoundary.jsx'
 import { initStoreEventBridge } from './stores/useStore'
 
 const container = document.getElementById('root')

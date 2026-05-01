@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	gemini "leiAgent/internal/provider/Gemin"
+	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/logging"
 )
@@ -65,8 +65,8 @@ func buildShellRiskRequestJSON(info *ModelAPIInfo, userSnippet string) ([]byte, 
 }
 
 var (
-	jsonSeverityPattern       = regexp.MustCompile(`(?i)"severity"\s*:\s*"(high|medium|low)"`)
-	looseSeverityWordPattern  = regexp.MustCompile(`(?i)\b(high|medium|low)\b`)
+	jsonSeverityPattern      = regexp.MustCompile(`(?i)"severity"\s*:\s*"(high|medium|low)"`)
+	looseSeverityWordPattern = regexp.MustCompile(`(?i)\b(high|medium|low)\b`)
 )
 
 func parseSeverityFromModelText(raw string) (string, bool) {

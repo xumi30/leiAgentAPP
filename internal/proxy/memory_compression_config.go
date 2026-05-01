@@ -10,7 +10,7 @@ import (
 // MemoryCompressionYAML mirrors config YAML under `memory_compression`.
 // It is intentionally decoupled from runtime logic to keep config parsing simple and stable.
 type MemoryCompressionYAML struct {
-	Enabled bool   `yaml:"enabled,omitempty"`
+	Enabled bool `yaml:"enabled,omitempty"`
 	// PersistDir is a directory relative to current working directory (same convention as localmemory/).
 	// Default: "compress"
 	PersistDir string `yaml:"persist_dir,omitempty"`
@@ -24,7 +24,7 @@ type MemoryCompressionYAML struct {
 }
 
 type MemoryCompressionTriggerYAML struct {
-	EveryAssistantTurns int `yaml:"every_assistant_turns,omitempty"`
+	EveryAssistantTurns  int `yaml:"every_assistant_turns,omitempty"`
 	YAMLMessageThreshold int `yaml:"yaml_message_threshold,omitempty"`
 }
 
@@ -46,12 +46,12 @@ type MemoryCompressionOutputsYAML struct {
 
 // ResolvedMemoryCompressionConfig is the runtime-ready config with defaults applied.
 type ResolvedMemoryCompressionConfig struct {
-	Enabled   bool
+	Enabled    bool
 	PersistDir string
 
 	Trigger struct {
-		EveryAssistantTurns   int
-		YAMLMessageThreshold  int
+		EveryAssistantTurns  int
+		YAMLMessageThreshold int
 	}
 	Context struct {
 		RecentTailMessages int
@@ -141,4 +141,3 @@ func LoadMemoryCompressionConfig() (ResolvedMemoryCompressionConfig, error) {
 	}
 	return cfg, nil
 }
-

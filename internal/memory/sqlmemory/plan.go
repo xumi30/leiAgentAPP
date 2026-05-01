@@ -19,7 +19,6 @@ const planstable = `CREATE TABLE IF NOT EXISTS plans (
 	Foreign KEY (chat_id) REFERENCES conversations(id) ON DELETE CASCADE
 )`
 
-
 const planstepstable = `CREATE TABLE IF NOT EXISTS plan_steps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     plan_id INTEGER NOT NULL,
@@ -430,7 +429,7 @@ func (m *SQLMemory) GetPlanStepsByChatid(chatid string) ([]map[string]interface{
 	// 首先获取plan_id
 	query := `SELECT id FROM plans WHERE chat_id = ?`
 	row := m.db.QueryRow(query, chatid)
-	
+
 	var planID int64
 	if err := row.Scan(&planID); err != nil {
 		if err == sql.ErrNoRows {
@@ -439,7 +438,7 @@ func (m *SQLMemory) GetPlanStepsByChatid(chatid string) ([]map[string]interface{
 		}
 		return nil, fmt.Errorf("failed to get plan id: %w", err)
 	}
-	
+
 	// 然后获取该plan的所有步骤
 	return m.ListPlanSteps(planID)
 }
@@ -471,7 +470,7 @@ func (m *SQLMemory) SavePlanStepByChatid(chatid, stepID, tool, input, dependsOn 
 	// 首先获取plan_id
 	query := `SELECT id FROM plans WHERE chat_id = ?`
 	row := m.db.QueryRow(query, chatid)
-	
+
 	var planID int64
 	if err := row.Scan(&planID); err != nil {
 		if err == sql.ErrNoRows {
@@ -480,7 +479,7 @@ func (m *SQLMemory) SavePlanStepByChatid(chatid, stepID, tool, input, dependsOn 
 		}
 		return fmt.Errorf("failed to get plan id: %w", err)
 	}
-	
+
 	// 然后使用plan_id保存步骤
 	return m.SavePlanStep(planID, stepID, tool, input, dependsOn, result, status, error, indegree)
 }

@@ -204,12 +204,12 @@ func List(workspace string, messageBodies []string) ([]map[string]interface{}, e
 	out := make([]map[string]interface{}, 0, len(items))
 	for _, it := range items {
 		out = append(out, map[string]interface{}{
-			"path":     it.Path,
-			"name":     it.Name,
-			"modTime":  it.ModTime.Format(time.RFC3339),
-			"size":     it.Size,
-			"source":   it.Source,
-			"relHint":  relHint(workspace, it.Path),
+			"path":    it.Path,
+			"name":    it.Name,
+			"modTime": it.ModTime.Format(time.RFC3339),
+			"size":    it.Size,
+			"source":  it.Source,
+			"relHint": relHint(workspace, it.Path),
 		})
 	}
 	return out, nil

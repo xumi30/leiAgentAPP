@@ -315,7 +315,7 @@ func CleanupGlobalChannel(chatID string) {
 	_ = Cleanup(chatID)
 }
 
-func SendAssitantMessageOnce(ctx context.Context, msg string, totalTokens ...int) {
+func SendAssistantMessageOnce(ctx context.Context, msg string, totalTokens ...int) {
 	chatID := dialogOutChatIDFromCtx(ctx)
 	dialogOutChan := GetGlobalDialogOutChannel(chatID)
 	messageid := utils.GenerateMessageID()
@@ -333,7 +333,7 @@ func SendAssitantMessageOnce(ctx context.Context, msg string, totalTokens ...int
 	}
 
 	if dialogOutChan == nil {
-		logging.Warn("SendAssitantMessageOnce: DialogOut channel 未注册 chatID=%q（消息将丢弃）", chatID)
+		logging.Warn("SendAssistantMessageOnce: DialogOut channel 未注册 chatID=%q（消息将丢弃）", chatID)
 		return
 	}
 	dialogOutChan <- &mg
@@ -359,11 +359,11 @@ func SendUserMessageOnce(ctx context.Context, msg string) {
 
 }
 
-func SendAssitantMessageStream(ctx context.Context, msg string, messageid string, isFinish bool, totalTokens int) {
+func SendAssistantMessageStream(ctx context.Context, msg string, messageid string, isFinish bool, totalTokens int) {
 	chatID := dialogOutChatIDFromCtx(ctx)
 	dialogOutChan := GetGlobalDialogOutChannel(chatID)
 	if dialogOutChan == nil {
-		logging.Warn("SendAssitantMessageStream: DialogOut channel 未注册 chatID=%q finish=%v（丢弃）", chatID, isFinish)
+		logging.Warn("SendAssistantMessageStream: DialogOut channel 未注册 chatID=%q finish=%v（丢弃）", chatID, isFinish)
 		return
 	}
 
@@ -378,11 +378,11 @@ func SendAssitantMessageStream(ctx context.Context, msg string, messageid string
 
 }
 
-func SendAReasonningMessageStream(ctx context.Context, msg string, messageid string, isFinish bool) {
+func SendReasoningMessageStream(ctx context.Context, msg string, messageid string, isFinish bool) {
 	chatID := dialogOutChatIDFromCtx(ctx)
 	reasonOutChan := GetGlobalReasonOutChannel(chatID)
 	if reasonOutChan == nil {
-		logging.Warn("SendAReasonningMessageStream: ReasonOut channel 未注册 chatID=%q finish=%v", chatID, isFinish)
+		logging.Warn("SendReasoningMessageStream: ReasonOut channel 未注册 chatID=%q finish=%v", chatID, isFinish)
 		return
 	}
 

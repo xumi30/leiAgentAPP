@@ -147,4 +147,3 @@ func listColumns(db *sql.DB, table string) (map[string]bool, error) {
 	}
 	return cols, nil
 }
-

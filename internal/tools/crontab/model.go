@@ -7,7 +7,7 @@ type ScheduledTask struct {
 	ID            string    `json:"id"`
 	UserID        string    `json:"user_id"`
 	Title         string    `json:"title"`
-	ActionType    string    `json:"action_type"`   // notify / tool
+	ActionType    string    `json:"action_type"` // notify / tool
 	ActionPayload string    `json:"action_payload"`
 	ScheduleType  string    `json:"schedule_type"` // once / recurring
 	RunAt         time.Time `json:"run_at"`        // once
@@ -20,4 +20,3 @@ type ScheduledTask struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
-

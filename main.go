@@ -21,6 +21,7 @@ var assets embed.FS
 
 // 与 Header 同源；Linux 打包仅产出裸二进制时需在此注入，窗口管理器才有任务栏/最小化图标。
 // macOS/.app、Windows exe 另有 Wails 从同文件生成的 icns/ico。
+//
 //go:embed build/appicon.png
 var appDesktopIconPNG []byte
 

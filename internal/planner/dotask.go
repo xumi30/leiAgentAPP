@@ -36,48 +36,48 @@ func (planner *Planning) DoTask(ctx context.Context) (string, error) {
 
 	if err != nil {
 		logging.Error("第一次执行规划失败: %v", err)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("第一次执行规划失败: %v", err))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("第一次执行规划失败: %v", err))
 	}
 
 	for planner.Status != utils.TaskCompleted && planner.RetryCount > 0 {
 		fmt.Printf("执行规划失败，正在进行倒数第%d次重试...\n", planner.RetryCount)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("执行规划失败，正在进行倒数第%d次重试...\n", planner.RetryCount))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("执行规划失败，正在进行倒数第%d次重试...\n", planner.RetryCount))
 		planner.RetryCount--
 		retryResult, err := planner.VerifyResult(ctx, pstr)
 
 		if err != nil {
 			logging.Error("Failed to retry verify result: %v", err)
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("Failed to retry verify result: %v", err))
+			globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("Failed to retry verify result: %v", err))
 			return "", err
 		}
 
 		// 错误信息
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("计划执行失败倒数第%d次，以下是重试后的结果：%s", planner.RetryCount, retryResult))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("计划执行失败倒数第%d次，以下是重试后的结果：%s", planner.RetryCount, retryResult))
 		pstr, err = planner.DoExe(ctx)
 
 		if err != nil {
 			logging.Error("执行规划失败倒数第%d次: %v", planner.RetryCount, err)
 
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("执行规划失败倒数第%d次: %v", planner.RetryCount, err))
+			globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("执行规划失败倒数第%d次: %v", planner.RetryCount, err))
 			return "", err
 		}
 
 	}
 
-	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("全部规划尝试执行完成，以下是执行结果：%s", pstr))
+	globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("全部规划尝试执行完成，以下是执行结果：%s", pstr))
 	logging.Info("全部规划尝试执行完成，以下是执行结果：%s", pstr)
 
 	if planner.Status == utils.TaskFailed {
 		logging.Error("执行规划失败: %v", planner.Status)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("执行规划失败: %v", planner.Status))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("执行规划失败: %v", planner.Status))
 		// return "", fmt.Errorf("执行规划失败: %v", planner.Status)
 	}
 
 	if err := summarizePlanExecution(ctx, chatId); err != nil {
 		logging.Warn("执行总结未生成: %v", err)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("执行总结未生成: %v", err))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("执行总结未生成: %v", err))
 	}
-	globalchannel.SendAssitantMessageOnce(ctx, "执行总结已生成。")
+	globalchannel.SendAssistantMessageOnce(ctx, "执行总结已生成。")
 
 	return pstr, nil
 
@@ -86,7 +86,7 @@ func (planner *Planning) DoTask(ctx context.Context) (string, error) {
 // summarizePlanExecution 根据记忆中上一条执行结果 JSON，调用模型输出面向用户的总结（流式写入对话区）。
 func summarizePlanExecution(ctx context.Context, chatId string) error {
 
-	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "正在生成执行总结…\n"))
+	globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", "正在生成执行总结…\n"))
 
 	p, err := proxy.NewProxy(nil)
 	if err != nil {

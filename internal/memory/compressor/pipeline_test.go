@@ -28,4 +28,3 @@ func TestCompressRulesOnlyDoesNotMutateInput(t *testing.T) {
 		t.Fatalf("expected selected segments")
 	}
 }
-

@@ -2,16 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 
 import './App.css';
 
-import ConversationList from './componentjs/ConversationList.jsx';
+import ConversationList from './features/conversations/ConversationList.jsx';
 import { ChatDialog } from './features/chat';
-import Header from './componentjs/Header.jsx';
-import Reasoning from './componentjs/Reasonging.jsx';
-import MemoModal from './componentjs/MemoModal.jsx';
-import DocLibraryModal from './componentjs/DocLibraryModal.jsx';
-import SettingsModal from './componentjs/SettingsModal.jsx';
-import LocalMemoryModal from './componentjs/LocalMemoryModal.jsx';
-import UserProfileModal from './componentjs/UserProfileModal.jsx';
-import ScheduledTasksModal from './componentjs/ScheduledTasksModal.jsx';
+import Header from './components/Header.jsx';
+import Reasoning from './features/chat/components/Reasoning.jsx';
+import MemoModal from './features/memo/MemoModal.jsx';
+import DocLibraryModal from './features/documents/DocLibraryModal.jsx';
+import SettingsModal from './features/settings/SettingsModal.jsx';
+import LocalMemoryModal from './features/memory/LocalMemoryModal.jsx';
+import UserProfileModal from './features/memory/UserProfileModal.jsx';
+import ScheduledTasksModal from './features/scheduling/ScheduledTasksModal.jsx';
 import {
   GetMemoCalendarDates,
   GetLLMConnectionStatus,

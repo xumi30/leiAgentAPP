@@ -87,7 +87,7 @@ func (a *App) focusMainWindow() {
 
 func (a *App) ListConversation() []map[string]interface{} {
 	// 模拟对话数据
-	conversations := dataoperation.ListConverstions()
+	conversations := dataoperation.ListConversations()
 	return conversations
 
 }
@@ -599,7 +599,7 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 				}
 				a.emitLLMConfigRequired(ctx, title, "请在设置中进行 LLM 配置", configCreated)
 			} else {
-				globalchannel.SendAssitantMessageOnce(ctx, "创建 Dispatcher 失败: "+errMsg)
+				globalchannel.SendAssistantMessageOnce(ctx, "创建 Dispatcher 失败: "+errMsg)
 				runtime.EventsEmit(a.ctx, "dispatcherError", errMsg)
 				if a.ctx != nil {
 					_, dlgErr := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
@@ -621,8 +621,8 @@ func (a *App) dispatcher(chatID string) *dispatcher.Dispatcher {
 		// 启动 并处理返回
 		logging.Info("Starting dispatcher for conversation with ChatID: %s", chatID)
 		go dp.Run(ctx)
-		go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
-		// go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
+		go a.AppendAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
+		// go a.AppendAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
 		go a.AppendTaskStateToFront(ctx, chatID)
 	}
 
@@ -640,8 +640,8 @@ func (a *App) restartDispatcherBackground(chatID string, dp *dispatcher.Dispatch
 	ctx = context.WithValue(ctx, utils.ChatIDString, chatID)
 	dp.ReplaceRunContext(ctx, cancel)
 	go dp.Run(ctx)
-	go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
-	go a.AppenAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
+	go a.AppendAgentMessageToFrontRole(ctx, utils.MessageRoleAssistant, chatID)
+	go a.AppendAgentMessageToFrontRole(ctx, utils.MessageRoleReasoning, chatID)
 	go a.AppendTaskStateToFront(ctx, chatID)
 	logging.Info("Dispatcher 已重新监听 input/output，chatID=%s（保留原 Dispatcher 与意图）", chatID)
 }
@@ -667,14 +667,14 @@ func (a *App) AppendTaskStateToFront(ctx context.Context, chatID string) {
 	}
 }
 
-func (a *App) AppenAgentMessageToFrontRole(ctx context.Context, role, chatID string) {
+func (a *App) AppendAgentMessageToFrontRole(ctx context.Context, role, chatID string) {
 	outputChan := globalchannel.GetGlobalDialogOutChannel(chatID)
-	reasonningOutputChan := globalchannel.GetGlobalReasonOutChannel(chatID)
+	reasoningOutputChan := globalchannel.GetGlobalReasonOutChannel(chatID)
 	eventname := "dialogAppend"
 
 	if role == utils.MessageRoleReasoning {
 		eventname = "reasoningAppend"
-		outputChan = reasonningOutputChan
+		outputChan = reasoningOutputChan
 	}
 
 	type streamBuf struct {
@@ -1117,13 +1117,13 @@ func (a *App) ResumeNovelLongform(chatID, outputDirRel, premise, authorNotes str
 	tool := noveltool.New()
 	go func() {
 		ctx := context.WithValue(context.Background(), utils.ChatIDString, chatID)
-		globalchannel.SendAssitantMessageOnce(ctx, "开始续写任务")
+		globalchannel.SendAssistantMessageOnce(ctx, "开始续写任务")
 		result, runErr := tool.Execute(ctx, string(payload))
 		if runErr != nil {
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("续写失败：%s", runErr.Error()))
+			globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("续写失败：%s", runErr.Error()))
 			return
 		}
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("续写完成: %s", result))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("续写完成: %s", result))
 	}()
 	return nil
 }

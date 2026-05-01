@@ -42,4 +42,3 @@ func DeletePageSnapshot(chatID string) {
 	}
 	chatPageSnapshotStore.Delete(chatID)
 }
-

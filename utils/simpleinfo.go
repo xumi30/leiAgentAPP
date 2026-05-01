@@ -8,4 +8,3 @@ func SimpleInfoMap(topic, simpledescription string) map[string]string {
 		"simpledescription": simpledescription,
 	}
 }
-

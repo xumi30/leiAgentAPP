@@ -256,4 +256,3 @@ func toJSON(v interface{}) (string, error) {
 	}
 	return string(out), nil
 }
-

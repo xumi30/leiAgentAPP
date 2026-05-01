@@ -7,4 +7,3 @@ import "fmt"
 func main() {
 	fmt.Println("browser-mcp-tool: placeholder")
 }
-

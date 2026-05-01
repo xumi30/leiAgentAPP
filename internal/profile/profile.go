@@ -272,7 +272,7 @@ func personFilePath() (string, error) {
 	dir, err := Dir()
 	if err != nil {
 		return "", err
-}
+	}
 	return filepath.Join(dir, personFileName), nil
 }
 

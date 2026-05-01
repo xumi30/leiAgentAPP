@@ -18,7 +18,7 @@ func GetSqlInstance() *sqlmemory.SQLMemory {
 	}
 	return sql
 }
-func ListConverstions() []map[string]interface{} {
+func ListConversations() []map[string]interface{} {
 	if GetSqlInstance() == nil {
 		return nil
 	}
@@ -101,7 +101,7 @@ func DeleteConversation(chatID string) error {
 	}
 
 	//删除对话对应的聊天记录
-	err = sql.DelateMessage(chatID)
+	err = sql.DeleteMessages(chatID)
 	if err != nil {
 		logging.Error("删除对话失败: %v", err)
 		return err

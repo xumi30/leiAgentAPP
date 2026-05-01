@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
-	fileFunctions "leiAgent/internal/tools/fileFunction"
+	filefunctions "leiAgent/internal/tools/filefunctions"
 	"leiAgent/internal/tools/libraryfs"
 	"leiAgent/internal/tools/noveltool"
 	"leiAgent/internal/tools/openclawtool"
-	searchFunctions "leiAgent/internal/tools/searchFuctions"
-	"leiAgent/internal/tools/timeFunctions"
+	searchfunctions "leiAgent/internal/tools/searchfunctions"
+	"leiAgent/internal/tools/timetools"
 	"leiAgent/logging"
 	"leiAgent/utils"
 	"strings"
@@ -50,14 +50,14 @@ type Dispatcher struct {
 func init() {
 	toolRegistry := tools.Getregistry()
 
-	getTime := timeFunctions.NewTimeTool()
-	calculateTimeTool := timeFunctions.NewCalculateTimeTool()
-	getWheatherTool := searchFunctions.NewWeatherTool()
-	getLongitude := searchFunctions.NewGeocodingTool()
-	financeMarket := searchFunctions.NewMarketTool()
-	getcurrenttime := timeFunctions.NewCurrentTimeTool()
-	wikiSearch := searchFunctions.NewWikipediaSearchTool()
-	downloadBooks := searchFunctions.NewDownloadBooksTool()
+	getTime := timetools.NewTimeTool()
+	calculateTimeTool := timetools.NewCalculateTimeTool()
+	getWeatherTool := searchfunctions.NewWeatherTool()
+	getLongitude := searchfunctions.NewGeocodingTool()
+	financeMarket := searchfunctions.NewMarketTool()
+	getcurrenttime := timetools.NewCurrentTimeTool()
+	wikiSearch := searchfunctions.NewWikipediaSearchTool()
+	downloadBooks := searchfunctions.NewDownloadBooksTool()
 	bashfunction := bashfunction.NewBashTool()
 
 	listMCPTools := mcptool.NewListMCPTools(nil)
@@ -75,16 +75,16 @@ func init() {
 	toolRegistry.Register(openClawBaiduSearch)
 	toolRegistry.Register(installOpenClawSkillFromMarket)
 
-	toolRegistry.Register(fileFunctions.GetWriteFileChunk())
-	toolRegistry.Register(fileFunctions.GetFileWriteTool())
-	toolRegistry.Register(fileFunctions.NewFileDownloadTool())
+	toolRegistry.Register(filefunctions.GetWriteFileChunk())
+	toolRegistry.Register(filefunctions.GetFileWriteTool())
+	toolRegistry.Register(filefunctions.NewFileDownloadTool())
 	toolRegistry.Register(libraryfs.New())
 	// toolRegistry.Register(memotool.NewMemoWriteTool())
 	toolRegistry.Register(noveltool.New())
 	toolRegistry.Register(getcurrenttime)
 	toolRegistry.Register(financeMarket)
 	toolRegistry.Register(getLongitude)
-	toolRegistry.Register(getWheatherTool)
+	toolRegistry.Register(getWeatherTool)
 	toolRegistry.Register(wikiSearch)
 	toolRegistry.Register(downloadBooks)
 	toolRegistry.Register(getTime)
@@ -199,7 +199,7 @@ func (d *Dispatcher) Shutdown() {
 		d.cancel()
 	}
 
-	//globalchannel.SendAssitantMessageOnce(d.ctx, fmt.Sprintf("%s", "终止任务运行..."))
+	//globalchannel.SendAssistantMessageOnce(d.ctx, fmt.Sprintf("%s", "终止任务运行..."))
 }
 
 // ReplaceRunContext 在 Shutdown 之后使用：保留同一 Dispatcher（含 Intention），仅换新可取消的 context 并重新 Run。
@@ -216,7 +216,7 @@ func (d *Dispatcher) handleMessage(ctx context.Context, msg *globalchannel.Messa
 	message := msg.Content
 	userToAgentList := msg.UserToAgentList
 	if len(userToAgentList) > 0 {
-		go chatWithAitessistant(ctx, message, userToAgentList)
+		go chatWithMentionedAgents(ctx, message, userToAgentList)
 		return
 	}
 
@@ -328,10 +328,28 @@ func (d *Dispatcher) handleActionGateChat(ctx context.Context, message string) (
 	if tc == nil {
 		return false, false, fmt.Errorf("action-gate 返回空响应")
 	}
-	if strings.TrimSpace(tc.Content) != "" && !tc.NeedAction {
+	needAction, handled = interpretActionGateResult(tc)
+	if !handled {
+		logging.Warn("action-gate 判定为普通对话但未返回正文，回退到意图识别")
+		return needAction, handled, nil
+	}
+	if !needAction {
 		memory.AddAssistantContentMessage(chatId, tc.Content)
 	}
-	return tc.NeedAction, true, nil
+	return needAction, handled, nil
+}
+
+// interpretActionGateResult 只把带有可展示正文的普通对话视为已处理。
+// 部分模型会只返回 [needAction:false]；该标签被代理层剥离后正文为空，
+// 此时必须回退到完整意图/聊天链路，否则用户看不到任何响应。
+func interpretActionGateResult(tc *proxy.ToolAndContent) (needAction bool, handled bool) {
+	if tc == nil {
+		return false, false
+	}
+	if tc.NeedAction {
+		return true, true
+	}
+	return false, strings.TrimSpace(tc.Content) != ""
 }
 
 func buildActionGateMessages(ctx context.Context, message string) []openaistyle.ChatMessage {
@@ -387,7 +405,7 @@ func (d *Dispatcher) switchIntent(ctx context.Context, intent *Intention) {
 	case utils.ChatModeString:
 		logging.Info("切换到对话模式")
 		if intent.Content != "" {
-			globalchannel.SendAssitantMessageOnce(ctx, intent.Content)
+			globalchannel.SendAssistantMessageOnce(ctx, intent.Content)
 		} else {
 			logging.Info("对话模式下，意图内容为空，不发送")
 			// 如果意图内容为空，则直接把goal用户原文发送给模型，进行对话
@@ -405,7 +423,7 @@ func (d *Dispatcher) switchIntent(ctx context.Context, intent *Intention) {
 		logging.Error("意图为空，无法处理")
 
 	default:
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "未知意图: "))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", "未知意图: "))
 		logging.Error("未知意图: %s", d.Intention.Intent)
 	}
 }
@@ -417,27 +435,27 @@ func (d *Dispatcher) handlePlan(ctx context.Context, intent *Intention) {
 	if _, ok := ctx.Value(utils.ChatIDString).(string); !ok {
 		logging.Error("无法从 context 中获取 chatId")
 
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "无法从 context 中获取 chatId"))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", "无法从 context 中获取 chatId"))
 		return
 	}
 
 	ctx = context.WithValue(ctx, utils.IsPlanningString, true)
 
-	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "开始进行任务规划...\n"))
+	globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", "开始进行任务规划...\n"))
 	logging.Info("开始进行任务规划...")
 
 	// 单次规划调用：goal 传用户原文。此前此处先 Communicate 再 GeneratePlan，会重复规划且第二次仍用包装后的长串污染 goal。
 	pInst, err := planner.GeneratePlan(ctx, userGoal, string(toolsInfo()))
 	if err != nil {
 		logging.Error("生成计划失败: %v", err)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("生成计划失败: %v", err))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("生成计划失败: %v", err))
 		return
 	}
 	if pInst == nil {
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "生成计划失败，请确认任务意图是否正确"))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", "生成计划失败，请确认任务意图是否正确"))
 		return
 	}
-	globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", "规划完成，开始执行..."))
+	globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", "规划完成，开始执行..."))
 
 	pInst.DoTask(ctx)
 
@@ -562,18 +580,18 @@ func handleAgentChat(ctx context.Context, message string, agentID string) error 
 
 	ctx = context.WithValue(ctx, utils.AgentID, agentID)
 
-	var responeseAgent *proxy.ToolAndContent
-	if responeseAgent, err = p.CommunicateWithMessages(ctx, messages); err != nil {
+	var responseAgent *proxy.ToolAndContent
+	if responseAgent, err = p.CommunicateWithMessages(ctx, messages); err != nil {
 		logging.Warn("aite chat failed agent=%s: %v", agentID, err)
 		return fmt.Errorf("chat failed: %s: %v", agentID, err)
 	}
-	if responeseAgent != nil && responeseAgent.Content != "" {
+	if responseAgent != nil && responseAgent.Content != "" {
 		chatId := ctx.Value(utils.ChatIDString).(string)
-		memory.AddAssistantContentMessage(chatId, fmt.Sprintf("%s: %s", info["agent_name"], responeseAgent.Content))
+		memory.AddAssistantContentMessage(chatId, fmt.Sprintf("%s: %s", info["agent_name"], responseAgent.Content))
 	}
 	return nil
 }
-func chatWithAitessistant(ctx context.Context, message string, agentList []string) error {
+func chatWithMentionedAgents(ctx context.Context, message string, agentList []string) error {
 	if len(agentList) == 0 {
 		return nil
 	}
@@ -695,12 +713,12 @@ func (d *Dispatcher) processMessageWithIntent(ctx context.Context, message strin
 	intent, err := ConfirmIntention(ctx, message, d.Intention)
 	if err != nil {
 		logging.Error("确认意图失败: %v", err)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("确认意图失败：%v", err))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("确认意图失败：%v", err))
 		return
 	}
 	if intent == nil {
 		logging.Error("确认意图失败: 返回了空意图且没有错误")
-		globalchannel.SendAssitantMessageOnce(ctx, "确认意图失败：模型未返回有效意图，请重试或检查模型与网络配置。")
+		globalchannel.SendAssistantMessageOnce(ctx, "确认意图失败：模型未返回有效意图，请重试或检查模型与网络配置。")
 		return
 	}
 	logging.Info("确认意图: %s", intent.Intent)
@@ -723,9 +741,9 @@ func (d *Dispatcher) processMessageWithIntent(ctx context.Context, message strin
 
 	if d.Intention.RequiresClarification {
 		if d.Intention.Content != "" {
-			globalchannel.SendAssitantMessageOnce(ctx, d.Intention.Content)
+			globalchannel.SendAssistantMessageOnce(ctx, d.Intention.Content)
 		} else {
-			globalchannel.SendAssitantMessageOnce(ctx, "我需要先确认一点信息，才能继续处理这个请求。")
+			globalchannel.SendAssistantMessageOnce(ctx, "我需要先确认一点信息，才能继续处理这个请求。")
 		}
 		return
 	}
@@ -785,14 +803,14 @@ func verifyGoal(ctx context.Context, goal string) error {
 	}
 	ctx = context.WithValue(ctx, utils.AgentID, agentID)
 
-	var responeseAgent *proxy.ToolAndContent
-	if responeseAgent, err = p.CommunicateWithMessages(ctx, messages); err != nil {
+	var responseAgent *proxy.ToolAndContent
+	if responseAgent, err = p.CommunicateWithMessages(ctx, messages); err != nil {
 		logging.Warn("aite chat failed agent=%s: %v", agentID, err)
 		return fmt.Errorf("chat failed: %s: %v", agentID, err)
 	}
-	if responeseAgent != nil && responeseAgent.Content != "" {
+	if responseAgent != nil && responseAgent.Content != "" {
 		chatId := ctx.Value(utils.ChatIDString).(string)
-		memory.AddAssistantContentMessage(chatId, fmt.Sprintf("From %s: %s", agent_name, responeseAgent.Content))
+		memory.AddAssistantContentMessage(chatId, fmt.Sprintf("From %s: %s", agent_name, responseAgent.Content))
 	}
 	return nil
 }

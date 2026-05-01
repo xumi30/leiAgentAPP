@@ -96,10 +96,10 @@ func jsonIntAny(m map[string]json.RawMessage, keys ...string) int {
 
 // LLMConfigFormState 为 GetLLMConfigFormState 的返回值。
 type LLMConfigFormState struct {
-	Primary       LLMConfigRow   `json:"primary"`
-	Backends      []LLMConfigRow `json:"backends"`
-	Path          string         `json:"path"`
-	UsingExample  bool           `json:"usingExample"`
+	Primary      LLMConfigRow   `json:"primary"`
+	Backends     []LLMConfigRow `json:"backends"`
+	Path         string         `json:"path"`
+	UsingExample bool           `json:"usingExample"`
 }
 
 func rowFromYAML(y llmYAML) LLMConfigRow {
@@ -166,10 +166,10 @@ func GetLLMConfigFormState() (LLMConfigFormState, error) {
 	}
 
 	return LLMConfigFormState{
-		Primary:       LLMConfigRow{Enabled: true},
-		Backends:      backends,
-		Path:          path,
-		UsingExample:  usingExample,
+		Primary:      LLMConfigRow{Enabled: true},
+		Backends:     backends,
+		Path:         path,
+		UsingExample: usingExample,
 	}, nil
 }
 

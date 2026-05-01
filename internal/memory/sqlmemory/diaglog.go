@@ -347,7 +347,7 @@ func (m *SQLMemory) SelectAllMessageContents() ([]string, error) {
 	return out, nil
 }
 
-func (m *SQLMemory) DelateMessage(chatID string) error {
+func (m *SQLMemory) DeleteMessages(chatID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -3,7 +3,7 @@ import { useChatStore } from '../../../stores';
 import { shouldShowMessageAvatar } from '../../../utils/messageClassify';
 import userAvatar from '../../../assets/images/ren.png';
 import assistantAvatar from '../../../assets/images/aitx.png';
-import MessageContent from '../../../componentjs/MessageContent.jsx';
+import MessageContent from '../../../features/chat/components/MessageContent.jsx';
 
 const DEFAULT_ASSISTANT_AGENT_ID = 'agentid_0';
 

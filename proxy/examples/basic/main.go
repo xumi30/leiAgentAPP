@@ -17,10 +17,10 @@ import (
 func main() {
 	client, err := proxy.New(
 		proxy.WithRetryPolicy(proxy.RetryPolicy{
-			MaxAttempts:  2,
-			BaseDelay:    250 * time.Millisecond,
-			MaxDelay:     2 * time.Second,
-			JitterRatio:  0.2,
+			MaxAttempts: 2,
+			BaseDelay:   250 * time.Millisecond,
+			MaxDelay:    2 * time.Second,
+			JitterRatio: 0.2,
 		}),
 		proxy.WithCircuitBreaker(proxy.CircuitBreakerPolicy{
 			Enabled:        true,
@@ -69,4 +69,3 @@ func clientModelHint() string {
 	// keep empty by default: the configured backend already pins the model.
 	return ""
 }
-

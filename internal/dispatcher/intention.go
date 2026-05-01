@@ -302,7 +302,7 @@ func buildIntentRecentContext(ctx context.Context, currentMessage string) []Inte
 		if strings.TrimSpace(content) == "" {
 			continue
 		}
-		if currentTrimmed != "" && strings.TrimSpace(content) == currentTrimmed {
+		if currentTrimmed != "" && msg.Role == memory.MessageRoleUser && intentUserContent(content) == currentTrimmed {
 			continue
 		}
 
@@ -314,6 +314,18 @@ func buildIntentRecentContext(ctx context.Context, currentMessage string) []Inte
 
 	reverseIntentContextMessages(contextMessages)
 	return contextMessages
+}
+
+// intentUserContent removes prefixes used when persisting user messages so the
+// just-added current message is not injected into the action-gate context again.
+func intentUserContent(content string) string {
+	trimmed := strings.TrimSpace(content)
+	for _, prefix := range []string{"User:", "User：", "用户请求:", "用户请求："} {
+		if strings.HasPrefix(trimmed, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+		}
+	}
+	return trimmed
 }
 
 // func normalizeIntentContextContent(content string) string {

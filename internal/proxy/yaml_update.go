@@ -96,4 +96,3 @@ func upsertRootKey(doc *yamlv3.Node, key string, valNode *yamlv3.Node) {
 		valNode,
 	)
 }
-

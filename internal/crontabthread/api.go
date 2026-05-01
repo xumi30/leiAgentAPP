@@ -69,17 +69,17 @@ func ListTasks(opts ListOptions) ([]map[string]interface{}, error) {
 	for rows.Next() {
 		var (
 			id, userID, title, actionType, actionPayload, scheduleType, timezone, status string
-			runAt                                                              sql.NullTime
-			cronExpr                                                           sql.NullString
-			rruleText                                                          sql.NullString
-			executingInt                                                       int
-			version                                                           int
-			completedInt                                                       int
-			runCount                                                          int
-			lastRunAt                                                          sql.NullTime
-			nextRunAt                                                          sql.NullTime
-			createdAt                                                          time.Time
-			updatedAt                                                          time.Time
+			runAt                                                                        sql.NullTime
+			cronExpr                                                                     sql.NullString
+			rruleText                                                                    sql.NullString
+			executingInt                                                                 int
+			version                                                                      int
+			completedInt                                                                 int
+			runCount                                                                     int
+			lastRunAt                                                                    sql.NullTime
+			nextRunAt                                                                    sql.NullTime
+			createdAt                                                                    time.Time
+			updatedAt                                                                    time.Time
 		)
 		if err := rows.Scan(
 			&id, &userID, &title, &actionType, &actionPayload, &scheduleType,
@@ -180,4 +180,3 @@ func UpdateTaskBasics(id string, title string, actionPayload string) error {
 	logging.Info("[scheduled_task:update_basics] id=%s affected=%d", taskID, aff)
 	return nil
 }
-

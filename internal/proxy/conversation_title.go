@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode"
 
-	gemini "leiAgent/internal/provider/Gemin"
+	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/logging"
 	"leiAgent/utils"

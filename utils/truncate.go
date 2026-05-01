@@ -15,4 +15,3 @@ func TruncateRunes(s string, max int) string {
 	}
 	return string(r[len(r)-max:])
 }
-

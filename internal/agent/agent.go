@@ -115,7 +115,7 @@ func (a *Agent) HandleChat(ctx context.Context, message string) (string, error) 
 		return "", fmt.Errorf("代理返回空内容")
 	}
 
-	a.recordMeomoryFromResponse(ctx, toolAndContent)
+	a.recordMemoryFromResponse(ctx, toolAndContent)
 
 	return toolAndContent.Content, nil
 }
@@ -143,7 +143,7 @@ func (a *Agent) handleToolCompleteChat(ctx context.Context, message string) (uti
 	}
 
 	if len(toolAndContent.ToolList) > 0 {
-		a.recordMeomoryFromResponse(toolCtx, toolAndContent)
+		a.recordMemoryFromResponse(toolCtx, toolAndContent)
 		return utils.ToolCompletePayload{}, nil
 	}
 
@@ -174,7 +174,7 @@ func (a *Agent) handleToolCompleteChat(ctx context.Context, message string) (uti
 // toolCodeRegex 匹配模型以纯文本输出的 <tool_code>...</tool_code> 格式
 var toolCodeRegex = regexp.MustCompile(`(?s)<tool_code>\s*(.*?)\s*</tool_code>`)
 
-func (a *Agent) recordMeomoryFromResponse(ctx context.Context, toolAndContent *proxy.ToolAndContent) {
+func (a *Agent) recordMemoryFromResponse(ctx context.Context, toolAndContent *proxy.ToolAndContent) {
 
 	logging.Info("开始记忆返回信息")
 
@@ -302,7 +302,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		functl, flag := tools.Getregistry().Get(toolname)
 
 		outStr = fmt.Sprintf("开始调用工具%s, 参数是%s", toolname, tool.Function.Arguments)
-		globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
+		globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 		logging.Info("%s", outStr)
 
 		start := time.Now()
@@ -351,7 +351,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 			directCompleteOnly = false
 			logging.Error("%s", outStr)
 			memory.AddToolMessage(chatId, tool.ID, outStr)
-			globalchannel.SendAssitantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
+			globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", outStr))
 
 			break
 		}
@@ -361,7 +361,7 @@ func (a *Agent) executeTools(ctx context.Context, toolAndContent *proxy.ToolAndC
 		displayStr := formatToolSuccessForDisplay(toolname, elapsed, str, directCompleteTool)
 		logging.Info("%s", outStr)
 		memory.AddToolMessage(chatId, tool.ID, outStr)
-		globalchannel.SendAssitantMessageOnce(ctx, displayStr)
+		globalchannel.SendAssistantMessageOnce(ctx, displayStr)
 		toolResults = append(toolResults, outStr)
 	}
 

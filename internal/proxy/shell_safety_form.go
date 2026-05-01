@@ -8,7 +8,7 @@ import (
 
 // ShellSafetyFormState 终端黑名单设置表单。
 type ShellSafetyFormState struct {
-	Path  string           `json:"path"`
+	Path  string            `json:"path"`
 	Rules []bashpolicy.Rule `json:"rules"`
 }
 

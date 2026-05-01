@@ -96,4 +96,3 @@ memory_compression:
 		t.Fatalf("unexpected tail: %#v %#v", out[1], out[2])
 	}
 }
-

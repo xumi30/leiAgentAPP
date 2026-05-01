@@ -1,11 +1,11 @@
 /**
- * 助手侧「工具调用流水」类文案（与 agent 里 SendAssitantMessageOnce 的格式一致），用于紧凑排版。
+ * 助手侧「工具调用流水」类文案（与 agent 里 SendAssistantMessageOnce 的格式一致），用于紧凑排版。
  * @param {string} content
  */
 export function isAssistantToolRoutineMessage(content) {
   const s = String(content ?? '').trim();
   if (!s) return false;
-  // 与 internal/agent/agent.go 中 SendAssitantMessageOnce 的文案一致
+  // 与 internal/agent/agent.go 中 SendAssistantMessageOnce 的文案一致
   // 注意：UI 里这些行有时会带前缀/换行/不可见字符，不能用 ^ 强锚定开头；改为“包含式”匹配。
   // 注意：不要用 \b 去卡中文词尾——JS 的 \b 只对 ASCII “单词字符”有效，
   // 「成功」后跟空格/`(` 时 \b 往往匹配不上，会导致整段规则失效。

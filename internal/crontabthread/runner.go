@@ -245,4 +245,3 @@ func (r *Runner) tryExecuteOne(ctx context.Context, db *sql.DB, task ScheduledTa
 	_ = tz
 	return nil
 }
-

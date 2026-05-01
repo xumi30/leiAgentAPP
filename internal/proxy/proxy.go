@@ -9,7 +9,7 @@ import (
 	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/capabilities"
 	"leiAgent/internal/memory"
-	gemini "leiAgent/internal/provider/Gemin"
+	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"

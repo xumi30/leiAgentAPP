@@ -400,4 +400,3 @@ func normalizeLabelFromName(name string) string {
 	}
 	return s
 }
-

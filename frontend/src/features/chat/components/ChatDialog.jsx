@@ -9,8 +9,9 @@ import { GetMCPConfigFormState, GetOpenClawSkillState, RespondShellApproval } fr
 import { EventsOn } from '../../../../wailsjs/runtime/runtime';
 import assistantAvatar from '../../../assets/images/aitx.png';
 import Tooltip from './tooltip/Tooltip';
-import MemoStrip from '../../dialog/components/MemoStrip';
-import { useMemoComposer } from '../../dialog/hooks/useMemoComposer';
+import MemoStrip from './MemoStrip';
+import { useMemoComposer } from '../hooks/useMemoComposer';
+import '../../../styles/chat.css';
 
 const DEFAULT_ASSISTANT_AGENT_ID = 'agentid_0';
 

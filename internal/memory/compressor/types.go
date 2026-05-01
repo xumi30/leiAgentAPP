@@ -29,8 +29,8 @@ type SourceMeta struct {
 }
 
 type ContextRecipe struct {
-	SystemCard        bool `yaml:"system_card"`
-	RecentTailMessages int `yaml:"recent_tail_messages"`
+	SystemCard         bool `yaml:"system_card"`
+	RecentTailMessages int  `yaml:"recent_tail_messages"`
 }
 
 type Outputs struct {
@@ -51,4 +51,3 @@ type SelectedSegment struct {
 	Kind    string `yaml:"kind"` // e.g. headings/conclusion/error_stack/tail_lines
 	Snippet string `yaml:"snippet"`
 }
-

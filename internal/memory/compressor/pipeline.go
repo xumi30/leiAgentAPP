@@ -37,10 +37,10 @@ func CompressRulesOnly(msgs []*memory.Message, opt Options) CompressedArtifact {
 			RawMessageCount: len(msgs),
 		},
 		PolicySnapshot: map[string]any{
-			"mode":              "rules_only",
-			"tldr_sentences":    opt.TLDRSentences,
-			"bullet_max":        opt.BulletMax,
-			"recent_tail_msgs":  opt.RecentTailMessages,
+			"mode":               "rules_only",
+			"tldr_sentences":     opt.TLDRSentences,
+			"bullet_max":         opt.BulletMax,
+			"recent_tail_msgs":   opt.RecentTailMessages,
 			"system_card_prefix": opt.SystemCardPrefix,
 		},
 		ContextRecipe: ContextRecipe{
@@ -378,7 +378,7 @@ func pickActions(lines []string, max int) []string {
 	}
 	actionHints := []string{"TODO", "行动", "修复", "解决", "请", "建议", "下一步", "改", "更新", "检查", "确认"}
 	type cand struct {
-		line string
+		line  string
 		score int
 	}
 	var cands []cand
@@ -532,4 +532,3 @@ func itoa(n int) string {
 	}
 	return string(b[i:])
 }
-

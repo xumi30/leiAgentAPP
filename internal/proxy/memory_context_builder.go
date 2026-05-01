@@ -152,4 +152,3 @@ func pickRecentTail(raw []*memory.Message, n int) []*memory.Message {
 	}
 	return tmp
 }
-
