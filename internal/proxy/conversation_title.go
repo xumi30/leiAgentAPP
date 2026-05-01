@@ -1,17 +1,12 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 	"unicode"
 
-	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -41,64 +36,6 @@ func normalizeChatTitle(raw string) string {
 	return utils.TruncateRunes(s, utils.ChatTitleMaxRunes)
 }
 
-func messageTextFromCompletion(resp *openaistyle.ChatCompletionResponse) (string, error) {
-	if len(resp.Choices) == 0 || resp.Choices[0].Message == nil {
-		return "", fmt.Errorf("no completion message")
-	}
-	msg := resp.Choices[0].Message
-	switch c := msg.Content.(type) {
-	case string:
-		return c, nil
-	default:
-		if msg.Content != nil {
-			return fmt.Sprint(msg.Content), nil
-		}
-		return "", nil
-	}
-}
-
-func parseCompletionBody(body []byte, info *ModelAPIInfo) (*openaistyle.ChatCompletionResponse, error) {
-	if info.provider == "gemini" {
-		geminiResponse := &gemini.ChatCompletionResponse{}
-		if err := json.Unmarshal(body, geminiResponse); err != nil {
-			return nil, err
-		}
-		return gemini.ConvertToOpenAIResponse(geminiResponse), nil
-	}
-	openaiResp := &openaistyle.ChatCompletionResponse{}
-	if err := json.Unmarshal(body, openaiResp); err != nil {
-		return nil, err
-	}
-	return openaiResp, nil
-}
-
-func buildTitleRequestJSON(info *ModelAPIInfo, userText string) ([]byte, error) {
-	maxTok := 64
-	temp := 0.35
-	opts := []openaistyle.Option{
-		openaistyle.WithModel(info.modelName),
-		openaistyle.WithMessages([]openaistyle.ChatMessage{
-			{Role: openaistyle.RoleSystem, Content: chatTitleSystemPrompt},
-			{Role: openaistyle.RoleUser, Content: userText},
-		}),
-		openaistyle.WithMaxTokens(maxTok),
-		openaistyle.WithStream(false),
-		openaistyle.WithTemperature(temp),
-		openaistyle.WithEnableThinking(false),
-		openaistyle.WithThinking(&openaistyle.ChatThinking{Type: openaistyle.ThinkingDisabled}),
-	}
-	req := openaistyle.NewChatCompletionRequest(opts...)
-	jsonData, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-	if info.provider == "gemini" {
-		greq := gemini.ConvertFromOpenAIRequest(req)
-		return json.Marshal(greq)
-	}
-	return jsonData, nil
-}
-
 func fallbackChatTitle(firstUserMessage string) string {
 	s := strings.TrimSpace(firstUserMessage)
 	if s == "" {
@@ -124,7 +61,7 @@ func GenerateConversationTitle(ctx context.Context, firstUserMessage string) str
 	}
 
 	client := &http.Client{Timeout: 40 * time.Second}
-	p, err := NewProxy(client)
+	p, err := NewClient(client)
 	if err != nil {
 		logging.Warn("生成对话标题：无法创建 LLM 代理，使用兜底标题: %v", err)
 		return fallbackChatTitle(msg)
@@ -139,56 +76,17 @@ func GenerateConversationTitle(ctx context.Context, firstUserMessage string) str
 		defer cancel()
 	}
 
-	var lastErr error
-	for i, info := range p.backends {
-		label := info.logLabel()
-		if label == "" {
-			label = fmt.Sprintf("#%d", i)
-		}
-		jsonData, err := buildTitleRequestJSON(info, userSnippet)
-		if err != nil {
-			lastErr = err
-			logging.Warn("生成对话标题：后端 %s 构造请求失败: %v", label, err)
-			continue
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, info.url, bytes.NewBuffer(jsonData))
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		resp, err := p.doRequest(req, info)
-		if err != nil {
-			lastErr = err
-			logging.Warn("生成对话标题：后端 %s 请求失败: %v", label, err)
-			continue
-		}
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		openaiResp, err := parseCompletionBody(body, info)
-		if err != nil {
-			lastErr = err
-			logging.Warn("生成对话标题：后端 %s 解析失败: %v", label, err)
-			continue
-		}
-		text, err := messageTextFromCompletion(openaiResp)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		title := normalizeChatTitle(text)
-		if title != "" {
-			logging.Info("生成对话标题成功（后端 %s）: %q", label, title)
-			return title
-		}
-		lastErr = fmt.Errorf("empty title from model")
+	text, err := p.completeText(ctx, []openaistyle.ChatMessage{
+		{Role: openaistyle.RoleSystem, Content: chatTitleSystemPrompt},
+		{Role: openaistyle.RoleUser, Content: userSnippet},
+	}, 64, 0.35)
+	if err != nil {
+		logging.Warn("生成对话标题失败，使用兜底: %v", err)
+		return fallbackChatTitle(msg)
 	}
-
-	if lastErr != nil {
-		logging.Warn("生成对话标题：全部后端失败，使用兜底: %v", lastErr)
+	title := normalizeChatTitle(text)
+	if title != "" {
+		return title
 	}
 	return fallbackChatTitle(msg)
 }

@@ -414,7 +414,7 @@ func (t *LongFormNovelTool) oneShotLLM(ctx context.Context, chatID, system, user
 	sub = context.WithValue(sub, utils.IsStreamString, true)
 	sub = context.WithValue(sub, utils.ToolsString, false)
 
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		return "", err
 	}

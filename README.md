@@ -2,7 +2,7 @@
 
 **A local-first desktop Agent runtime built with Go, Wails, and React.**
 
-leiAgent 不只是聊天 UI。它把一次用户请求路由到 `CHAT`、`PLAN` 或 `TOOL` 执行路径，并在同一个桌面应用中组合多模型故障转移、Agent 工具循环、MCP、Skills、持久化记忆、工作区文件和人工审批。
+leiAgent 不只是聊天 UI。它把一次用户请求路由到 `CHAT`、`PLAN` 或 `TOOL` 执行路径，并在同一个桌面应用中组合单一 LLM 客户端、Agent 工具循环、MCP、Skills、持久化记忆、工作区文件和人工审批。
 
 > Local-first 指 Agent 运行时、会话数据、记忆和工具执行位于本机；模型请求仍会发送到你配置的 LLM 服务。
 
@@ -14,7 +14,7 @@ leiAgent 不只是聊天 UI。它把一次用户请求路由到 `CHAT`、`PLAN` 
 | Agent runtime | 工具调用循环、执行上下文、任务取消、流式事件和多 Agent 会话 |
 | 规划执行 | Planner 生成步骤、调用工具、校验结果并持久化计划状态 |
 | 工具生态 | 内置文件、Shell、搜索、时间、文库、长文和定时任务工具；支持 MCP 与 Skills |
-| 模型接入 | OpenAI Chat Completions 兼容接口、Gemini 转换层、多后端顺序故障转移 |
+| 模型接入 | 单一 OpenAI-compatible Chat Completions 接口 |
 | 长期上下文 | SQLite 会话、YAML 本地记忆、规则压缩、结构化用户画像和备忘录 |
 | 桌面体验 | 多会话、流式消息、文库、Agent 管理、定时任务和可视化设置 |
 
@@ -28,7 +28,7 @@ flowchart LR
     Gate --> Chat[CHAT]
     Gate --> Plan[PLAN]
     Gate --> Tool[TOOL]
-    Chat --> Proxy[Provider proxy]
+    Chat --> Client[LLM client]
     Plan --> Planner
     Tool --> Agent[Agent tool loop]
     Planner --> Registry[Tool registry]
@@ -36,10 +36,10 @@ flowchart LR
     Registry --> Local[Local tools]
     Registry --> MCP[MCP servers]
     Registry --> Skills[Skill adapters]
-    Proxy --> LLM[Configured LLM backends]
+    Client --> LLM[OpenAI-compatible API]
     Planner --> Memory[(Memory / SQLite)]
     Agent --> Memory
-    Proxy --> Memory
+    Client --> Memory
     Memory --> UI
 ```
 
@@ -62,8 +62,8 @@ internal/
 ├── MCP/              # MCP client、配置、预检和环境解析
 ├── openclawskill/    # Skill 扫描、依赖和生命周期
 ├── memory/           # 上下文、压缩存储与 SQLite memory
-├── provider/         # OpenAI-style / Gemini 协议模型
-├── proxy/            # LLM 配置、故障转移和响应处理
+├── provider/         # OpenAI-compatible 请求与响应类型
+├── proxy/            # 单一 LLM 配置、客户端和响应处理
 ├── bashpolicy/       # Shell 命令策略
 ├── shellapproval/    # 用户批准 / 拒绝握手
 ├── doclib/           # Workspace 文库边界
@@ -113,7 +113,7 @@ wails dev
 cp config/config.example.yaml config/config.yaml
 ```
 
-真实 API Key 只应保存在被忽略的 `config/config.yaml`，或通过 `LEIAGENT_LLM_API_KEY` 等环境变量注入。多后端、Gemini、MCP、Skills、记忆压缩和 Shell 策略示例均在 `config/config.example.yaml` 中。
+真实 API Key 只应保存在被忽略的 `config/config.yaml`，或通过 `LEIAGENT_LLM_API_KEY` / `OPENAI_API_KEY` 注入。LLM、MCP、Skills、记忆压缩和 Shell 策略示例均在 `config/config.example.yaml` 中。
 
 ### 构建
 
@@ -146,7 +146,7 @@ cd frontend && npm run build
 npm run release:check
 ```
 
-当前测试覆盖 MCP 默认拒绝、环境解析、Shell policy 与审批、Workspace 路径边界、Agent Skill 预检、Dispatcher 意图与执行蓝图、记忆压缩、SQL memory、Provider 配置和 Proxy-LB 等关键路径。
+当前测试覆盖 MCP 默认拒绝、环境解析、Shell policy 与审批、Workspace 路径边界、Agent Skill 预检、Dispatcher 意图与执行蓝图、记忆压缩、SQL memory 和 LLM 配置等关键路径。
 
 CI 会在 Pull Request 和 `main` push 上运行 Go 全量测试及 Linux Wails smoke build；`v*` tag 会触发 Linux、Windows、macOS 构建并生成 GitHub Release 产物。
 

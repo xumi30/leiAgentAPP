@@ -9,34 +9,27 @@ import (
 	mcpbridge "leiAgent/internal/MCP"
 	"leiAgent/internal/capabilities"
 	"leiAgent/internal/memory"
-	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/internal/tools"
 	"leiAgent/logging"
 	"leiAgent/utils"
 	"net/http"
-	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	streamModeNonStream = 0 // 仅非流式
-	streamModeStream    = 1 // 仅流式
-	streamModeBoth      = 3 // 由请求/上下文决定
-
 	// 默认补全上限（原 3000 易导致长 JSON / 多段正文在流式下被 length 截断）
 	defaultMaxOutputTokens = 8192
 	// 任务规划阶段模型常输出大块 JSON（含多步、长 content），单独抬高下限
 	planningMinOutputTokens = 16384
 )
 
-type Proxy struct {
+type Client struct {
 	httpClient *http.Client
-	backends   []*ModelAPIInfo // 按顺序尝试，失败则故障转移到下一条
+	config     *modelConfig
 }
 
 var (
@@ -59,26 +52,22 @@ func sharedHTTPClient() *http.Client {
 	return defaultHTTPClient
 }
 
-// NewProxy 创建代理。httpClient 为 nil 时使用进程内共享的默认 Client。
-// 配置见 config/config.yaml：llm（api_key、base_url、model）或多后端 llm_backends（按顺序 failover）。
-func NewProxy(httpClient *http.Client) (*Proxy, error) {
+// NewClient 创建单一 OpenAI-compatible LLM 客户端。
+func NewClient(httpClient *http.Client) (*Client, error) {
 	if httpClient == nil {
 		httpClient = sharedHTTPClient()
 	}
-	backends, err := loadModelConfigs()
+	config, err := loadModelConfig()
 	if err != nil {
 		return nil, err
 	}
-	if len(backends) == 0 {
-		return nil, fmt.Errorf("未加载到任何 LLM 后端")
-	}
-	return &Proxy{
+	return &Client{
 		httpClient: httpClient,
-		backends:   backends,
+		config:     config,
 	}, nil
 }
 
-func (p *Proxy) Communicate(ctx context.Context) (*ToolAndContent, error) {
+func (p *Client) Communicate(ctx context.Context) (*ToolAndContent, error) {
 	chatIDVal := ctx.Value(utils.ChatIDString)
 	chatID, ok := chatIDVal.(string)
 	if !ok || chatID == "" {
@@ -100,86 +89,42 @@ func (p *Proxy) Communicate(ctx context.Context) (*ToolAndContent, error) {
 	return p.communicateWithChatMessages(ctx, convertMessages(sourceMessages))
 }
 
-func (p *Proxy) CommunicateWithMessages(ctx context.Context, messages []openaistyle.ChatMessage) (*ToolAndContent, error) {
+func (p *Client) CommunicateWithMessages(ctx context.Context, messages []openaistyle.ChatMessage) (*ToolAndContent, error) {
 	return p.communicateWithChatMessages(ctx, messages)
 }
 
-func (p *Proxy) communicateWithChatMessages(ctx context.Context, chatMessages []openaistyle.ChatMessage) (*ToolAndContent, error) {
+func (p *Client) communicateWithChatMessages(ctx context.Context, chatMessages []openaistyle.ChatMessage) (*ToolAndContent, error) {
 	isStream := true
 	if val, ok := ctx.Value(utils.IsStreamString).(bool); ok {
 		isStream = val
 	}
 
-	var lastErr error
-	for i, info := range p.backends {
-		label := info.logLabel()
-		if label == "" {
-			label = fmt.Sprintf("#%d", i)
+	jsonData, err := p.makeRequestJSONFromChatMessages(ctx, chatMessages)
+	if err == nil {
+		var request *http.Request
+		request, err = http.NewRequestWithContext(ctx, http.MethodPost, p.config.url, bytes.NewBuffer(jsonData))
+		if err == nil {
+			var response *http.Response
+			response, err = p.doRequest(request)
+			if err == nil {
+				defer response.Body.Close()
+				return p.handleResponse(ctx, response, isStream)
+			}
 		}
-
-		jsonData, err := p.makeRequestJSONFromChatMessages(ctx, info, chatMessages)
-		if err != nil {
-			lastErr = err
-			logging.Error("LLM 后端 %s 构造请求失败: %v", label, err)
-			continue
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", info.url, bytes.NewBuffer(jsonData))
-		if err != nil {
-			lastErr = err
-			logging.Error("LLM 后端 %s 创建 HTTP 请求失败: %v", label, err)
-			continue
-		}
-
-		resp, err := p.doRequest(req, info)
-		if err != nil {
-			lastErr = err
-			logging.Warn("LLM 后端 %s 请求失败，尝试下一后端: %v", label, err)
-			continue
-		}
-
-		if info.isStream == streamModeNonStream {
-			isStream = false
-		}
-
-		toolAndContent, err := p.handleResponse(ctx, resp, isStream, info)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = err
-			logging.Warn("LLM 后端 %s 解析响应失败，尝试下一后端: %v", label, err)
-			continue
-		}
-
-		logging.Info("LLM 后端 %s 处理响应成功", label)
-		return toolAndContent, nil
 	}
-
-	if lastErr != nil {
-		err := fmt.Errorf("全部 LLM 后端均失败（共 %d 条）: %w", len(p.backends), lastErr)
-		if NotifyLLMProblem != nil {
-			NotifyLLMProblem(ctx, err.Error())
-		}
-		return nil, err
-	}
-	err := fmt.Errorf("全部 LLM 后端均失败（共 %d 条）", len(p.backends))
 	if NotifyLLMProblem != nil {
 		NotifyLLMProblem(ctx, err.Error())
 	}
 	return nil, err
 }
 
-func (p *Proxy) doRequest(requestinfo *http.Request, info *ModelAPIInfo) (*http.Response, error) {
-	switch info.provider {
-	case "gemini":
-		requestinfo.Header.Set("x-goog-api-key", info.token)
-
-	default:
-		requestinfo.Header.Set("Authorization", "Bearer "+info.token)
+func (p *Client) doRequest(request *http.Request) (*http.Response, error) {
+	if p.config.token != "" {
+		request.Header.Set("Authorization", "Bearer "+p.config.token)
 	}
+	request.Header.Set("Content-Type", "application/json")
 
-	requestinfo.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(requestinfo)
+	resp, err := p.httpClient.Do(request)
 
 	if err != nil {
 		logging.Error("发送请求失败：%v", err)
@@ -201,15 +146,10 @@ func (p *Proxy) doRequest(requestinfo *http.Request, info *ModelAPIInfo) (*http.
 }
 
 // resolveMaxOutputTokens 决定本次请求的 max_tokens：配置项、环境变量、规划模式下限。
-func resolveMaxOutputTokens(ctx context.Context, info *ModelAPIInfo) int {
+func resolveMaxOutputTokens(ctx context.Context, config *modelConfig) int {
 	maxTok := defaultMaxOutputTokens
-	if info.maxOutputTokens > 0 {
-		maxTok = info.maxOutputTokens
-	}
-	if v := strings.TrimSpace(os.Getenv("LEIAGENT_LLM_MAX_OUTPUT_TOKENS")); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			maxTok = n
-		}
+	if config.maxOutputTokens > 0 {
+		maxTok = config.maxOutputTokens
 	}
 	if v, ok := ctx.Value(utils.IsPlanningString).(bool); ok && v {
 		if maxTok < planningMinOutputTokens {
@@ -219,24 +159,7 @@ func resolveMaxOutputTokens(ctx context.Context, info *ModelAPIInfo) int {
 	return maxTok
 }
 
-func (p *Proxy) makeRequestJson(ctx context.Context, info *ModelAPIInfo) ([]byte, error) {
-	chatIDVal := ctx.Value(utils.ChatIDString)
-	chatID, ok := chatIDVal.(string)
-	if !ok || chatID == "" {
-		return nil, fmt.Errorf("context 缺少有效的 chatID")
-	}
-
-	var sourceMessages []*memory.Message
-	if override, ok := ctx.Value(utils.MemoryMessagesOverrideString).([]*memory.Message); ok && len(override) > 0 {
-		sourceMessages = override
-	} else {
-		sourceMessages = memory.GetLocalMemory().GetMessages(chatID)
-	}
-
-	return p.makeRequestJSONFromChatMessages(ctx, info, convertMessages(sourceMessages))
-}
-
-func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *ModelAPIInfo, chatMessages []openaistyle.ChatMessage) ([]byte, error) {
+func (p *Client) makeRequestJSONFromChatMessages(ctx context.Context, chatMessages []openaistyle.ChatMessage) ([]byte, error) {
 	isStream := true
 	if val, ok := ctx.Value(utils.IsStreamString).(bool); ok {
 		isStream = val
@@ -308,11 +231,11 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		}
 	}
 
-	maxTok := resolveMaxOutputTokens(ctx, info)
+	maxTok := resolveMaxOutputTokens(ctx, p.config)
 	logging.Info("LLM 请求 max_tokens=%d", maxTok)
 
 	opts := []openaistyle.Option{
-		openaistyle.WithModel(info.modelName),
+		openaistyle.WithModel(p.config.modelName),
 		openaistyle.WithMessages(chatMessages),
 		openaistyle.WithMaxTokens(maxTok),
 		openaistyle.WithStream(isStream),
@@ -320,28 +243,11 @@ func (p *Proxy) makeRequestJSONFromChatMessages(ctx context.Context, info *Model
 		openaistyle.WithTools(tls),
 		openaistyle.WithToolChoice(toolChoice),
 	}
-	// Some OpenAI-compatible gateways reject non-standard thinking fields even
-	// when they are set to "disabled". In disabled mode we simply omit them.
-	if IsLLMThinkingDisabled() {
-		opts = append(opts,
-			openaistyle.WithEnableThinking(false),
-			openaistyle.WithThinking(&openaistyle.ChatThinking{Type: openaistyle.ThinkingDisabled}),
-		)
-	}
-
 	req := openaistyle.NewChatCompletionRequest(opts...)
 
 	jsonData, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
-	}
-	if info.provider == "gemini" {
-		req := gemini.ConvertFromOpenAIRequest(req)
-
-		jsonData, err = json.Marshal(req)
-		if err != nil {
-			return nil, err
-		}
 	}
 	logging.Info("请求参数：%s", string(jsonData))
 	return jsonData, nil

@@ -447,7 +447,7 @@ func Refresh(ctx context.Context, chatID string) (*UserProfile, error) {
 	}
 	inputJSON, _ := json.MarshalIndent(input, "", "  ")
 
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		return nil, err
 	}

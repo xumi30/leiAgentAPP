@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AssessShellCommandRisk,
-  ClearProxyLbAuth,
   DeleteOpenClawSkill,
-  GetLLMConfigFormState,
+  GetLLMConfig,
   GetMCPConfigFormState,
   GetMCPHubPluginDetail,
   GetMCPHubStatus,
@@ -13,27 +12,25 @@ import {
   InstallOpenClawSkillDeps,
   PrepareMCPHubDeployment,
   RegisterMCPHub,
-  SaveLLMConfigForm,
+  SaveLLMConfig,
   SaveMCPConfigForm,
   SaveShellSafetyForm,
   SearchMCPHub,
   ValidateMCPConfigRow,
 } from '../../../wailsjs/go/main/App';
-import ProxyLbAuthModal, { hasProxyLbSessionFromBackends } from './ProxyLbAuthModal.jsx';
-import LLMBackendTable from './LLMBackendTable.jsx';
+import LLMConfigForm from './LLMConfigForm.jsx';
 import '../../styles/settings.css';
 
 import {
   FALLBACK_HUB_CATEGORIES,
   emptyHubStatus,
+  emptyLLMConfig,
   emptyMcpRow,
   emptyMcpStatus,
-  emptyRow,
   formatCount,
   hubRatingText,
   isMcpRowReady,
-  isProxyLbDisplayRow,
-  mapBackendRow,
+  mapLLMConfig,
   mcpToolsForDisplay,
   parseMcpImportText,
   sameToolList,
@@ -42,7 +39,7 @@ import {
 } from './settingsModel';
 export default function SettingsModal({ open, onClose, onSaved }) {
   const [activeTab, setActiveTab] = useState('llm');
-  const [backends, setBackends] = useState(() => []);
+  const [llmConfig, setLLMConfig] = useState(() => emptyLLMConfig());
   const [mcpServers, setMcpServers] = useState(() => []);
   const [mcpStatuses, setMcpStatuses] = useState(() => []);
   const [selectedMcpIndex, setSelectedMcpIndex] = useState(null);
@@ -87,11 +84,6 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const [skillNotice, setSkillNotice] = useState('');
   const [skillErr, setSkillErr] = useState('');
   const [skillBusyPath, setSkillBusyPath] = useState('');
-  const [proxyLbModalOpen, setProxyLbModalOpen] = useState(false);
-  const [proxyLbAuthFailed, setProxyLbAuthFailed] = useState(false);
-  const [proxyLbLogoutConfirmOpen, setProxyLbLogoutConfirmOpen] = useState(false);
-  const [proxyLbLogoutBusy, setProxyLbLogoutBusy] = useState(false);
-
   const lastValidatedRef = useRef([]);
   const shellLastRowRef = useRef(null);
   const shellScrollAfterAppendRef = useRef(false);
@@ -99,44 +91,14 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const loadLLMOnly = useCallback(async () => {
     setLoadErr('');
     try {
-      const llmState = await GetLLMConfigFormState();
-      const llmList = Array.isArray(llmState.backends) ? llmState.backends : [];
-      setBackends(llmList.length > 0 ? llmList.map(mapBackendRow) : []);
+      const llmState = await GetLLMConfig();
+      setLLMConfig(mapLLMConfig(llmState.config ?? {}));
       setSavePath(llmState.path ?? '');
       setUsingExample(!!llmState.usingExample);
     } catch (e) {
       setLoadErr(String(e?.message || e));
     }
   }, []);
-
-  const proxyLbHasSession = useMemo(() => hasProxyLbSessionFromBackends(backends), [backends]);
-
-  useEffect(() => {
-    if (proxyLbHasSession) setProxyLbAuthFailed(false);
-  }, [proxyLbHasSession]);
-
-  const handleProxyLbButtonClick = useCallback(() => {
-    if (proxyLbHasSession) {
-      setProxyLbLogoutConfirmOpen(true);
-      return;
-    }
-    setProxyLbAuthFailed(false);
-    setProxyLbModalOpen(true);
-  }, [proxyLbHasSession]);
-
-  const handleProxyLbLogoutConfirm = useCallback(async () => {
-    setProxyLbLogoutBusy(true);
-    try {
-      await ClearProxyLbAuth();
-      setProxyLbLogoutConfirmOpen(false);
-      await loadLLMOnly();
-      onSaved?.();
-    } catch (e) {
-      console.error('ClearProxyLbAuth:', e);
-    } finally {
-      setProxyLbLogoutBusy(false);
-    }
-  }, [loadLLMOnly, onSaved]);
 
   const loadNonLLM = useCallback(async () => {
     try {
@@ -382,26 +344,6 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     }
   }, [refreshSkills]);
 
-  const updateBackend = (index, field, value) => {
-    setBackends((prev) => {
-      if (isProxyLbDisplayRow(prev[index])) return prev;
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  };
-
-  const addBackendRow = () => {
-    setBackends((prev) => [...prev, emptyRow()]);
-  };
-
-  const removeBackendRow = (index) => {
-    setBackends((prev) => {
-      if (isProxyLbDisplayRow(prev[index])) return prev;
-      return prev.filter((_, i) => i !== index);
-    });
-  };
-
   const updateMcpServer = (index, field, value) => {
     setMcpServers((prev) => {
       const next = [...prev];
@@ -579,7 +521,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
           matchKind: String(r?.matchKind ?? r?.match_kind ?? 'substring').toLowerCase() === 'regex' ? 'regex' : 'substring',
         })));
       } else {
-        await SaveLLMConfigForm({}, backends);
+        await SaveLLMConfig(llmConfig);
       }
       setUsingExample(false);
       onSaved?.();
@@ -785,7 +727,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
               ? '终端黑名单表；点「保存」写入 config.yaml。（管道/重定向等结构限制仍为程序内置。）'
             : activeTab === 'mcp'
             ? 'MCP 页支持从 LobeHub MCP Hub 搜索并安装配置，也保留手动 JSON 导入与表单编辑。安装后可直接点击服务进入详情页进行测试、修改和删除。'
-            : '按顺序故障转移；可将自填 API 排在 proxy-lb 行之前以优先使用。仅勾选启用的行会参与。'}
+            : '连接一个 OpenAI-compatible Chat Completions 接口。API Key 可留空用于本地无鉴权服务。'}
         </p>
 
         {loadErr ? <div className="settings-sheet__error">{loadErr}</div> : null}
@@ -796,14 +738,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         {skillNotice ? <div className="settings-sheet__notice">{skillNotice}</div> : null}
 
         {activeTab === 'llm' ? (
-          <LLMBackendTable
-            backends={backends}
-            onAdd={addBackendRow}
-            onRemove={removeBackendRow}
-            onUpdate={updateBackend}
-            proxyLbHasSession={proxyLbHasSession}
-            proxyLbAuthFailed={proxyLbAuthFailed}
-          />
+          <LLMConfigForm config={llmConfig} onChange={setLLMConfig} />
         ) : activeTab === 'skills' ? (
           <div className="settings-sheet__scroll settings-sheet__scroll--mcp">
             <div className="settings-list-block">
@@ -1255,28 +1190,6 @@ export default function SettingsModal({ open, onClose, onSaved }) {
 
         <div className="settings-sheet__actions">
           <div className="settings-sheet__actions-start">
-            {activeTab === 'llm' ? (
-              <button
-                type="button"
-                className="settings-btn settings-btn--secondary settings-btn--proxy settings-btn--proxy-lb"
-                onClick={handleProxyLbButtonClick}
-                title={
-                  proxyLbHasSession
-                    ? 'Proxy-LB 已登录（token 已写入配置），点此登出'
-                    : proxyLbAuthFailed
-                      ? '上次登录/注册或验证请求失败，点此重试'
-                      : '未登录：点此登录或注册'
-                }
-              >
-                <span
-                  className={`settings-proxy-lb-dot settings-proxy-lb-dot--${
-                    proxyLbHasSession ? 'ok' : proxyLbAuthFailed ? 'fail' : 'idle'
-                  }`}
-                  aria-hidden
-                />
-                PROXYLB
-              </button>
-            ) : null}
             {activeTab === 'shell' ? (
               <button
                 type="button"
@@ -1434,52 +1347,6 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         </div>
       ) : null}
 
-      {proxyLbLogoutConfirmOpen ? (
-        <div
-          className="auth-modal-overlay"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (!proxyLbLogoutBusy && e.target === e.currentTarget) setProxyLbLogoutConfirmOpen(false);
-          }}
-        >
-          <div
-            className="auth-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="proxy-lb-settings-logout-title"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="auth-modal__head">
-              <div>
-                <p id="proxy-lb-settings-logout-title" className="auth-modal__title">登出 Proxy-LB</p>
-                <p className="auth-modal__desc">将清除本机保存的令牌。</p>
-              </div>
-              <button type="button" className="auth-modal__secondary-btn auth-modal__close" onClick={() => { if (!proxyLbLogoutBusy) setProxyLbLogoutConfirmOpen(false); }} aria-label="关闭">×</button>
-            </div>
-            <div className="auth-modal__actions">
-              <button type="button" className="auth-modal__secondary-btn" disabled={proxyLbLogoutBusy} onClick={() => setProxyLbLogoutConfirmOpen(false)}>取消</button>
-              <button type="button" className="auth-modal__primary-btn" disabled={proxyLbLogoutBusy} onClick={() => void handleProxyLbLogoutConfirm()}>
-                {proxyLbLogoutBusy ? '处理中…' : '确认登出'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {proxyLbModalOpen ? (
-        <ProxyLbAuthModal
-          open
-          onClose={() => setProxyLbModalOpen(false)}
-          hasProxySession={hasProxyLbSessionFromBackends(backends)}
-          onAuthOutcome={({ success }) => {
-            if (!success) setProxyLbAuthFailed(true);
-          }}
-          onCompleted={() => {
-            void loadLLMOnly();
-            onSaved?.();
-          }}
-        />
-      ) : null}
     </div>
   );
 }

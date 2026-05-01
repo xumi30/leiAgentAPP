@@ -2,48 +2,16 @@
 # 桌面发布包：同内容已打入二进制（internal/proxy/bundled_config.yaml），若需改默认请与该文件一并维护同步。
 # LEIAGENT_CONFIG_PATH 可指向自定义 YAML 路径。
 #
-# LLM 表格与 Proxy-LB 可同时存在于本文件；故障转移按 llm_backends 顺序。若同一文件里还有自填的 API，
-# 请把优先使用的后端排在前面；仅 Proxy-LB 登录时写入的行也遵守此顺序。
-#
-# 单后端：配置 llm。
-# 多后端故障转移：配置 llm_backends（非空时忽略 llm）；按数组顺序尝试，失败则换下一个。
-# 某行未写 api_key 时，若上方 llm.api_key 已填写，会回退使用该 Key（再否则用环境变量）。
-#
-# 单后端时可用环境变量覆盖：LEIAGENT_LLM_API_KEY、LEIAGENT_LLM_BASE_URL、LEIAGENT_LLM_MODEL、
-# LEIAGENT_LLM_PROVIDER、LEIAGENT_LLM_STREAM_MODE、LEIAGENT_LLM_MAX_OUTPUT_TOKENS（补全 token 上限）。
-#
-# 可选 max_output_tokens：对应 API 的 max_tokens；不填时默认 8192，任务规划阶段会自动不低于 16384。
-# 多后端时每行须写全 base_url、model、api_key（api_key 可留空则回退到环境变量中的 Key）。
-# 多后端时每行可选 enabled: false，表示不参与故障转移（省略默认 true）；至少须有一条启用。
-#
-# 可选：provider 留空为 Bearer；Google Gemini 填 gemini（使用 x-goog-api-key）。
-# 可选：stream_mode 为 nonstream | stream | both（默认 both；Gemini 未指定时默认 nonstream）。
-#
-# 如使用独立部署的 proxy-lb 服务：
-# - api_key 填 proxy-lb 的服务鉴权 token
-# - base_url 填 http://your-server:8088/v1/chat/completions
-# - model 填 proxy-lb 配置里的 models[].name
-# 使用应用预置 proxy-lb 会话时：name 填 proxy-lb，base_url 与 model 均填 proxylb（勿在配置里写公网 IP；由程序解析）
+# 只配置一个 OpenAI-compatible Chat Completions 接口。
+# api_key 可留空（例如无鉴权的本地服务），也可使用 LEIAGENT_LLM_API_KEY 或 OPENAI_API_KEY。
+# 其余字段可由 LEIAGENT_LLM_BASE_URL、LEIAGENT_LLM_MODEL、LEIAGENT_LLM_MAX_OUTPUT_TOKENS 覆盖。
+# max_output_tokens 不填时默认 8192；任务规划阶段自动不低于 16384。
 
 # llm:
-#   # Do not commit real API keys. You can also leave this empty and set LEIAGENT_LLM_API_KEY.
 #   api_key: "your-api-key"
 #   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-#   model: "qwen3.5-plus-2026-02-15"
-#   provider: ""
-#   stream_mode: both
-  # max_output_tokens: 32768
-
-# 与上方 llm 二选一示例：
-# llm_backends:
-#   - name: primary
-#     api_key: "your-primary-api-key"
-#     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-#     model: "qwen-turbo"
-#   - name: backup
-#     api_key: "your-backup-api-key"
-#     base_url: "https://api.deepseek.com/v1/chat/completions"
-#     model: "deepseek-chat"
+#   model: "qwen-plus"
+#   max_output_tokens: 32768
 
 # 可选：配置 MCP 服务器，供 list_mcp_tools / call_mcp_tool 使用。
 # 安全默认值：allowed_tools 必须显式列出可调用工具；空数组表示禁止 call_mcp_tool。

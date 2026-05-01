@@ -315,7 +315,7 @@ func sleepWithContext(ctx context.Context, d time.Duration) bool {
 func (d *Dispatcher) handleActionGateChat(ctx context.Context, message string) (needAction bool, handled bool, err error) {
 	chatId := ctx.Value(utils.ChatIDString).(string)
 
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		return false, false, err
 	}
@@ -466,7 +466,7 @@ func (d *Dispatcher) handleChat(ctx context.Context, intent *Intention) {
 	chatId := ctx.Value(utils.ChatIDString).(string)
 	memory.SetSystemPrompt(chatId, utils.ChatPromptTemplate)
 	logging.Info("对话系统提示词已加载...")
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		logging.Error("创建 LLM 代理失败: %v", err)
 		return
@@ -554,7 +554,7 @@ func handleAgentChat(ctx context.Context, message string, agentID string) error 
 	if systemPrompt == "" {
 		return fmt.Errorf("agent %s has no description", agentID)
 	}
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		logging.Warn("aite proxy init failed: %v", err)
 		return fmt.Errorf("proxy init failed: %v", err)
@@ -778,7 +778,7 @@ func verifyGoal(ctx context.Context, goal string) error {
 	今天日期：%s`, goal, time.Now().Format("2006-01-02 Monday"),
 	))
 
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		logging.Warn("aite proxy init failed: %v", err)
 		return fmt.Errorf("proxy init failed: %v", err)

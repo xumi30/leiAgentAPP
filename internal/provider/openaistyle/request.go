@@ -18,10 +18,6 @@ const (
 	ToolTypeWebSearch = "web_search"
 	ToolTypeMCP       = "mcp"
 
-	// 是否开启思维链: enabled/disabled
-	ThinkingEnabled  = "enabled"
-	ThinkingDisabled = "disabled"
-
 	// 内容类型: text/input_audio
 	ContentTypeText       = "text"
 	ContentTypeInputAudio = "input_audio"
@@ -32,7 +28,6 @@ const (
 )
 
 // ChatCompletionRequest 对话补全请求基础结构体
-// ChatCompletionRequest 对话补全请求基础结构体
 type ChatCompletionRequest struct {
 	Model            string          `json:"model"`                       // 模型名称
 	Messages         []ChatMessage   `json:"messages"`                    // 消息列表
@@ -41,19 +36,15 @@ type ChatCompletionRequest struct {
 	Temperature      *float64        `json:"temperature,omitempty"`       // 采样温度
 	TopP             *float64        `json:"top_p,omitempty"`             // 核采样参数
 	MaxTokens        *int            `json:"max_tokens,omitempty"`        // 最大token数
-	DoSample         *bool           `json:"do_sample,omitempty"`         // 是否启用采样
 	Tools            []Tool          `json:"tools,omitempty"`             // 工具列表
 	ToolChoice       *ToolChoice     `json:"tool_choice,omitempty"`       // 工具选择策略
 	Stop             []string        `json:"stop,omitempty"`              // 停止词
 	RequestID        string          `json:"request_id,omitempty"`        // 请求ID
 	UserID           string          `json:"user_id,omitempty"`           // 用户ID
-	Thinking         *ChatThinking   `json:"thinking,omitempty"`          // 思维链配置
 	FrequencyPenalty *float64        `json:"frequency_penalty,omitempty"` // 频率惩罚
 	PresencePenalty  *float64        `json:"presence_penalty,omitempty"`  // 存在惩罚
 	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`   // 响应格式
 	Seed             *int            `json:"seed,omitempty"`              // 随机种子
-	Enablesearch     bool            `json:"enable_search,omitempty"`     // 是否启用搜索QWEN
-	EnableThinking   *bool           `json:"enable_thinking,omitempty"`   // 百炼/DashScope Qwen 思考开关（兼容 OpenAI 扩展字段）
 }
 
 // StreamOptions OpenAI 兼容：流式响应附加选项
@@ -154,12 +145,6 @@ type ToolCall struct {
 	Type     string    `json:"type"`     // 工具类型
 	Function *Function `json:"function"` // 函数调用信息
 	Index    int       `json:"index"`    // 工具调用索引
-}
-
-// ChatThinking 思维链配置
-type ChatThinking struct {
-	Type          string `json:"type"`                     // 是否开启思维链: enabled/disabled
-	ClearThinking bool   `json:"clear_thinking,omitempty"` // 是否清除历史思维链
 }
 
 // VisionMultimodalContent 视觉多模态内容

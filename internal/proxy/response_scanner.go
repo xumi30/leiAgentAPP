@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"leiAgent/internal/globalchannel"
-	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/logging"
 	"leiAgent/utils"
@@ -89,17 +88,17 @@ func extractUsageLoose(raw []byte) *openaistyle.TokenUsage {
 	}
 }
 
-func (p *Proxy) handleResponse(ctx context.Context, resp *http.Response, isStream bool, info *ModelAPIInfo) (*ToolAndContent, error) {
+func (p *Client) handleResponse(ctx context.Context, resp *http.Response, isStream bool) (*ToolAndContent, error) {
 
 	if isStream {
 		return p.handleStreamResponse(ctx, resp)
 	}
-	return p.handleNonStreamResponse(ctx, resp, info)
+	return p.handleNonStreamResponse(ctx, resp)
 }
 
 // effectiveDialogChatID 用于 UI 管道：可与 memory 用的 ChatIDString（临时子会话）不同。
 
-func (p *Proxy) handleStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
+func (p *Client) handleStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
 	logging.Info("开始处理流式响应: %v", resp)
 	var fullContent strings.Builder
 	var fullReasoningContent strings.Builder
@@ -351,7 +350,7 @@ func consumeNeedActionHeader(buffer string) (parsed bool, needAction bool, rest 
 	return false, false, "", true
 }
 
-func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response, info *ModelAPIInfo) (*ToolAndContent, error) {
+func (p *Client) handleNonStreamResponse(ctx context.Context, resp *http.Response) (*ToolAndContent, error) {
 	logging.Info("开始处理非流式响应")
 
 	memChatID, ok := ctx.Value(utils.ChatIDString).(string)
@@ -365,7 +364,7 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 		skipDialog = true
 	}
 
-	openaiResp, err := p.convertResponse(resp, info)
+	openaiResp, err := p.convertResponse(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -428,27 +427,12 @@ func (p *Proxy) handleNonStreamResponse(ctx context.Context, resp *http.Response
 	}, nil
 }
 
-func (p *Proxy) convertResponse(resp *http.Response, info *ModelAPIInfo) (*openaistyle.ChatCompletionResponse, error) {
+func (p *Client) convertResponse(resp *http.Response) (*openaistyle.ChatCompletionResponse, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应体失败: %w", err)
 	}
 	logging.Info("响应体: %s", string(body))
-
-	if info.provider == "gemini" {
-		//fmt.Println("convertResponse gemini")
-
-		geminiResponse := &gemini.ChatCompletionResponse{}
-		if err := json.Unmarshal(body, geminiResponse); err != nil {
-			//fmt.Println("convertResponse err: ", err)
-			logging.Error("解析Gemini JSON失败:")
-			return nil, fmt.Errorf("解析JSON失败: %w", err)
-		}
-
-		openaiResp := gemini.ConvertToOpenAIResponse(geminiResponse)
-		logging.Info("openaiResp: %v", openaiResp)
-		return openaiResp, nil
-	}
 
 	openaiResp := &openaistyle.ChatCompletionResponse{}
 	if err := json.Unmarshal(body, openaiResp); err != nil {

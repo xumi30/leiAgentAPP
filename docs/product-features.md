@@ -1,27 +1,27 @@
 # LeiAgent 功能说明（项目总览）
 
 > 本文档汇总桌面端 **LeiAgent** 当前主要能力，含界面、Agent、LLM、文库、工具、**本地记忆 / 用户画像** 与**备忘录**专章，便于产品/开发对照与维护。  
-> **最后更新**：2026-05-13
+> **最后更新**：2026-08-25
 
 ---
 
 ## 1. 项目概览
 
 - **形态**：基于 **Wails v2** 的桌面应用（Go 后端 + Web 前端），本地运行。
-- **布局**：顶栏全局操作；左侧为**人物头像面板**（`ConversationCalendar.jsx`，实为 Agent 头像墙）+ **会话列表**；中间为**对话**。**当前主线** `App.jsx` 中 `showReasoningChrome = false`，主界面**不挂载**右侧推理槽，仅左侧宽度可拖拽；`Reasoning` 组件仍在仓库中供后续打开。
-- **分栏**：左栏宽度可拖拽；推理栏是否显示由 `showReasoningChrome` 与顶栏「关闭思考」历史逻辑共同决定（现默认关闭整条右栏）。
+- **布局**：顶栏全局操作；左侧为**人物头像面板**（`ConversationCalendar.jsx`，实为 Agent 头像墙）+ **会话列表**；中间为**对话**。主界面当前不挂载右侧推理槽，仅左侧宽度可拖拽。
+- **分栏**：左栏宽度可拖拽；推理内容仍由后端记录，但当前没有独立的右侧展示面板。
 
 ---
 
 ## 2. 顶栏（Header）
 
-- **设置**：打开 **LLM 配置（YAML）** 编辑器模态框（`SettingsModal`）。
+- **设置**：打开极简 LLM 配置表单（`SettingsModal`）。
 - **文库**：打开文档库模态框（见 §7）。
 - **本地记忆**：打开当前会话的 `localMemory` 调试视图。
 - **画像**：打开当前会话的结构化用户画像面板，可手动刷新生成。
 - **备忘录**：打开备忘录窗口（见 §10、§11）。
 - **定时任务**：打开 `ScheduledTasksModal`（定时任务列表）。
-- **连接状态**：展示 `GetLLMConnectionStatus` 探测结果；可点击刷新。刷新时若配置缺失或不可用，可能弹出 **Proxy-LB** 注册 / 登录模态（`ProxyAuthRequest` 写回配置）。启动后定时轮询连接状态。
+- **连接状态**：展示 `GetLLMConnectionStatus` 探测结果；可点击刷新。配置缺失或不可用时会提示打开设置，填写单一 OpenAI-compatible 接口。
 
 ---
 
@@ -72,10 +72,9 @@
 
 ---
 
-## 6. 推理侧栏（Reasoning）
+## 6. 推理内容
 
-- 展示当前会话 `GetReasoningMessage` 返回的推理类消息。顶栏「关闭思考」开关代码仍保留但已注释。
-- **主线界面**：`App.jsx` 中 `showReasoningChrome = false` 时**不渲染**右侧槽位与 `Reasoning` 组件。
+- 后端仍可记录和查询当前会话的推理类消息；主界面当前不提供独立的推理侧栏或「关闭思考」配置项。
 
 ---
 
@@ -90,7 +89,7 @@
 
 ## 8. 设置（SettingsModal）
 
-- **模型与连接**：加载 `GetLLMConfigEditorState`（YAML 全文、保存路径、是否示例）；保存 `SaveLLMConfigText`（校验后写入）。
+- **模型与连接**：`GetLLMConfig` / `SaveLLMConfig` 只读写一个 OpenAI-compatible 连接，包括 URL、模型、API Key 和最大输出 token。
 - 保存成功后可触发顶栏连接状态刷新（`onSaved` → `refreshConnection`）。
 
 ---

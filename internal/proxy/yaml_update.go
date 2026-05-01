@@ -96,3 +96,16 @@ func upsertRootKey(doc *yamlv3.Node, key string, valNode *yamlv3.Node) {
 		valNode,
 	)
 }
+
+func removeRootKey(doc *yamlv3.Node, key string) {
+	if doc == nil || len(doc.Content) == 0 || doc.Content[0].Kind != yamlv3.MappingNode {
+		return
+	}
+	root := doc.Content[0]
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Kind == yamlv3.ScalarNode && root.Content[i].Value == key {
+			root.Content = append(root.Content[:i], root.Content[i+2:]...)
+			return
+		}
+	}
+}

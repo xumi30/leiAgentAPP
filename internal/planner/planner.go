@@ -286,7 +286,7 @@ func GeneratePlan(ctx context.Context, goal string, toolInfo string) (*Planning,
 		return nil, err
 	}
 
-	plannerProxy, err := proxy.NewProxy(nil)
+	plannerProxy, err := proxy.NewClient(nil)
 	if err != nil {
 		return nil, err
 	}

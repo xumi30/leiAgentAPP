@@ -1,18 +1,13 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
-	"leiAgent/logging"
 )
 
 const memoComposeSystem = `你是备忘录编辑助手。用户会提供从对话中摘选的多段 Markdown（含「用户」「助手」标签），以及可选的额外要求。
@@ -33,7 +28,7 @@ func GenerateMemoFromDraft(ctx context.Context, draftMarkdown, userHint string) 
 	}
 
 	client := &http.Client{Timeout: 120 * time.Second}
-	p, err := NewProxy(client)
+	p, err := NewClient(client)
 	if err != nil {
 		return "", err
 	}
@@ -46,87 +41,18 @@ func GenerateMemoFromDraft(ctx context.Context, draftMarkdown, userHint string) 
 		defer cancel()
 	}
 
-	maxTok := 4096
-	temp := 0.4
-	opts := []openaistyle.Option{
-		openaistyle.WithModel(""),
-		openaistyle.WithMessages([]openaistyle.ChatMessage{
-			{Role: openaistyle.RoleSystem, Content: memoComposeSystem},
-			{Role: openaistyle.RoleUser, Content: user},
-		}),
-		openaistyle.WithMaxTokens(maxTok),
-		openaistyle.WithStream(false),
-		openaistyle.WithTemperature(temp),
-		openaistyle.WithEnableThinking(false),
-		openaistyle.WithThinking(&openaistyle.ChatThinking{Type: openaistyle.ThinkingDisabled}),
-	}
-
-	var lastErr error
-	for i, info := range p.backends {
-		label := info.logLabel()
-		if label == "" {
-			label = fmt.Sprintf("#%d", i)
-		}
-		opts[0] = openaistyle.WithModel(info.modelName)
-		req := openaistyle.NewChatCompletionRequest(opts...)
-		jsonData, err := jsonMarshalRequest(req, info)
-		if err != nil {
-			lastErr = err
-			logging.Warn("备忘录 LLM：后端 %s 构造请求失败: %v", label, err)
-			continue
-		}
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, info.url, bytes.NewBuffer(jsonData))
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		resp, err := p.doRequest(httpReq, info)
-		if err != nil {
-			lastErr = err
-			logging.Warn("备忘录 LLM：后端 %s 请求失败: %v", label, err)
-			continue
-		}
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		openaiResp, err := parseCompletionBody(body, info)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		text, err := messageTextFromCompletion(openaiResp)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		out := strings.TrimSpace(text)
-		out = stripOuterFence(out)
-		if out == "" {
-			lastErr = fmt.Errorf("模型返回空内容")
-			continue
-		}
-		logging.Info("备忘录 LLM 生成成功（后端 %s）", label)
-		return out, nil
-	}
-	if lastErr != nil {
-		return "", lastErr
-	}
-	return "", fmt.Errorf("未配置可用 LLM 后端")
-}
-
-func jsonMarshalRequest(req *openaistyle.ChatCompletionRequest, info *ModelAPIInfo) ([]byte, error) {
-	jsonData, err := json.Marshal(req)
+	text, err := p.completeText(ctx, []openaistyle.ChatMessage{
+		{Role: openaistyle.RoleSystem, Content: memoComposeSystem},
+		{Role: openaistyle.RoleUser, Content: user},
+	}, 4096, 0.4)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	if info.provider == "gemini" {
-		greq := gemini.ConvertFromOpenAIRequest(req)
-		return json.Marshal(greq)
+	out := stripOuterFence(strings.TrimSpace(text))
+	if out == "" {
+		return "", fmt.Errorf("模型返回空内容")
 	}
-	return jsonData, nil
+	return out, nil
 }
 
 func stripOuterFence(s string) string {

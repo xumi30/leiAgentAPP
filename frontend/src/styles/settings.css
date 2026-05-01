@@ -238,64 +238,26 @@
   border-bottom: none;
 }
 
-/* LLM 表：proxy-lb 只读行 — 蒙层三色与 .settings-proxy-lb-dot--{ok|idle|fail} 一致 */
-.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--ok td {
-  background: rgba(52, 199, 89, 0.12);
+.settings-llm-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px 16px;
+  padding: 22px;
 }
 
-.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--idle td {
-  background: rgba(174, 174, 178, 0.14);
+.settings-llm-field {
+  display: grid;
+  gap: 7px;
 }
 
-.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--fail td {
-  background: rgba(28, 28, 30, 0.08);
+.settings-llm-field--full {
+  grid-column: 1 / -1;
 }
 
-.settings-table__proxy-lb-cell {
-  position: relative;
-  display: block;
-  min-height: 34px;
-}
-
-.settings-table__proxy-lb-cell::after {
-  content: '';
-  position: absolute;
-  inset: -3px -2px;
-  border-radius: 6px;
-  z-index: 2;
-  pointer-events: auto;
-}
-
-.settings-table__proxy-lb-cell--ok::after {
-  background: rgba(52, 199, 89, 0.2);
-}
-
-.settings-table__proxy-lb-cell--idle::after {
-  background: rgba(174, 174, 178, 0.22);
-}
-
-.settings-table__proxy-lb-cell--fail::after {
-  background: rgba(28, 28, 30, 0.18);
-}
-
-.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--ok .settings-table__input {
-  color: #1d7a3a;
-  cursor: default;
-}
-
-.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--idle .settings-table__input {
-  color: #636366;
-  cursor: default;
-}
-
-.settings-table tbody tr.settings-table__tr--proxy-lb-readonly.settings-table__tr--proxy-lb--fail .settings-table__input {
+.settings-llm-field__label {
+  font-size: 12px;
+  font-weight: 600;
   color: #3a3a3c;
-  cursor: default;
-}
-
-.settings-table tbody tr.settings-table__tr--proxy-lb-readonly .settings-table__check:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .settings-table__input {
@@ -1043,39 +1005,6 @@
 .settings-btn:disabled {
   opacity: 0.55;
   cursor: default;
-}
-
-.settings-btn--proxy {
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-  padding: 9px 14px;
-}
-
-.settings-btn--proxy-lb {
-  display: inline-flex;
-  align-items: center;
-}
-
-.settings-proxy-lb-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-.settings-proxy-lb-dot--ok {
-  background-color: #34c759;
-}
-
-.settings-proxy-lb-dot--idle {
-  background-color: #aeaeb2;
-}
-
-.settings-proxy-lb-dot--fail {
-  background-color: #1c1c1e;
 }
 
 .settings-btn--secondary {

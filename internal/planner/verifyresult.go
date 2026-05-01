@@ -339,7 +339,7 @@ func (p *Planning) verifyResultWithRetry(ctx context.Context, chatID string, wor
 }
 
 func sendVerifyMessage(ctx context.Context, chatID string, workingMessages []openaistyle.ChatMessage) (string, error) {
-	px, err := proxy.NewProxy(nil)
+	px, err := proxy.NewClient(nil)
 	if err != nil {
 		return "", err
 	}

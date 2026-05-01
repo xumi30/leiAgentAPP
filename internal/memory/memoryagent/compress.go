@@ -83,7 +83,7 @@ func Compress(ctx context.Context, chatID string) (string, error) {
 	}
 
 	userPayload := buildCompressionPayload(plan)
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		return "", err
 	}

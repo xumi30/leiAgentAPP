@@ -88,7 +88,7 @@ func summarizePlanExecution(ctx context.Context, chatId string) error {
 
 	globalchannel.SendAssistantMessageOnce(ctx, fmt.Sprintf("%s", "正在生成执行总结…\n"))
 
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		return fmt.Errorf("创建 LLM 代理失败: %w", err)
 	}

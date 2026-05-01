@@ -1,17 +1,13 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
-	gemini "leiAgent/internal/provider/gemini"
 	"leiAgent/internal/provider/openaistyle"
 	"leiAgent/logging"
 )
@@ -34,34 +30,6 @@ type ShellCommandRiskResult struct {
 	RiskLevel string `json:"risklevel,omitempty"` // 与 Severity 同值，便于前端展示
 	Comment   string `json:"comment,omitempty"`
 	Message   string `json:"message,omitempty"`
-}
-
-func buildShellRiskRequestJSON(info *ModelAPIInfo, userSnippet string) ([]byte, error) {
-	maxTok := 384
-	temp := 0.2
-	userContent := "待评估片段如下（仅用于分级，不要执行）：\n" + userSnippet
-	opts := []openaistyle.Option{
-		openaistyle.WithModel(info.modelName),
-		openaistyle.WithMessages([]openaistyle.ChatMessage{
-			{Role: openaistyle.RoleSystem, Content: shellRiskSystemPrompt},
-			{Role: openaistyle.RoleUser, Content: userContent},
-		}),
-		openaistyle.WithMaxTokens(maxTok),
-		openaistyle.WithStream(false),
-		openaistyle.WithTemperature(temp),
-		openaistyle.WithEnableThinking(false),
-		openaistyle.WithThinking(&openaistyle.ChatThinking{Type: openaistyle.ThinkingDisabled}),
-	}
-	req := openaistyle.NewChatCompletionRequest(opts...)
-	jsonData, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-	if info.provider == "gemini" {
-		greq := gemini.ConvertFromOpenAIRequest(req)
-		return json.Marshal(greq)
-	}
-	return jsonData, nil
 }
 
 var (
@@ -192,7 +160,7 @@ func AssessShellCommandRisk(ctx context.Context, commandLine string) ShellComman
 	const parseFailed = "模型未返回有效分级，无法自动填写危险度，请自行判定。"
 
 	client := &http.Client{Timeout: 45 * time.Second}
-	p, err := NewProxy(client)
+	p, err := NewClient(client)
 	if err != nil {
 		logging.Warn("shell 危险度评估：无法创建 LLM 代理: %v", err)
 		return ShellCommandRiskResult{OK: false, Message: llmUnavailable}
@@ -206,58 +174,18 @@ func AssessShellCommandRisk(ctx context.Context, commandLine string) ShellComman
 		defer cancel()
 	}
 
-	var lastErr error
-	for i, info := range p.backends {
-		label := info.logLabel()
-		if label == "" {
-			label = fmt.Sprintf("#%d", i)
-		}
-		jsonData, err := buildShellRiskRequestJSON(info, snippet)
-		if err != nil {
-			lastErr = err
-			logging.Warn("shell 危险度评估：后端 %s 构造请求失败: %v", label, err)
-			continue
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, info.url, bytes.NewBuffer(jsonData))
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		resp, err := p.doRequest(req, info)
-		if err != nil {
-			lastErr = err
-			logging.Warn("shell 危险度评估：后端 %s 请求失败: %v", label, err)
-			continue
-		}
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		openaiResp, err := parseCompletionBody(body, info)
-		if err != nil {
-			lastErr = err
-			logging.Warn("shell 危险度评估：后端 %s 解析失败: %v", label, err)
-			continue
-		}
-		text, err := messageTextFromCompletion(openaiResp)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		sev, comment, ok := parseShellRiskFromModelText(text)
-		if !ok {
-			lastErr = fmt.Errorf("unparseable model output")
-			logging.Warn("shell 危险度评估：后端 %s 输出无法解析: %q", label, strings.TrimSpace(text))
-			return ShellCommandRiskResult{OK: false, Message: parseFailed}
-		}
-		logging.Info("shell 危险度评估成功（后端 %s）: %q -> %s comment=%q", label, snippet, sev, comment)
-		return ShellCommandRiskResult{OK: true, Severity: sev, RiskLevel: sev, Comment: comment}
+	text, err := p.completeText(ctx, []openaistyle.ChatMessage{
+		{Role: openaistyle.RoleSystem, Content: shellRiskSystemPrompt},
+		{Role: openaistyle.RoleUser, Content: "待评估片段如下（仅用于分级，不要执行）：\n" + snippet},
+	}, 384, 0.2)
+	if err != nil {
+		logging.Warn("shell 危险度评估失败: %v", err)
+		return ShellCommandRiskResult{OK: false, Message: llmUnavailable}
 	}
-
-	if lastErr != nil {
-		logging.Warn("shell 危险度评估：全部后端失败: %v", lastErr)
+	severity, comment, ok := parseShellRiskFromModelText(text)
+	if !ok {
+		logging.Warn("shell 危险度评估输出无法解析: %q", strings.TrimSpace(text))
+		return ShellCommandRiskResult{OK: false, Message: parseFailed}
 	}
-	return ShellCommandRiskResult{OK: false, Message: llmUnavailable}
+	return ShellCommandRiskResult{OK: true, Severity: severity, RiskLevel: severity, Comment: comment}
 }

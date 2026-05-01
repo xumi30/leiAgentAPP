@@ -17,19 +17,6 @@ export function shellSeverityHintLabel(s) {
   return '中';
 }
 
-/** LLM 表中由 Proxy-LB 登录写入的内置行：仅展示、不可编辑 */
-export function isProxyLbDisplayRow(row) {
-  return String(row?.name ?? '').trim().toLowerCase() === 'proxy-lb';
-}
-
-/** 登录后 API Key 列展示占位符，不露出真实 token */
-export const PROXY_LB_APIKEY_DISPLAY = 'proxylb';
-
-export function proxyLbApiKeyFieldValue(row, locked) {
-  if (!locked) return String(row.apiKey ?? '');
-  return String(row.apiKey ?? '').trim() ? PROXY_LB_APIKEY_DISPLAY : '';
-}
-
 export const FALLBACK_HUB_CATEGORIES = [
   'business',
   'cloud',
@@ -61,16 +48,12 @@ export const FALLBACK_HUB_CATEGORIES = [
   'web-search',
 ];
 
-export function emptyRow() {
+export function emptyLLMConfig() {
   return {
-    name: '',
     apiKey: '',
     baseUrl: '',
     model: '',
-    provider: '',
-    streamMode: 'both',
     maxOutputTokens: 0,
-    enabled: true,
   };
 }
 
@@ -198,27 +181,17 @@ export function mcpToolsForDisplay(status, row) {
   return Array.isArray(source) ? source : [];
 }
 
-export function effectiveStreamMode(raw, provider) {
-  const s = String(raw ?? '').trim();
-  if (s) return s;
-  return String(provider ?? '').toLowerCase().trim() === 'gemini' ? 'nonstream' : 'both';
-}
-
-export function mapBackendRow(r) {
+export function mapLLMConfig(r) {
   return {
-    name: r.name ?? '',
     apiKey: r.apiKey ?? r.api_key ?? '',
     baseUrl: r.baseUrl ?? r.base_url ?? '',
     model: r.model ?? '',
-    provider: r.provider ?? '',
-    streamMode: effectiveStreamMode(r.streamMode ?? r.stream_mode, r.provider),
     maxOutputTokens:
       typeof r.maxOutputTokens === 'number'
         ? r.maxOutputTokens
         : typeof r.max_output_tokens === 'number'
           ? r.max_output_tokens
           : 0,
-    enabled: r.enabled !== false,
   };
 }
 

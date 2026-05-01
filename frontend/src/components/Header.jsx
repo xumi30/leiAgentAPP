@@ -9,7 +9,7 @@ function shortConnectionLabel(loading, status) {
     return '配置正常';
   }
   if (status.phase === 'no_config') return '未配置';
-  return '请登录';
+  return '配置异常';
 }
 
 export default function Header({
@@ -22,8 +22,6 @@ export default function Header({
   connectionStatus,
   onRefreshConnection,
   onOpenSettings,
-  thinkingDisabled,
-  onThinkingDisabledChange,
 }) {
   const neverProbed = !connectionLoading && !connectionStatus;
   const ok = !connectionLoading && connectionStatus?.ok;
@@ -49,17 +47,6 @@ export default function Header({
       </div>
 
       <div className="header-controls">
-        {/* 暂时停用“关闭思考”开关，保留代码以便后续恢复。
-        <label className="header-thinking-toggle clay-card" title="勾选后隐藏推理面板，且请求不再携带思考/推理参数">
-          <input
-            type="checkbox"
-            checked={!!thinkingDisabled}
-            onChange={(e) => onThinkingDisabledChange?.(e.target.checked)}
-          />
-          <span className="header-thinking-toggle__text">关闭思考</span>
-        </label>
-        */}
-
         {typeof onOpenSettings === 'function' ? (
           <button
             type="button"

@@ -23,7 +23,7 @@ import (
 
 type Agent struct {
 	systemPrompt  string
-	proxy         *proxy.Proxy
+	proxy         *proxy.Client
 	taskLoopTimes int
 	ctx           context.Context
 }
@@ -45,7 +45,7 @@ func WithCtx(ctx context.Context) options {
 }
 
 func NewAgent(opts ...options) (*Agent, error) {
-	p, err := proxy.NewProxy(nil)
+	p, err := proxy.NewClient(nil)
 	if err != nil {
 		return nil, err
 	}

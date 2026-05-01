@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -349,11 +346,6 @@ func GenerateMessageID() string {
 	return messageID
 }
 
-// SetLLMThinkingDisabled 为 true 时，前端隐藏推理面板，后端也不再发送 thinking 相关扩展字段。
-func (a *App) SetLLMThinkingDisabled(disabled bool) {
-	proxy.SetLLMThinkingDisabled(disabled)
-}
-
 func (a *App) ListAgents() ([]map[string]interface{}, error) {
 	return dataoperation.ListAgents()
 }
@@ -374,105 +366,12 @@ func (a *App) GetConversationAgents(chatID string) ([]map[string]interface{}, er
 	return dataoperation.ListConversationAgents(chatID)
 }
 
-// GetLLMThinkingDisabled 返回当前是否对 LLM 关闭了思考过程。
-func (a *App) GetLLMThinkingDisabled() bool {
-	return proxy.IsLLMThinkingDisabled()
-}
-
 func (a *App) GetReasoningMessage(chatID string) []map[string]interface{} {
 	reasonings, err := dataoperation.GetReasonings(chatID)
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "getReasoningMessageError", err.Error())
 	}
 	return reasonings
-}
-
-// ProxyAuthRequest forwards an auth request (login/register/send-code) to the
-// proxy-lb server from Go to avoid CORS issues in the Wails webview.
-// For login/register, if a token is returned, append or refresh the canonical
-// proxy-lb row at the end of llm_backends (merge into existing YAML on disk).
-func (a *App) ProxyAuthRequest(path string, body map[string]interface{}) (map[string]interface{}, error) {
-	username, _ := body["username"].(string)
-	logging.Info("ProxyAuthRequest: path=%s username=%s", path, username)
-	url := proxy.DefaultProxyLBOrigin + path
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("序列化请求失败: %w", err)
-	}
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(url, "application/json", bytes.NewReader(bodyBytes))
-	if err != nil {
-		logging.Error("ProxyAuthRequest 请求失败: path=%s err=%v", path, err)
-		return nil, fmt.Errorf("请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-	respBytes, _ := io.ReadAll(resp.Body)
-	var result map[string]interface{}
-	unmarshalErr := json.Unmarshal(respBytes, &result)
-	if unmarshalErr != nil {
-		result = map[string]interface{}{"raw": string(respBytes)}
-	}
-	result["_statusCode"] = resp.StatusCode
-	yamlPri := proxy.LLMYAMLConfigTakesPriority()
-	if unmarshalErr != nil {
-		snippet := string(respBytes)
-		if len(snippet) > 2048 {
-			snippet = snippet[:2048] + "...(truncated)"
-		}
-		logging.Info("ProxyAuthRequest: path=%s status=%d bytes=%d unmarshalOK=false yamlPriority=%v err=%v rawSnippet=%q",
-			path, resp.StatusCode, len(respBytes), yamlPri, unmarshalErr, snippet)
-	} else {
-		safe := make(map[string]interface{}, len(result))
-		for k, v := range result {
-			switch k {
-			case "token":
-				if s, ok := v.(string); ok && s != "" {
-					safe[k] = fmt.Sprintf("<redacted len=%d>", len(s))
-				} else {
-					safe[k] = v
-				}
-			default:
-				safe[k] = v
-			}
-		}
-		safeJSON, _ := json.Marshal(safe)
-		logging.Info("ProxyAuthRequest: path=%s status=%d bytes=%d unmarshalOK=true yamlPriority=%v body=%s",
-			path, resp.StatusCode, len(respBytes), yamlPri, string(safeJSON))
-	}
-
-	// 登录或注册成功后写入本机 YAML：在已有 llm_backends 末尾追加或刷新 proxy-lb 行（不改前面的用户后端）
-	// 响应 JSON 形状与 proxy-lb/internal/app/router.go 一致：成功时含 token 字符串字段。
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		token := ""
-		if unmarshalErr == nil {
-			token = proxy.ProxyLBLoginRegisterToken(result)
-		}
-		if token != "" {
-			if saveErr := a.saveAuthConfig(token); saveErr != nil {
-				logging.Error("登录成功但写入配置失败: %v", saveErr)
-			} else if yamlPri {
-				logging.Info("ProxyAuthRequest: 已在 llm_backends 末尾写入 proxy-lb（当前 YAML 中另有 LLM 配置）")
-			}
-		} else if path == "/auth/login" || path == "/auth/register" {
-			if unmarshalErr != nil {
-				logging.Warn("ProxyAuthRequest: path=%s status=%d 响应体非 JSON（%v），无法读取 token", path, resp.StatusCode, unmarshalErr)
-			} else {
-				logging.Warn("ProxyAuthRequest: path=%s status=%d 响应中缺少字符串字段 token（见 proxy-lb router POST /auth/login 的 gin.H username+token），未写入配置", path, resp.StatusCode)
-			}
-		}
-	}
-	return result, nil
-}
-
-// saveAuthConfig 将认证 token 追加为 llm_backends 末尾的 canonical proxy-lb 行（兜底 LLM），与是否已有其它 YAML 后端无关。
-func (a *App) saveAuthConfig(token string) error {
-	state, err := proxy.GetLLMConfigFormState()
-	if err != nil {
-		return fmt.Errorf("读取配置失败: %w", err)
-	}
-	nextRows := proxy.AppendProxyLbFallbackBackend(state.Backends, token)
-	_, err = proxy.SaveLLMConfigForm(proxy.LLMConfigRow{}, nextRows)
-	return err
 }
 
 // evictLRUDispatcherLocked 在 poolMutex 已持有时调用：驱逐最久未访问的会话 dispatcher（避免 map 随机迭代误杀正在跑的对话）。
@@ -506,17 +405,14 @@ func (a *App) evictLRUDispatcherLocked() {
 }
 
 func isMissingLLMConfigError(errMsg string) bool {
-	return strings.Contains(errMsg, "未找到配置文件 config/config.yaml") ||
-		(strings.Contains(errMsg, "未在 ") && strings.Contains(errMsg, "中配置 LLM"))
+	return strings.Contains(errMsg, "未找到 config/config.yaml") ||
+		(strings.Contains(errMsg, "未在 ") && strings.Contains(errMsg, "中配置 llm"))
 }
 
 func isLLMConfigError(errMsg string) bool {
 	return isMissingLLMConfigError(errMsg) ||
-		strings.Contains(errMsg, "未配置 API Key") ||
-		strings.Contains(errMsg, "未配置 base_url") ||
-		strings.Contains(errMsg, "未配置 model") ||
-		strings.Contains(errMsg, "llm_backends 中至少需要启用一条后端") ||
-		strings.Contains(errMsg, "llm_backends[")
+		strings.Contains(errMsg, "未配置 LLM base_url") ||
+		strings.Contains(errMsg, "未配置 LLM model")
 }
 
 func (a *App) ensureConfigFileForChatStart() bool {
@@ -849,42 +745,14 @@ func (a *App) GetLLMConnectionStatus() proxy.LLMConnectionStatus {
 	return proxy.CheckLLMConnectionStatus(context.Background())
 }
 
-// ClearProxyLbAuth 清除 config 中与桌面端 Proxy-LB 登录匹配的 api_key。
-func (a *App) ClearProxyLbAuth() error {
-	return proxy.ClearProxyLbAuthCredentials()
+// GetLLMConfig 返回唯一的 OpenAI-compatible LLM 配置。
+func (a *App) GetLLMConfig() (proxy.LLMConfigState, error) {
+	return proxy.GetLLMConfig()
 }
 
-// GetLLMResolvedConfigPath 返回当前使用的配置文件绝对路径；未找到时为空。
-func (a *App) GetLLMResolvedConfigPath() string {
-	return proxy.GetResolvedConfigPath()
-}
-
-// GetLLMConfigEditorState 返回 YAML 全文、保存路径；若尚无配置文件则内容为示例，usingExample 为 true。
-func (a *App) GetLLMConfigEditorState() (map[string]interface{}, error) {
-	content, path, usingExample, err := proxy.ReadLLMConfigForUI()
-	if err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{
-		"content":      content,
-		"path":         path,
-		"usingExample": usingExample,
-	}, nil
-}
-
-// SaveLLMConfigText 校验并写入配置文件。
-func (a *App) SaveLLMConfigText(content string) (string, error) {
-	return proxy.SaveLLMConfigText(content)
-}
-
-// GetLLMConfigFormState 返回 LLM 配置的表格编辑数据（多后端列表；旧版仅 llm 时会合成一行展示）。
-func (a *App) GetLLMConfigFormState() (proxy.LLMConfigFormState, error) {
-	return proxy.GetLLMConfigFormState()
-}
-
-// SaveLLMConfigForm 将表格数据序列化为 YAML 并校验、写入。
-func (a *App) SaveLLMConfigForm(primary proxy.LLMConfigRow, backends []proxy.LLMConfigRow) (string, error) {
-	return proxy.SaveLLMConfigForm(primary, backends)
+// SaveLLMConfig 将单一 LLM 配置写入 YAML。
+func (a *App) SaveLLMConfig(config proxy.LLMConfig) (string, error) {
+	return proxy.SaveLLMConfig(config)
 }
 
 // GetMCPConfigFormState 返回 MCP 配置的表格编辑数据。

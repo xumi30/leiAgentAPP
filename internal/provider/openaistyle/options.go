@@ -58,13 +58,6 @@ func WithMaxTokens(maxTokens int) Option {
 	}
 }
 
-// WithDoSample 设置是否启用采样
-func WithDoSample(doSample bool) Option {
-	return func(r *ChatCompletionRequest) {
-		r.DoSample = &doSample
-	}
-}
-
 // WithTools 设置工具列表
 func WithTools(tools []Tool) Option {
 	return func(r *ChatCompletionRequest) {
@@ -100,27 +93,6 @@ func WithUserID(userID string) Option {
 	}
 }
 
-// WithThinking 设置思维链配置
-func WithThinking(thinking *ChatThinking) Option {
-
-	return func(r *ChatCompletionRequest) {
-		r.Thinking = thinking
-	}
-}
-
-func WithEnablesearch(enable bool) Option {
-	return func(r *ChatCompletionRequest) {
-		r.Enablesearch = enable
-	}
-}
-
-// WithEnableThinking 设置百炼等兼容接口的 enable_thinking（true/false）。
-func WithEnableThinking(enable bool) Option {
-	return func(r *ChatCompletionRequest) {
-		r.EnableThinking = &enable
-	}
-}
-
 // NewChatCompletionRequest 创建新的对话补全请求
 func NewChatCompletionRequest(opts ...Option) *ChatCompletionRequest {
 	req := &ChatCompletionRequest{
@@ -130,13 +102,11 @@ func NewChatCompletionRequest(opts ...Option) *ChatCompletionRequest {
 		// Temperature: nil,   // 默认nil
 		// TopP:        nil,   // 默认nil
 		// MaxTokens:   nil,   // 默认nil
-		// DoSample:    nil,   // 默认nil
 		// Tools:       nil,   // 默认nil
 		// ToolChoice:  nil,   // 默认nil
 		// Stop:        nil,   // 默认nil
 		// RequestID:   "",    // 默认空字符串
 		// UserID:      "",    // 默认空字符串
-		// Thinking:    nil,   // 默认nil
 	}
 
 	for _, opt := range opts {

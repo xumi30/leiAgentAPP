@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"leiAgent/internal/appruntime"
 )
@@ -116,15 +115,6 @@ func ReadLLMConfigForUI() (content string, savePath string, usingExample bool, e
 		return "", savePath, false, e
 	}
 	return string(data), savePath, false, nil
-}
-
-// SaveLLMConfigText 校验并写入配置文件（必要时创建 config 目录）。
-func SaveLLMConfigText(content string) (savedPath string, err error) {
-	data := []byte(strings.ReplaceAll(content, "\r\n", "\n"))
-	if err := ValidateLLMConfigYAML(data); err != nil {
-		return "", err
-	}
-	return writeLLMConfigBytes(data)
 }
 
 func writeLLMConfigBytes(data []byte) (savedPath string, err error) {

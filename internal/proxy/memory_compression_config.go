@@ -84,7 +84,7 @@ func defaultResolvedMemoryCompressionConfig() ResolvedMemoryCompressionConfig {
 }
 
 // LoadMemoryCompressionConfig loads memory_compression from the same config YAML as LLM settings.
-// It is safe to call frequently (same IO pattern as loadModelConfigs).
+// It is safe to call frequently (same IO pattern as loadModelConfig).
 func LoadMemoryCompressionConfig() (ResolvedMemoryCompressionConfig, error) {
 	cfg := defaultResolvedMemoryCompressionConfig()
 	root, cfgPath, err := readConfigRoot()

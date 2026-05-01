@@ -5,7 +5,6 @@ import './App.css';
 import ConversationList from './features/conversations/ConversationList.jsx';
 import { ChatDialog } from './features/chat';
 import Header from './components/Header.jsx';
-import Reasoning from './features/chat/components/Reasoning.jsx';
 import MemoModal from './features/memo/MemoModal.jsx';
 import DocLibraryModal from './features/documents/DocLibraryModal.jsx';
 import SettingsModal from './features/settings/SettingsModal.jsx';
@@ -15,22 +14,11 @@ import ScheduledTasksModal from './features/scheduling/ScheduledTasksModal.jsx';
 import {
   GetMemoCalendarDates,
   GetLLMConnectionStatus,
-  SetLLMThinkingDisabled,
 } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
-const THINKING_LS_KEY = 'leiAgent.llmThinkingDisabled';
-
-function readThinkingDisabledFromLS() {
-  const raw = localStorage.getItem(THINKING_LS_KEY);
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  return null;
-}
-
 function App() {
   const [leftWidth, setLeftWidth] = useState(260);
-  const [rightWidth, setRightWidth] = useState(360);
   const [isDragging, setIsDragging] = useState(null);
 
   const [memoOpen, setMemoOpen] = useState(false);
@@ -46,8 +34,6 @@ function App() {
   /** 助手流式输出进行中（按 chatID），用于侧栏列表显示加载态 */
   const [streamingChatIds, setStreamingChatIds] = useState(() => new Set());
   const [memoDates, setMemoDates] = useState(() => new Set());
-
-  const [thinkingDisabled, setThinkingDisabled] = useState(true);
 
   const [connectionLoading, setConnectionLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(null);
@@ -90,31 +76,6 @@ function App() {
   useEffect(() => {
     refreshMemoDates();
   }, [refreshMemoDates]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // 暂时停用“关闭思考”开关后，前端统一回落为默认关闭思考逻辑。
-        if (!cancelled) {
-          setThinkingDisabled(true);
-          localStorage.setItem(THINKING_LS_KEY, 'true');
-        }
-        await SetLLMThinkingDisabled(true);
-      } catch (e) {
-        console.error('SetLLMThinkingDisabled:', e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (thinkingDisabled && isDragging === 'right') {
-      setIsDragging(null);
-    }
-  }, [thinkingDisabled, isDragging]);
 
   useEffect(() => {
     const onConv = (e) => {
@@ -175,12 +136,9 @@ function App() {
         configPath: String(detail.configPath ?? ''),
       });
     };
-    const onNeedLogin = (payload) => openPrompt(payload);
     const onLLMConfigRequired = (payload) => openPrompt(payload);
-    const offNeedLogin = EventsOn('needLogin', onNeedLogin);
     const offLLMConfigRequired = EventsOn('llmConfigRequired', onLLMConfigRequired);
     return () => {
-      offNeedLogin();
       offLLMConfigRequired();
     };
   }, []);
@@ -213,9 +171,6 @@ function App() {
       if (isDragging === 'left') {
         const newLeftWidth = e.clientX - containerRect.left;
         setLeftWidth(Math.max(100, Math.min(400, newLeftWidth)));
-      } else if (isDragging === 'right') {
-        const newRightWidth = containerRect.right - e.clientX;
-        setRightWidth(Math.max(110, Math.min(1500, newRightWidth)));
       }
     };
 
@@ -234,14 +189,6 @@ function App() {
     };
   }, [isDragging]);
 
-  const handleThinkingDisabledChange = useCallback((v) => {
-    setThinkingDisabled(v);
-    localStorage.setItem(THINKING_LS_KEY, String(v));
-    SetLLMThinkingDisabled(v).catch((e) => console.error('SetLLMThinkingDisabled:', e));
-  }, []);
-
-  const showReasoningChrome = false;
-
   return (
     <div id="App" className="board-column">
       <Header
@@ -257,8 +204,6 @@ function App() {
         connectionStatus={connectionStatus}
         onRefreshConnection={refreshConnection}
         onOpenSettings={() => setSettingsOpen(true)}
-        thinkingDisabled={thinkingDisabled}
-        onThinkingDisabledChange={handleThinkingDisabledChange}
       />
       <SettingsModal
         open={settingsOpen}
@@ -328,20 +273,6 @@ function App() {
         <div className="main-content__dialog-slot">
           <ChatDialog />
         </div>
-        {showReasoningChrome ? (
-          <>
-            <div className="resizer right-resizer" onMouseDown={(e) => handleMouseDown(e, 'right')} />
-            <div
-              className="main-content__reasoning-slot"
-              style={{
-                width: `${rightWidth}px`,
-                maxWidth: '1500px',
-              }}
-            >
-              <Reasoning conversationId={activeChatId} />
-            </div>
-          </>
-        ) : null}
       </div>
     </div>
   );
