@@ -151,6 +151,9 @@ func resolveMaxOutputTokens(ctx context.Context, config *modelConfig) int {
 	if config.maxOutputTokens > 0 {
 		maxTok = config.maxOutputTokens
 	}
+	if limit, ok := ctx.Value(utils.MaxOutputTokensString).(int); ok && limit > 0 && limit < maxTok {
+		maxTok = limit
+	}
 	if v, ok := ctx.Value(utils.IsPlanningString).(bool); ok && v {
 		if maxTok < planningMinOutputTokens {
 			maxTok = planningMinOutputTokens

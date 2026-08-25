@@ -1,8 +1,11 @@
 package proxy
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"leiAgent/utils"
 )
 
 func TestLLMConfigFromRootUsesEnvironmentOverrides(t *testing.T) {
@@ -72,5 +75,12 @@ mcp_servers:
 
 	if err := ValidateLLMConfigYAML(data); err != nil {
 		t.Fatalf("expected config without llm to pass, got: %v", err)
+	}
+}
+
+func TestResolveMaxOutputTokensHonorsPerRequestLimit(t *testing.T) {
+	ctx := context.WithValue(context.Background(), utils.MaxOutputTokensString, 160)
+	if got := resolveMaxOutputTokens(ctx, &modelConfig{maxOutputTokens: 8192}); got != 160 {
+		t.Fatalf("expected per-request limit 160, got %d", got)
 	}
 }

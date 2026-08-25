@@ -20,7 +20,6 @@ import (
 	"leiAgent/internal/tools/crontab"
 	"leiAgent/internal/tools/mcptool"
 	"math/rand"
-	"sync"
 	"time"
 
 	filefunctions "leiAgent/internal/tools/filefunctions"
@@ -40,11 +39,7 @@ type Dispatcher struct {
 	agent     *agent.Agent
 	Intention *Intention
 	ChatID    string
-	// 移除 planner 字段，统一使用 agent
-	agentSpeakHistory []string // 记录agent发言顺序，用于下一轮排序
-	// 移除 planner 字段，统一使用 agent
-	isPlanning bool // 是否正在规划
-	Stop       bool // 是否停止
+	Stop      bool
 }
 
 func init() {
@@ -212,104 +207,19 @@ func (d *Dispatcher) ReplaceRunContext(ctx context.Context, cancel context.Cance
 }
 
 func (d *Dispatcher) handleMessage(ctx context.Context, msg *globalchannel.Message) {
+	message := strings.TrimSpace(msg.Content)
+	logging.Info("Dispatcher 处理消息: %s", message)
 
-	message := msg.Content
-	userToAgentList := msg.UserToAgentList
-	if len(userToAgentList) > 0 {
-		go chatWithMentionedAgents(ctx, message, userToAgentList)
+	if len(msg.UserToAgentList) > 0 {
+		d.handleMentionedMessage(ctx, message, msg.UserToAgentList)
+		return
+	}
+	if msg.IsAutoToTalk {
+		d.handleDefaultGroupMessage(ctx, message)
 		return
 	}
 
-	chatIDForPersist, _ := ctx.Value(utils.ChatIDString).(string)
-	logging.Info("Dispatcher 处理消息: %s", message)
-
-	round := 0
-	for msg.IsAutoToTalk {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		if d.Stop {
-			return
-		}
-		if message != "继续对话controller" {
-			go d.processMessageWithIntent(ctx, message)
-			// 先等待一轮对话，再继续自动对话
-			if !sleepWithContext(ctx, time.Duration(3+rand.Intn(4))*time.Second) {
-				return
-			}
-			if d.isPlanning {
-				if !sleepWithContext(ctx, time.Duration(15+rand.Intn(10))*time.Second) {
-					return
-				}
-				d.isPlanning = false
-			}
-			if !sleepWithContext(ctx, time.Duration(1+rand.Intn(4))*time.Second) {
-				return
-			}
-
-		}
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		if d.Stop {
-			return
-		}
-		// 根据chatid获取agent列表
-		logging.Info("自动对话模式，获取对话agent列表")
-		if agentList, err := dataoperation.ListAgentsInConversation(chatIDForPersist); err != nil {
-			logging.Error("获取对话agent列表失败: %v", err)
-			return
-		} else if len(agentList) > 0 {
-			// 随机选择最多3个agent
-			selectedAgentIDs := d.selectRandomAgents(agentList, 3)
-
-			// 随机顺序调用handleAgentChat
-			for _, agentid := range selectedAgentIDs {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-				if d.Stop {
-					return
-				}
-				round += 1
-
-				handleAgentChat(ctx, message, agentid)
-				logging.Info("处理agent聊天: %s", agentid)
-
-				if !sleepWithContext(ctx, time.Duration(4+rand.Intn(3))*time.Second) {
-					return
-				}
-
-				// 每4轮验证一次话题偏移
-				if round%4 == 0 {
-					verifyGoal(ctx, msg.Content)
-				}
-			}
-		}
-		if !sleepWithContext(ctx, time.Duration(1+rand.Intn(5))*time.Second) {
-			return
-		}
-		message = "继续对话controller"
-	}
-	d.processMessageWithIntent(ctx, message)
-
-}
-
-func sleepWithContext(ctx context.Context, d time.Duration) bool {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-		return true
-	}
+	d.processMessageWithIntent(context.WithValue(ctx, utils.AgentID, defaultAssistantAgentID), message)
 }
 
 func (d *Dispatcher) handleActionGateChat(ctx context.Context, message string) (needAction bool, handled bool, err error) {
@@ -405,7 +315,7 @@ func (d *Dispatcher) switchIntent(ctx context.Context, intent *Intention) {
 	case utils.ChatModeString:
 		logging.Info("切换到对话模式")
 		if intent.Content != "" {
-			globalchannel.SendAssistantMessageOnce(ctx, intent.Content)
+			sendAssistantAndRemember(ctx, intent.Content)
 		} else {
 			logging.Info("对话模式下，意图内容为空，不发送")
 			// 如果意图内容为空，则直接把goal用户原文发送给模型，进行对话
@@ -530,23 +440,144 @@ func getMCPSimpleInfo() []byte {
 	return js
 }
 
-func handleAgentChat(ctx context.Context, message string, agentID string) error {
+const (
+	defaultAssistantAgentID  = "agentid_0"
+	groupRoleMaxOutputTokens = 160
+	groupToolmanPrompt       = `你是群聊中第一个发言的“工具人”。先直接处理用户问题，优先保证事实准确、立场客观和信息完整；需要实时信息或外部事实时使用可用工具核验，不确定的地方明确说明边界。不要模仿其他群成员，也不要为了热闹牺牲正确性。`
+)
+
+func defaultGroupReplyOrder(agentIDs []string, pickIndex func(int) int) []string {
+	eligible := make([]string, 0, len(agentIDs))
+	seen := map[string]struct{}{defaultAssistantAgentID: {}}
+	for _, id := range agentIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		eligible = append(eligible, id)
+	}
+
+	order := []string{defaultAssistantAgentID}
+	if len(eligible) > 0 {
+		order = append(order, eligible[pickIndex(len(eligible))])
+	}
+	return order
+}
+
+func mentionedReplyAgent(agentIDs []string, pickIndex func(int) int) string {
+	unique := make([]string, 0, len(agentIDs))
+	seen := make(map[string]struct{}, len(agentIDs))
+	for _, id := range agentIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return ""
+	}
+	return unique[pickIndex(len(unique))]
+}
+
+func (d *Dispatcher) handleMentionedMessage(ctx context.Context, message string, mentionedAgentIDs []string) {
+	agentID := mentionedReplyAgent(mentionedAgentIDs, rand.Intn)
+	if agentID == "" {
+		return
+	}
+	if agentID == defaultAssistantAgentID {
+		d.processMessageWithIntent(context.WithValue(ctx, utils.AgentID, agentID), message)
+		return
+	}
+	if err := d.handleMentionedRoleReply(ctx, message, agentID); err != nil {
+		logging.Warn("被 @ 角色回复失败 agent=%s: %v", agentID, err)
+	}
+}
+
+func (d *Dispatcher) handleDefaultGroupMessage(ctx context.Context, message string) {
+	candidates, err := dataoperation.ListAgentsInConversation(d.ChatID)
+	if err != nil {
+		logging.Warn("读取群聊成员失败，当前轮仅由工具人回复: %v", err)
+		candidates = nil
+	}
+
+	chatID, _ := ctx.Value(utils.ChatIDString).(string)
+	var toolmanAnswer string
+	for index, agentID := range defaultGroupReplyOrder(candidates, rand.Intn) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		if d.Stop {
+			return
+		}
+
+		if index == 0 {
+			before := latestAssistantContent(memory.GetLocalMemory().GetMessages(chatID))
+			d.processMessageWithIntent(withGroupToolmanPolicy(ctx), message)
+			after := latestAssistantContent(memory.GetLocalMemory().GetMessages(chatID))
+			if after == "" || after == before {
+				logging.Warn("工具人本轮没有产生可作为事实基准的新回复，跳过其他角色")
+				return
+			}
+			toolmanAnswer = after
+			continue
+		}
+		if err := d.handleGroupRoleReply(ctx, message, toolmanAnswer, agentID); err != nil {
+			logging.Warn("群聊角色回复失败 agent=%s: %v", agentID, err)
+		}
+	}
+}
+
+func latestAssistantContent(messages []*memory.Message) string {
+	for index := len(messages) - 1; index >= 0; index-- {
+		message := messages[index]
+		if message == nil || message.Role != memory.MessageRoleAssistant {
+			continue
+		}
+		if content := strings.TrimSpace(message.Content); content != "" {
+			return content
+		}
+	}
+	return ""
+}
+
+func withGroupToolmanPolicy(ctx context.Context) context.Context {
+	extra, _ := ctx.Value(utils.ExtraSystemMessagesString).([]string)
+	messages := append([]string(nil), extra...)
+	messages = append(messages, groupToolmanPrompt)
+	ctx = context.WithValue(ctx, utils.ExtraSystemMessagesString, messages)
+	return context.WithValue(ctx, utils.AgentID, defaultAssistantAgentID)
+}
+
+func (d *Dispatcher) handleGroupRoleReply(ctx context.Context, message, toolmanAnswer, agentID string) error {
 	info, err := dataoperation.GetAgent(agentID)
 	if err != nil || info == nil {
-		logging.Warn("aite agent not found: %s: %v", agentID, err)
+		logging.Warn("group agent not found: %s: %v", agentID, err)
 		return fmt.Errorf("agent not found: %s", agentID)
 	}
 	systemPrompt := strings.TrimSpace(fmt.Sprintf(`你的名字是 %s。角色设定：%s
-	你正在一个多人群聊中。你会看到「xxx: ...」格式的消息，xxx 是发言人。
-	发言规则：
-	- 先理解目前的话题是什么,优先铆钉话题，不要跑题。特别要关注User@你的名字的消息,必须第一时间回复User。
-	- 如果有人 @你，优先专门回复他。
-	- 你可以针对某人回复，并使用 @xxx。
-	- 你也可以不 @任何人，直接发表自己的观点。
-	- 回复要像真实群聊成员，可以赞同、反对、补充、提问、自由发挥。
-	- 回复不要带上你自己的名字。
-	- 回复要简洁，不要冗长。像个真实的人一样聊天。
-	- 今天日期：%s`,
+
+你正在微信群里接着用户和“工具人”聊天。工具人本轮给出的内容是唯一事实基准，你必须接受并以它为准。
+
+严格要求：
+- 不得质疑、否定、纠正或重新核验工具人的信息，不得引入与它冲突的新事实或来源。
+- 只能基于工具人的信息表达态度、补充生活化角度，或问一句真正有用的问题；没有可补充内容就简短附和。
+- 只说一到三句短句，通常不超过 80 个汉字。
+- 不写标题、列表、总结、教程或客服腔，不复述工具人已经说清楚的内容。
+- 不编造型号、数字、日期、出处或结论。
+- 不在开头报自己的名字，不解释角色设定。
+
+今天日期：%s`,
 		info["agent_name"],
 		info["description"],
 		time.Now().Format("2006-01-02 Monday"),
@@ -554,147 +585,82 @@ func handleAgentChat(ctx context.Context, message string, agentID string) error 
 	if systemPrompt == "" {
 		return fmt.Errorf("agent %s has no description", agentID)
 	}
+	messages := buildGroupRoleMessages(systemPrompt, message, toolmanAnswer)
+	return sendGroupRoleReply(ctx, agentID, strings.TrimSpace(fmt.Sprint(info["agent_name"])), messages)
+}
+
+func (d *Dispatcher) handleMentionedRoleReply(ctx context.Context, message, agentID string) error {
+	info, err := dataoperation.GetAgent(agentID)
+	if err != nil || info == nil {
+		return fmt.Errorf("agent not found: %s", agentID)
+	}
+	systemPrompt := strings.TrimSpace(fmt.Sprintf(`你的名字是 %s。角色设定：%s
+
+你正在一个微信群里，用户刚刚明确 @ 了你。请由你直接回应，不要等待或代替其他成员发言。
+
+严格要求：
+- 结合最近对话理解用户在指什么；如果用户只发了 @名字，就自然回应紧邻的上一段话题。
+- 回复像微信群里的真人，只说一到三句短句，通常不超过 80 个汉字。
+- 不写标题、列表、教程、总结或客服腔，不复述角色设定。
+- 不冒充工具人，不声称做过实际没有做过的搜索或核验；不确定就直说。
+- 不在开头报自己的名字。
+
+今天日期：%s`,
+		info["agent_name"],
+		info["description"],
+		time.Now().Format("2006-01-02 Monday"),
+	))
+	messages := buildMentionedRoleMessages(systemPrompt, buildIntentRecentContext(ctx, message), message)
+	return sendGroupRoleReply(ctx, agentID, strings.TrimSpace(fmt.Sprint(info["agent_name"])), messages)
+}
+
+func sendGroupRoleReply(ctx context.Context, agentID, agentName string, messages []openaistyle.ChatMessage) error {
 	p, err := proxy.NewClient(nil)
 	if err != nil {
-		logging.Warn("aite proxy init failed: %v", err)
 		return fmt.Errorf("proxy init failed: %v", err)
-	}
-	// Build a minimal chat: agent persona + recent context + current user message.
-	messages := []openaistyle.ChatMessage{}
-	if systemPrompt != "" {
-		messages = append(messages, openaistyle.ChatMessage{
-			Role:    openaistyle.RoleSystem,
-			Content: systemPrompt,
-		})
-	}
-	for _, recent := range buildIntentRecentContext(ctx, message) {
-		role := strings.TrimSpace(recent.Role)
-		if role != openaistyle.RoleUser && role != openaistyle.RoleAssistant {
-			continue
-		}
-		if strings.TrimSpace(recent.Content) == "" {
-			continue
-		}
-		messages = append(messages, openaistyle.ChatMessage{Role: role, Content: recent.Content})
 	}
 
 	ctx = context.WithValue(ctx, utils.AgentID, agentID)
+	ctx = context.WithValue(ctx, utils.MaxOutputTokensString, groupRoleMaxOutputTokens)
 
 	var responseAgent *proxy.ToolAndContent
 	if responseAgent, err = p.CommunicateWithMessages(ctx, messages); err != nil {
-		logging.Warn("aite chat failed agent=%s: %v", agentID, err)
+		logging.Warn("group chat failed agent=%s: %v", agentID, err)
 		return fmt.Errorf("chat failed: %s: %v", agentID, err)
 	}
 	if responseAgent != nil && responseAgent.Content != "" {
-		chatId := ctx.Value(utils.ChatIDString).(string)
-		memory.AddAssistantContentMessage(chatId, fmt.Sprintf("%s: %s", info["agent_name"], responseAgent.Content))
+		chatID, _ := ctx.Value(utils.ChatIDString).(string)
+		memory.AddAssistantContentMessage(chatID, fmt.Sprintf("%s: %s", agentName, responseAgent.Content))
 	}
 	return nil
 }
-func chatWithMentionedAgents(ctx context.Context, message string, agentList []string) error {
-	if len(agentList) == 0 {
-		return nil
-	}
-	unique := make([]string, 0, len(agentList))
-	seen := map[string]struct{}{}
-	for _, id := range agentList {
-		s := strings.TrimSpace(id)
-		if s == "" {
+
+func buildMentionedRoleMessages(systemPrompt string, recent []IntentContextMessage, userMessage string) []openaistyle.ChatMessage {
+	messages := []openaistyle.ChatMessage{{Role: openaistyle.RoleSystem, Content: systemPrompt}}
+	for _, item := range recent {
+		role := strings.TrimSpace(item.Role)
+		if role != openaistyle.RoleUser && role != openaistyle.RoleAssistant {
 			continue
 		}
-		if _, ok := seen[s]; ok {
-			continue
+		if content := strings.TrimSpace(item.Content); content != "" {
+			messages = append(messages, openaistyle.ChatMessage{Role: role, Content: content})
 		}
-		seen[s] = struct{}{}
-		unique = append(unique, s)
 	}
-
-	// 使用 WaitGroup 等待所有 goroutine 完成
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(unique))
-
-	for _, aid := range unique {
-		wg.Add(1)
-		go func(agentID string) {
-			defer wg.Done()
-			if err := handleAgentChat(ctx, message, agentID); err != nil {
-				errChan <- err
-			}
-		}(aid)
-	}
-
-	// 等待所有 goroutine 完成
-	wg.Wait()
-	close(errChan)
-
-	// 收集所有错误
-	var errors []error
-	for err := range errChan {
-		errors = append(errors, err)
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("multiple errors occurred: %v", errors)
-	}
-
-	return nil
+	messages = append(messages, openaistyle.ChatMessage{Role: openaistyle.RoleUser, Content: strings.TrimSpace(userMessage)})
+	return messages
 }
 
-// selectRandomAgents 从agent列表中随机选择指定数量的agent ID
-func (d *Dispatcher) selectRandomAgents(agentList []string, maxCount int) []string {
-	if len(agentList) == 0 {
-		return nil
+func buildGroupRoleMessages(systemPrompt, userMessage, toolmanAnswer string) []openaistyle.ChatMessage {
+	return []openaistyle.ChatMessage{
+		{Role: openaistyle.RoleSystem, Content: systemPrompt},
+		{
+			Role: openaistyle.RoleUser,
+			Content: fmt.Sprintf("用户原话：%s\n\n【工具人本轮权威信息】\n%s\n\n请只基于以上权威信息自然接一句。",
+				strings.TrimSpace(userMessage),
+				strings.TrimSpace(toolmanAnswer),
+			),
+		},
 	}
-
-	// 确定实际选择的数量
-	actualCount := min(len(agentList), maxCount)
-
-	// 根据发言历史重新排序agentList
-	// 将最近发言的agent放在列表后面
-	spokenAgents := make(map[string]int)
-
-	// 记录每个agent在历史中的位置（越近的位置值越大）
-	for i, agentID := range d.agentSpeakHistory {
-		spokenAgents[agentID] = i
-	}
-
-	// 分离已发言和未发言的agent
-	unspokenAgents := make([]string, 0)
-	spokenAgentsList := make([]string, 0)
-
-	for _, agentID := range agentList {
-		if _, ok := spokenAgents[agentID]; ok {
-			spokenAgentsList = append(spokenAgentsList, agentID)
-		} else {
-			unspokenAgents = append(unspokenAgents, agentID)
-		}
-	}
-
-	// 将未发言的agent放在前面，已发言的agent按时间倒序排列（最近发言的越靠后）
-	// 对已发言的agent按历史顺序倒序排列
-	for i := len(spokenAgentsList) - 1; i >= 0; i-- {
-		unspokenAgents = append(unspokenAgents, spokenAgentsList[i])
-	}
-
-	// 随机打乱未发言的agent列表
-	rand.Shuffle(len(unspokenAgents), func(i, j int) {
-		unspokenAgents[i], unspokenAgents[j] = unspokenAgents[j], unspokenAgents[i]
-	})
-
-	// 提取前actualCount个agent
-	selectedAgentIDs := make([]string, 0, actualCount)
-	for i := 0; i < actualCount && i < len(unspokenAgents); i++ {
-		selectedAgentIDs = append(selectedAgentIDs, unspokenAgents[i])
-	}
-
-	// 更新发言历史
-	d.agentSpeakHistory = append(selectedAgentIDs, d.agentSpeakHistory...)
-	// 限制历史记录长度，避免无限增长
-	if len(d.agentSpeakHistory) > 20 {
-		d.agentSpeakHistory = d.agentSpeakHistory[:20]
-	}
-
-	return selectedAgentIDs
 }
 
 func (d *Dispatcher) processMessageWithIntent(ctx context.Context, message string) {
@@ -723,9 +689,6 @@ func (d *Dispatcher) processMessageWithIntent(ctx context.Context, message strin
 	}
 	logging.Info("确认意图: %s", intent.Intent)
 	d.Intention = intent
-	if intent.Intent == utils.PlanModeString {
-		d.isPlanning = true
-	}
 	taskProfile := AnalyzeTask(message, d.Intention)
 	executionBlueprint := BuildExecutionBlueprint(taskProfile, d.Intention)
 	ctx = context.WithValue(ctx, utils.TaskProfileString, taskProfile)
@@ -741,9 +704,9 @@ func (d *Dispatcher) processMessageWithIntent(ctx context.Context, message strin
 
 	if d.Intention.RequiresClarification {
 		if d.Intention.Content != "" {
-			globalchannel.SendAssistantMessageOnce(ctx, d.Intention.Content)
+			sendAssistantAndRemember(ctx, d.Intention.Content)
 		} else {
-			globalchannel.SendAssistantMessageOnce(ctx, "我需要先确认一点信息，才能继续处理这个请求。")
+			sendAssistantAndRemember(ctx, "我需要先确认一点信息，才能继续处理这个请求。")
 		}
 		return
 	}
@@ -768,49 +731,13 @@ func (d *Dispatcher) processMessageWithIntent(ctx context.Context, message strin
 	}
 }
 
-func verifyGoal(ctx context.Context, goal string) error {
-	agent_name := "话题维护者"
-	agentID := "话题维护者"
-	systemPrompt := strings.TrimSpace(fmt.Sprintf(`你叫 话题维护者。这轮话题是：%s.
-	角色设定：超级智慧的社交leader.
-	你正在一个多人群聊中。你会看到「From xxx: ...」格式的消息，xxx 是发言人。
-	你要对他们的发言进行话题维护，确保他们的话题在群里是合适的。及时纠正话题偏离。引导他们回到合适的话题。启发式开启对应的话题。对偏离话题的特定人的发言进行针对性回复。
-	今天日期：%s`, goal, time.Now().Format("2006-01-02 Monday"),
-	))
-
-	p, err := proxy.NewClient(nil)
-	if err != nil {
-		logging.Warn("aite proxy init failed: %v", err)
-		return fmt.Errorf("proxy init failed: %v", err)
+func sendAssistantAndRemember(ctx context.Context, content string) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return
 	}
-	// Build a minimal chat: agent persona + recent context + current user message.
-	messages := []openaistyle.ChatMessage{}
-	if systemPrompt != "" {
-		messages = append(messages, openaistyle.ChatMessage{
-			Role:    openaistyle.RoleSystem,
-			Content: systemPrompt,
-		})
+	globalchannel.SendAssistantMessageOnce(ctx, content)
+	if chatID, ok := ctx.Value(utils.ChatIDString).(string); ok && strings.TrimSpace(chatID) != "" {
+		memory.AddAssistantContentMessage(chatID, content)
 	}
-	for _, recent := range buildIntentRecentContext(ctx, "开始话题维护") {
-		role := strings.TrimSpace(recent.Role)
-		if role != openaistyle.RoleUser && role != openaistyle.RoleAssistant {
-			continue
-		}
-		if strings.TrimSpace(recent.Content) == "" {
-			continue
-		}
-		messages = append(messages, openaistyle.ChatMessage{Role: role, Content: recent.Content})
-	}
-	ctx = context.WithValue(ctx, utils.AgentID, agentID)
-
-	var responseAgent *proxy.ToolAndContent
-	if responseAgent, err = p.CommunicateWithMessages(ctx, messages); err != nil {
-		logging.Warn("aite chat failed agent=%s: %v", agentID, err)
-		return fmt.Errorf("chat failed: %s: %v", agentID, err)
-	}
-	if responseAgent != nil && responseAgent.Content != "" {
-		chatId := ctx.Value(utils.ChatIDString).(string)
-		memory.AddAssistantContentMessage(chatId, fmt.Sprintf("From %s: %s", agent_name, responseAgent.Content))
-	}
-	return nil
 }

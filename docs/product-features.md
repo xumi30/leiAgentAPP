@@ -44,7 +44,7 @@
 
 ## 4. 对话区（`ChatDialog` + `ChatInput`）
 
-- **布局**：会话标题行、**群聊自动参与**开关（`leiAgent.chatAutoToTalk` 本地持久化，影响发送时是否附带自动对话参数及是否先发 `StopChat`）、当前会话已加入 **Agent chips**（`conversationAgentsForUI`，缺省补上助手 `agentid_0` / 「工具人」）。
+- **布局**：会话标题行、**群聊自动参与**开关（`leiAgent.chatAutoToTalk` 本地持久化）、当前会话已加入 **Agent chips**（`conversationAgentsForUI`，缺省补上助手 `agentid_0` / 「工具人」）。群聊每轮严格串行：有明确 `@` 时由被点名角色直接回复，单个 `@` 精确命中、多个 `@` 随机选择一人；没有 `@` 时才由工具人先给出事实基准，再随机选择一名有效群员短评。
 - **@ 提及**：`ChatInput` 在词界输入 `@` 打开成员列表（来自 `mentionOptions`，可键盘导航）；选中插入 `@姓名 ` 并通过 `onMentionPicked` 把 `agent_id` 加入本轮 `aiteAgentIds`，随 `ChatService.sendMessage` 传入；清空输入会清空该集合。
 - **MCP / Skill 命令面板**：
   - **数据源**：挂载与每次 **focus** 输入框时并行调用 `GetMCPConfigFormState`、`GetOpenClawSkillState`，得到 `mcpOptions`（含 `label`、`cachedTools`、`lastCheckState` 等）与 `skillOptions`（过滤 `supported === false`）。
@@ -69,6 +69,7 @@
 - **意图刷新**：部分规则下对新一轮用户话语文本触发重新分类（`ShouldReclassifyIntent`）。
 - **并发池**：`agentPool` 有上限（满则淘汰最旧 Dispatcher）；停止对话会 `Shutdown` 再以新 context 恢复监听。
 - **流式输出**：助手与推理内容经事件推送到前端；结束符写入 DB，支持仅展示不落库的 ephemeral 结束标记。
+- **群聊事实基准**：仅默认的无 `@` 群聊轮次要求其他角色以“用户原话 + 工具人本轮权威信息”为准；被 `@` 的角色读取精简近期上下文并直接回应，不强插工具人。两条路径都限制为群聊式短回复。
 
 ---
 

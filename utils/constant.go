@@ -27,6 +27,7 @@ const (
 	TaskProfileString         = "taskProfile"
 	ExecutionBlueprintString  = "executionBlueprint"
 	ExtraSystemMessagesString = "extraSystemMessages"
+	MaxOutputTokensString     = "maxOutputTokens"
 	FreshnessTimeAnchorString = "freshnessTimeAnchor"
 	NeedActionHeaderString    = "needActionHeader"
 
